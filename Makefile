@@ -114,7 +114,7 @@ lint-config: golangci-lint ## Verify the golangci-lint configuration.
 .PHONY: verify-fast
 verify-fast: golangci-lint ## Format, vet and lint only what changed since HEAD.
 	"$(LOCALBIN)/golangci-lint" fmt
-	@dirs=$$(git status --porcelain | awk '{print $$2}' | grep '\.go$$' | xargs -r -n1 dirname | sort -u | sed 's|^|./|' | paste -sd, -); \
+	@dirs=$$(git status --porcelain | awk '{print $$2}' | grep '\.go$$' | xargs -r -n1 dirname | sort -u | sed 's|^|./|' | paste -sd, - || true); \
 	if [ -n "$$dirs" ]; then $(GO) vet $$dirs; else echo "verify-fast: no changed packages to vet"; fi
 	"$(LOCALBIN)/golangci-lint" run --new-from-rev=HEAD
 
@@ -126,6 +126,7 @@ verify: ## Verify generated code, manifests, docs and module files produce no di
 	$(GO) mod tidy
 	cd tools && $(GO) mod tidy
 	@hack/verify-headers.sh
+	@hack/verify-harness-links.sh
 	@hack/verify-no-claude-md.sh
 	@if [ -n "$$(git status --porcelain)" ]; then \
 		echo "verify: the working tree changed; run 'make generate manifests api-docs' and commit the result" >&2; \
