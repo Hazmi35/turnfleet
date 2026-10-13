@@ -101,6 +101,13 @@ func TestVantageRunnerInCluster(t *testing.T) {
 	// The condition must come from the published result, not from the pool:
 	// check the payload the runner wrote and the values it holds.
 	payload := publishedPayload(ctx, t)
+	t.Logf("the runner published %d result(s) for pool %s at %s", len(payload.Results), payload.Pool,
+		payload.ObservedAt.UTC().Format(time.RFC3339))
+	for _, result := range payload.Results {
+		t.Logf("  %s succeeded=%t relayed=%s:%d message=%q",
+			result.URI, result.Succeeded, result.RelayedAddress, result.RelayedPort, result.Message)
+	}
+	logConditions(ctx, t, vantagePool, "after the runner Job")
 	if len(payload.Results) != 1 {
 		t.Fatalf("the runner published %d results, want one per listener URI: %+v", len(payload.Results), payload.Results)
 	}
@@ -120,6 +127,7 @@ func TestVantageRunnerInCluster(t *testing.T) {
 		func(ctx context.Context) (bool, error) {
 			return condition(ctx, t, vantagePool, controller.ConditionReachableFromVantage) == metav1.ConditionFalse, nil
 		})
+	logConditions(ctx, t, vantagePool, "after a failing result was published")
 
 	current := pool(ctx, t, vantagePool)
 	if got := conditionAt(current, controller.ConditionProbeSucceeded); got != metav1.ConditionTrue {
@@ -192,6 +200,20 @@ func runVantageRunner(t *testing.T) {
 		}
 		return job.Status.Succeeded > 0, nil
 	})
+	// The runner's own output is what an operator reads first.
+	t.Logf("runner Job output:\n%s", kubectl(ctx, t, "logs", "job/"+vantageJob, "-n", testNamespace))
+}
+
+// logConditions writes a pool's conditions to the test log, so a run shows what
+// the published result turned into.
+func logConditions(ctx context.Context, t *testing.T, poolName, when string) {
+	t.Helper()
+
+	current := pool(ctx, t, poolName)
+	t.Logf("%s, pool %s reports:", when, poolName)
+	for _, condition := range current.Status.Conditions {
+		t.Logf("  %s=%s reason=%s message=%q", condition.Type, condition.Status, condition.Reason, condition.Message)
+	}
 }
 
 // deleteVantageJob removes the one-shot Job, so the next run can create it.
