@@ -31,11 +31,31 @@ read-only and coturn is started with `-c /etc/turnfleet/turnserver.conf`.
   therefore requires re-capturing the help output of a new pin.
 * The flags used are: `--listening-port`, `--tls-listening-port`,
   `--listening-ip` (`-L`), `--relay-ip` (`-E`), `--external-ip` (`-X`),
-  `--min-port`, `--max-port`, `--realm`, `--lt-cred-mech`,
-  `--use-auth-secret`, `--static-auth-secret`, `--no-multicast-peers`,
-  `--denied-peer-ip`, `--allowed-peer-ip`, `--prometheus`,
-  `--prometheus-port`, `--prometheus-path`, `--no-cli`, `--simple-log`,
-  `--log-file`, and `--cert`/`--pkey` for TLS listeners.
+  `--min-port`, `--max-port`, `--realm`, `--use-auth-secret`,
+  `--static-auth-secret`, `--no-multicast-peers`, `--denied-peer-ip`,
+  `--allowed-peer-ip`, `--prometheus`, `--prometheus-port`,
+  `--prometheus-path`, `--log-file`, `--simple-log`, `--fingerprint`,
+  `--no-udp`/`--no-tcp`/`--no-tls` (only the transports the pool declares), and
+  `--cert`/`--pkey` for TLS listeners.
+* Three behaviours of the pinned image were verified against it rather than
+  assumed, and they shape the rendering:
+  * **`--denied-peer-ip` does not accept CIDR.** coturn aborts with "invalid
+    denied-peer-ip value 203.0.113.0/24. Use IP or IP-IP range (CIDR is not
+    supported)", so every prefix is expanded to `first-last` by the renderer.
+  * **`--no-cli` is deprecated** in this version, so neither it nor `--cli` is
+    rendered; the CLI is off by default.
+  * **TCP relay endpoints are allocated from `--min-port`/`--max-port` too**
+    (`turnports_create` builds the UDP and TCP port maps from the same bounds),
+    so `--no-tcp-relay` is *not* rendered: TCP relays stay available for clients
+    that need them and still count against the pool's capacity. Verified by
+    allocating over TCP against the pinned image and observing a relayed port
+    inside the configured range.
+* Authentication uses `--use-auth-secret` with `--static-auth-secret` only.
+  `--lt-cred-mech` is not rendered: coturn warns when both are set, and the
+  shared-secret mechanism is the one the credential issuer uses. This was
+  verified end to end against the pinned image — a probe using credentials
+  derived from the shared secret allocates successfully, and the same probe with
+  a wrong secret is refused with TURN error 401.
 * The rendered config is content-hashed into the pod's
   `turnfleet.hzmi.dev/config-hash` annotation. A change to the config or to the
   referenced Secret changes the hash, and the relay rolls (one at a time, with
