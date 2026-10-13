@@ -85,6 +85,22 @@ Edit the canonical file under `.agents/`; `hack/verify-harness-links.sh` (part o
 `make verify`) fails when an alias is missing, points elsewhere, or was replaced
 by a copy.
 
+## Agent skills
+
+The engineering skills under `.agents/skills/` read their per-repo configuration from `docs/agents/`.
+
+### Issue tracker
+
+Issues and specs live as GitHub issues on `Hazmi35/turnfleet`, driven with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five canonical triage roles use their default strings (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), one per triaged issue, alongside a category label. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: the vocabulary is the "Glossary" section of this file, the decisions are the ADRs under `docs/adr/`. See `docs/agents/domain.md`.
+
 ## Conventions
 
 * Errors: wrap with `%w` and enough context to act on; never return a bare
