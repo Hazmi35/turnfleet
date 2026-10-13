@@ -15,6 +15,17 @@ import (
 	turnfleetv1alpha1 "github.com/Hazmi35/turnfleet/api/v1alpha1"
 )
 
+// The addresses in this file are unique to it: the conflict check spans the
+// cluster, and envtest never finishes terminating a test namespace, so pools
+// from the other tests in this package are still there.
+const (
+	conflictAddress = "203.0.113.201"
+	movedAddress    = "203.0.113.202"
+	sharedAddress   = "203.0.113.211"
+	watchedAddress  = "203.0.113.221"
+	quietAddress    = "203.0.113.222"
+)
+
 // externalPool is a one-relay pool holding a declared external address on a
 // node. Two pools built this way with the same address are the shape that
 // produces a cross-pool conflict: one public address in front of two nodes, or
@@ -66,18 +77,18 @@ func requireCondition(t *testing.T, pool *turnfleetv1alpha1.TURNPool, conditionT
 func TestCrossPoolAddressConflict(t *testing.T) {
 	f := newFixture(t)
 	f.createSecret()
-	f.createNode("tf-worker-1", "10.0.0.11")
-	f.createNode("tf-worker-2", "10.0.0.12")
+	f.createNode("tf-conflict-1", "10.0.0.11")
+	f.createNode("tf-conflict-2", "10.0.0.12")
 
-	f.createPool(externalPool("tpool-a", "tf-worker-1", "198.51.100.11"))
-	f.createPool(externalPool("tpool-b", "tf-worker-2", "198.51.100.11"))
+	f.createPool(externalPool("tpool-a", "tf-conflict-1", conflictAddress))
+	f.createPool(externalPool("tpool-b", "tf-conflict-2", conflictAddress))
 
 	// Each pool compares its own relays with the identities the other pools
 	// publish, so the pair sees each other once both have a status.
-	f.reconcile("tpool-a")
-	f.reconcile("tpool-b")
-	f.reconcile("tpool-a")
-	f.reconcile("tpool-b")
+	for range 2 {
+		f.reconcile("tpool-a")
+		f.reconcile("tpool-b")
+	}
 
 	for _, name := range []string{"tpool-a", "tpool-b"} {
 		pool := f.pool(name)
@@ -85,7 +96,7 @@ func TestCrossPoolAddressConflict(t *testing.T) {
 		if conflict.Reason != "RelayIdentityOverlap" {
 			t.Errorf("pool %s: AddressConflict reason is %q, want RelayIdentityOverlap", name, conflict.Reason)
 		}
-		if !strings.Contains(conflict.Message, "198.51.100.11") {
+		if !strings.Contains(conflict.Message, conflictAddress) {
 			t.Errorf("pool %s: AddressConflict message names no address: %q", name, conflict.Message)
 		}
 		// The other pool is the actionable half of the message.
@@ -100,25 +111,25 @@ func TestCrossPoolAddressConflict(t *testing.T) {
 	}
 
 	// Pool b moves off the shared address. Declared addresses may be added and
-	// removed, so this is the move the message asks for; the relay that held
-	// the address drains first.
+	// removed, so this is the move the condition asks for; the relay that held
+	// the address drains first, and the conflict stays until it is gone.
 	latest := f.pool("tpool-b")
 	latest.Spec.Addressing.ExternalIPPool.Addresses = []turnfleetv1alpha1.ExternalAddress{
-		{NodeName: "tf-worker-2", Address: "198.51.100.20"},
+		{NodeName: "tf-conflict-2", Address: movedAddress},
 	}
 	if err := k8sClient.Update(f.ctx, latest); err != nil {
 		t.Fatalf("moving pool b off the shared address: %v", err)
 	}
 
-	f.reconcileUntil("tpool-b", "pool b holds only its new address", func() bool {
+	f.reconcileUntil("tpool-b", "pool b holds only its new address and reports no conflict", func() bool {
 		held := heldRelays(f.pool("tpool-b"))
-		return len(held) == 1 && held[0].address == "198.51.100.20"
+		pool := f.pool("tpool-b")
+		return len(held) == 1 && held[0].address == movedAddress &&
+			conditionStatus(pool, ConditionAddressConflict) == "False" &&
+			conditionStatus(pool, ConditionDegraded) == "False"
 	})
-	requireCondition(t, f.pool("tpool-b"), ConditionAddressConflict, "False")
-	requireCondition(t, f.pool("tpool-b"), ConditionDegraded, "False")
 
-	// Pool a has not changed: its next pass has to clear the condition it was
-	// reporting.
+	// Pool a has not changed: its next pass has to clear what it was reporting.
 	f.reconcile("tpool-a")
 	requireCondition(t, f.pool("tpool-a"), ConditionAddressConflict, "False")
 	requireCondition(t, f.pool("tpool-a"), ConditionDegraded, "False")
@@ -130,18 +141,19 @@ func TestCrossPoolAddressConflict(t *testing.T) {
 func TestDisjointRangesOnOneAddressAreLegal(t *testing.T) {
 	f := newFixture(t)
 	f.createSecret()
-	f.createNode("tf-worker-1", "10.0.0.11")
-	f.createNode("tf-worker-2", "10.0.0.12")
+	f.createNode("tf-conflict-1", "10.0.0.11")
+	f.createNode("tf-conflict-2", "10.0.0.12")
 
-	f.createPool(externalPool("tpool-a", "tf-worker-1", "198.51.100.11"))
+	f.createPool(externalPool("tpool-a", "tf-conflict-1", sharedAddress))
 
-	other := externalPool("tpool-b", "tf-worker-2", "198.51.100.11")
+	other := externalPool("tpool-b", "tf-conflict-2", sharedAddress)
 	other.Spec.RelayPortRange = turnfleetv1alpha1.PortRange{Start: 49200, End: 49247}
 	f.createPool(other)
 
-	f.reconcile("tpool-a")
-	f.reconcile("tpool-b")
-	f.reconcile("tpool-a")
+	for range 2 {
+		f.reconcile("tpool-a")
+		f.reconcile("tpool-b")
+	}
 
 	for _, name := range []string{"tpool-a", "tpool-b"} {
 		requireCondition(t, f.pool(name), ConditionAddressConflict, "False")
@@ -155,24 +167,22 @@ func TestDisjointRangesOnOneAddressAreLegal(t *testing.T) {
 func TestPoolsForHeldAddresses(t *testing.T) {
 	f := newFixture(t)
 	f.createSecret()
-	f.createNode("tf-worker-1", "10.0.0.11")
-	f.createNode("tf-worker-2", "10.0.0.12")
-	f.createNode("tf-worker-3", "10.0.0.13")
+	f.createNode("tf-conflict-1", "10.0.0.11")
+	f.createNode("tf-conflict-2", "10.0.0.12")
+	f.createNode("tf-conflict-3", "10.0.0.13")
 
-	f.createPool(externalPool("tpool-a", "tf-worker-1", "198.51.100.11"))
-	f.createPool(externalPool("tpool-b", "tf-worker-2", "198.51.100.11"))
-	f.createPool(externalPool("tpool-c", "tf-worker-3", "198.51.100.30"))
+	f.createPool(externalPool("tpool-a", "tf-conflict-1", watchedAddress))
+	f.createPool(externalPool("tpool-b", "tf-conflict-2", watchedAddress))
+	f.createPool(externalPool("tpool-c", "tf-conflict-3", quietAddress))
 
 	for _, name := range []string{"tpool-a", "tpool-b", "tpool-c"} {
 		f.reconcile(name)
 	}
 
+	want := ctrl.Request{NamespacedName: types.NamespacedName{Namespace: f.namespace, Name: "tpool-b"}}
 	requests := f.reconciler.poolsForHeldAddresses(f.ctx, f.pool("tpool-a"))
-	want := []ctrl.Request{
-		{NamespacedName: types.NamespacedName{Namespace: f.namespace, Name: "tpool-b"}},
-	}
-	if len(requests) != 1 || requests[0] != want[0] {
-		t.Errorf("pool a's address wakes %v, want only pool b", requests)
+	if len(requests) != 1 || requests[0] != want {
+		t.Errorf("pool a's address wakes %v, want only %v", requests, want)
 	}
 
 	if requests := f.reconciler.poolsForHeldAddresses(f.ctx, f.pool("tpool-c")); len(requests) != 0 {
@@ -180,7 +190,7 @@ func TestPoolsForHeldAddresses(t *testing.T) {
 	}
 
 	// A pool that holds nothing is nobody's peer.
-	empty := externalPool("tpool-empty", "tf-worker-1", "198.51.100.11")
+	empty := externalPool("tpool-empty", "tf-conflict-1", watchedAddress)
 	if requests := f.reconciler.poolsForHeldAddresses(f.ctx, empty); len(requests) != 0 {
 		t.Errorf("a pool with no status wakes %v, want nobody", requests)
 	}
@@ -190,7 +200,7 @@ func TestPoolsForHeldAddresses(t *testing.T) {
 // identities a pool holds, and nothing else. Waking on every status write would
 // put every pool that shares an address on the probe interval.
 func TestHeldIdentitiesChanged(t *testing.T) {
-	poolWith := func(probeSucceeded bool, relays ...turnfleetv1alpha1.RelayStatus) *turnfleetv1alpha1.TURNPool {
+	poolWith := func(probed bool, relays ...turnfleetv1alpha1.RelayStatus) *turnfleetv1alpha1.TURNPool {
 		pool := hostNetworkPool("tpool-a", 1)
 		pool.Status = &turnfleetv1alpha1.TURNPoolStatus{
 			Relays: relays,
@@ -201,15 +211,14 @@ func TestHeldIdentitiesChanged(t *testing.T) {
 				Message: "nothing overlaps",
 			}},
 		}
-		if probeSucceeded {
-			relayStatus := &pool.Status.Relays[0]
-			relayStatus.LastProbe = &turnfleetv1alpha1.ProbeStatus{Succeeded: new(true)}
+		if probed {
+			pool.Status.Relays[0].LastProbe = &turnfleetv1alpha1.ProbeStatus{Succeeded: new(true)}
 		}
 		return pool
 	}
 	relay := turnfleetv1alpha1.RelayStatus{
 		Name:         "tpool-a-relay-abcde",
-		RelayAddress: new("198.51.100.11"),
+		RelayAddress: new(watchedAddress),
 		PortRange:    turnfleetv1alpha1.PortRange{Start: 49152, End: 49199},
 	}
 	moved := relay

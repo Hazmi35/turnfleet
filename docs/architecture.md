@@ -90,6 +90,13 @@ stateDiagram-v2
 * **`turnURIs`.** Only ready, non-draining relays, mirrored into the
   `<pool>-turn-uris` ConfigMap so the credential issuer hands out per-relay
   URIs (and never a URI for a relay that is saturated or going away).
+* **Cross-pool identity check.** The pass compares the relays it planned with
+  the identities every other pool reports in `status.relays[]`. An address held
+  by both with overlapping ports is reported on each pool as `AddressConflict`
+  and `Degraded`; disjoint ranges on one address stay legal. A pool whose held
+  identities change wakes the pools sharing its addresses, so the pool that did
+  not change clears its condition. See
+  `docs/adr/0012-cross-pool-address-conflict.md`.
 
 ## Status and conditions
 
@@ -98,7 +105,8 @@ stateDiagram-v2
 | `Ready` | normal-true | The desired number of relays exist, are ready and non-draining. |
 | `ProbeSucceeded` | normal-true | Every ready relay last probed successfully. |
 | `CapacityPressure` | abnormal-true | A relay is near or at its port limit (`portsInUse`/`portsTotal`), or a probe observed error 508. |
-| `Degraded` | abnormal-true | Fewer relays than desired, or a relay is failing to converge. |
+| `AddressConflict` | abnormal-true | A relay this pool holds shares its address and ports with a relay of another pool. Disjoint ranges on a shared address are legal. |
+| `Degraded` | abnormal-true | Fewer relays than desired, a relay is failing to converge, or a relay identity overlaps another pool's. |
 
 `status.relays[]` carries per-relay truth: `relayAddress`, `portRange`,
 `ready`, `draining`, `allocations`, `portsInUse`, `portsTotal` and
