@@ -24,7 +24,7 @@ import (
 // A relay identity is an address and the ports a relay owns on it, and it is
 // unique across the cluster: two relays holding the same ports on one address
 // fight over the same sockets, and both pools end up serving less than they
-// report. The ruler rejects that inside one pool (and the webhook rejects it
+// report. The planner rejects that inside one pool (and the webhook rejects it
 // before admission), but no admission check spans two TURNPools, so the
 // reconciler compares them and reports every overlap it finds as a condition
 // on each pool that holds one. Admission is not the place for it: a webhook
@@ -34,7 +34,8 @@ import (
 // What is compared is what pools hold, never what they ask for:
 //
 //   - For the pool being reconciled, the identities are the ones this pass
-//     planned, which are the ones its status is about to publish.
+//     knows about: the relays it plans plus the ones still draining. Those are
+//     the relays its status is about to publish.
 //   - For every other pool, they are the relays its status reports.
 //
 // A pool that requests an address but holds no relay on it therefore takes
@@ -46,11 +47,6 @@ import (
 type heldRelay struct {
 	address   string
 	portRange relay.PortRange
-}
-
-// key is the identity in comparable string form, "<address>/<start>-<end>".
-func (h heldRelay) key() string {
-	return h.address + "/" + h.portRange.String()
 }
 
 // heldRelays lists the relay identities a pool's status reports. The status is
@@ -74,9 +70,11 @@ func heldRelays(pool *turnfleetv1alpha1.TURNPool) []heldRelay {
 	return held
 }
 
-// plannedRelays lists the relay identities a reconcile pass plans, in the form
-// the conflict check compares.
-func plannedRelays(states []*relayState) []heldRelay {
+// heldRelaysFromStates lists the relay identities a reconcile pass holds, in
+// the form the conflict check compares. It is the states rather than the plan
+// because a draining relay still owns its ports: it stays in the states, and
+// in the status, until its pod is gone.
+func heldRelaysFromStates(states []*relayState) []heldRelay {
 	held := make([]heldRelay, 0, len(states))
 	for _, state := range states {
 		if state.relay.Address == "" {
@@ -111,16 +109,23 @@ func sharesAddress(held []heldRelay, addresses map[string]struct{}) bool {
 	return false
 }
 
-// heldIdentityKeys is the sorted set of identities a pool holds, so two status
+// heldIdentities is the sorted set of identities a pool holds, so two status
 // versions can be compared for "did anything about the held identities change".
-func heldIdentityKeys(pool *turnfleetv1alpha1.TURNPool) []string {
+func heldIdentities(pool *turnfleetv1alpha1.TURNPool) []heldRelay {
 	held := heldRelays(pool)
-	keys := make([]string, 0, len(held))
-	for _, identity := range held {
-		keys = append(keys, identity.key())
+	slices.SortFunc(held, compareHeldRelays)
+	return held
+}
+
+// compareHeldRelays orders identities by address, then by their ports.
+func compareHeldRelays(a, b heldRelay) int {
+	if c := strings.Compare(a.address, b.address); c != 0 {
+		return c
 	}
-	slices.Sort(keys)
-	return keys
+	if c := cmp.Compare(a.portRange.Start, b.portRange.Start); c != 0 {
+		return c
+	}
+	return cmp.Compare(a.portRange.End, b.portRange.End)
 }
 
 // addressConflict is one identity this pool holds that another pool holds too,
@@ -137,20 +142,20 @@ type addressConflict struct {
 // PartitionedIP mode does inside one pool, and the same reasoning holds across
 // pools.
 func (r *TURNPoolReconciler) addressConflicts(ctx context.Context, pool *turnfleetv1alpha1.TURNPool, states []*relayState) ([]addressConflict, error) {
-	mine := plannedRelays(states)
+	mine := heldRelaysFromStates(states)
 	if len(mine) == 0 {
 		// Nothing held, nothing to conflict over: skip the list.
 		return nil, nil
 	}
 
-	pools := &turnfleetv1alpha1.TURNPoolList{}
-	if err := r.List(ctx, pools); err != nil {
+	pools, err := r.listPools(ctx)
+	if err != nil {
 		return nil, fmt.Errorf("listing pools to compare relay identities: %w", err)
 	}
 
 	var conflicts []addressConflict
-	for i := range pools.Items {
-		other := &pools.Items[i]
+	for i := range pools {
+		other := &pools[i]
 		if other.Namespace == pool.Namespace && other.Name == pool.Name {
 			// Same-pool overlap is the planner's invariant, checked there.
 			continue
@@ -179,13 +184,7 @@ func (r *TURNPoolReconciler) addressConflicts(ctx context.Context, pool *turnfle
 // compareConflicts orders conflicts by identity, then by the pool holding the
 // overlapping one.
 func compareConflicts(a, b addressConflict) int {
-	if c := strings.Compare(a.identity.address, b.identity.address); c != 0 {
-		return c
-	}
-	if c := cmp.Compare(a.identity.portRange.Start, b.identity.portRange.Start); c != 0 {
-		return c
-	}
-	if c := cmp.Compare(a.identity.portRange.End, b.identity.portRange.End); c != 0 {
+	if c := compareHeldRelays(a.identity, b.identity); c != 0 {
 		return c
 	}
 	if c := strings.Compare(a.other.Namespace, b.other.Namespace); c != 0 {
@@ -241,16 +240,16 @@ func (r *TURNPoolReconciler) poolsForHeldAddresses(ctx context.Context, obj clie
 		return nil
 	}
 
-	pools := &turnfleetv1alpha1.TURNPoolList{}
-	if err := r.List(ctx, pools); err != nil {
+	pools, err := r.listPools(ctx)
+	if err != nil {
 		logf.FromContext(ctx).Error(err, "listing pools for a held relay address change",
 			"pool", changed.Name, "namespace", changed.Namespace)
 		return nil
 	}
 
-	requests := make([]ctrl.Request, 0, len(pools.Items))
-	for i := range pools.Items {
-		other := &pools.Items[i]
+	requests := make([]ctrl.Request, 0, len(pools))
+	for i := range pools {
+		other := &pools[i]
 		if other.Namespace == changed.Namespace && other.Name == changed.Name {
 			continue
 		}
@@ -279,7 +278,7 @@ func heldIdentitiesChanged() predicate.Predicate {
 			if !oldOK || !newOK {
 				return true
 			}
-			return !slices.Equal(heldIdentityKeys(oldPool), heldIdentityKeys(newPool))
+			return !slices.Equal(heldIdentities(oldPool), heldIdentities(newPool))
 		},
 		GenericFunc: func(event.GenericEvent) bool { return false },
 	}

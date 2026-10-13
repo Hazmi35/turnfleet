@@ -344,6 +344,17 @@ func (r *TURNPoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
+// listPools lists every TURNPool in the cluster. Relay identities are unique
+// across the cluster, so a caller that needs the other pools' identities cannot
+// scope the list to one namespace or label.
+func (r *TURNPoolReconciler) listPools(ctx context.Context) ([]turnfleetv1alpha1.TURNPool, error) {
+	pools := &turnfleetv1alpha1.TURNPoolList{}
+	if err := r.List(ctx, pools); err != nil {
+		return nil, err
+	}
+	return pools.Items, nil
+}
+
 // poolsForNode maps a relay node to the pools that could place a relay on it.
 func (r *TURNPoolReconciler) poolsForNode(ctx context.Context, obj client.Object) []ctrl.Request {
 	node, ok := obj.(*corev1.Node)
@@ -353,16 +364,16 @@ func (r *TURNPoolReconciler) poolsForNode(ctx context.Context, obj client.Object
 	if _, isRelayNode := node.Labels[RelayNodeLabel]; !isRelayNode {
 		return nil
 	}
-	pools := &turnfleetv1alpha1.TURNPoolList{}
-	if err := r.List(ctx, pools); err != nil {
+	pools, err := r.listPools(ctx)
+	if err != nil {
 		logf.FromContext(ctx).Error(err, "listing pools for a relay node change", "node", node.Name)
 		return nil
 	}
-	requests := make([]ctrl.Request, 0, len(pools.Items))
-	for i := range pools.Items {
+	requests := make([]ctrl.Request, 0, len(pools))
+	for i := range pools {
 		requests = append(requests, ctrl.Request{NamespacedName: types.NamespacedName{
-			Namespace: pools.Items[i].Namespace,
-			Name:      pools.Items[i].Name,
+			Namespace: pools[i].Namespace,
+			Name:      pools[i].Name,
 		}})
 	}
 	return requests
