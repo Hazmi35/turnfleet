@@ -1,10 +1,10 @@
 # Turnfleet — build, test and release automation.
 #
 # Everything this file downloads is pinned: Go tool versions, container images
-# by tag plus digest, and the Kubernetes version used by envtest. The provenance
-# of every pin lives in docs/versions.md. Go tools are declared as `tool`
-# directives (root go.mod for repository tools, tools/go.mod for the lint
-# toolchain) so there is a single place where their versions are resolved.
+# by tag plus digest, and the Kubernetes version used by envtest. Go tools are
+# declared as `tool` directives (root go.mod for repository tools, tools/go.mod
+# for the lint toolchain) so there is a single place where their versions are
+# resolved; docs/versions.md records the pins that are deliberately held.
 
 SHELL = /usr/bin/env bash -o pipefail
 .SHELLFLAGS = -ec
@@ -20,10 +20,10 @@ IMAGE_TAG ?= dev
 CONTROLLER_IMG ?= $(IMAGE_REGISTRY)/turnfleet-controller:$(IMAGE_TAG)
 PROBE_IMG ?= $(IMAGE_REGISTRY)/turnfleet-probe:$(IMAGE_TAG)
 
-# Pinned versions. Bump together with docs/versions.md.
+# Pinned versions. Every copy of one (the Dockerfiles, the workflows,
+# .custom-gcl.yml) moves together; docs/versions.md records what is held.
 CONTROLLER_TOOLS_VERSION ?= v0.22.0
 ENVTEST_K8S_VERSION ?= 1.37.0
-GOLANGCI_LINT_VERSION ?= v2.14.0
 KUSTOMIZE_VERSION ?= v5.8.2
 KIND_IMAGE ?= kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
 # The coturn data plane. COTURN_IMAGE is the tag the kind cluster is loaded
