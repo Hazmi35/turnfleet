@@ -138,6 +138,24 @@ bin/turnfleet-probe --uri "turn:<relayAddress>:<listener-port>?transport=udp" \
   --expect-port-range <start>-<end> --json
 ```
 
+A runner can put that answer where the operator can see it, instead of leaving
+it in a terminal. `--uris-configmap` probes every URI the pool publishes and
+`--publish-configmap` writes the pass into the pool's `<pool>-vantage`
+ConfigMap; the controller reads that object into the pool's
+`ReachableFromVantage` condition, and a failing result also raises `Degraded`:
+
+```sh
+bin/turnfleet-probe --uris-configmap <pool>-turn-uris \
+  --publish-configmap <pool>-vantage --pool <pool> --secret-file ./turn-secret
+```
+
+`config/vantage/runner.yaml` is that command as a CronJob, with the role that
+lets it write its result and nothing else. **Running it in a pod proves the
+delivery path, not the vantage point**: a pod is on the cluster's network, so it
+sees exactly what the controller sees. Publish from a machine outside, and per
+pool, for the answer to be authoritative
+(`docs/adr/0015-vantage-result-delivery.md`).
+
 ## Firewall and network prerequisites
 
 On every relay node, allow:
