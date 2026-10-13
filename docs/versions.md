@@ -82,6 +82,16 @@ fixtures, which need a syntactically valid digest rather than this one, and
 A coturn bump also re-captures `internal/relay/testdata/coturn-<version>-help.txt`,
 the flag list `TestRenderedFlagsExistInPinnedCoturn` holds the renderer to.
 
+Renovate maintains the other image pins in the `Makefile` the same way:
+`KIND_IMAGE`, `GO_IMAGE` and `RUNTIME_IMAGE` are each extracted as one
+dependency holding its `tag@sha256:digest`, because the Dockerfiles name their
+base images only as `ARG`s that the Makefile passes at build time — a default
+manager sees `FROM ${GO_IMAGE}` and no version to resolve. `GO_IMAGE` carries
+the Go toolchain and is grouped with the `go` directive and the workflows'
+`GO_VERSION` (`go toolchain` in `renovate.json`); `KIND_IMAGE` is what the
+`kind node image` rule groups; distroless `nonroot` is a tag rather than a
+version, so that dependency is digest upkeep.
+
 The coturn image is the upstream, unmodified BSD-3-Clause data plane. It is
 never vendored into this repository (see `docs/adr/0002-coturn-data-plane.md`).
 

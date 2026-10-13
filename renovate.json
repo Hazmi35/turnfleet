@@ -50,6 +50,13 @@
       "matchPackageNames": ["kindest/node"]
     },
     {
+      "description": "The Go toolchain is one version written in five places: the `go` directive in go.mod and tools/go.mod, the GO_VERSION env in the workflows, the devcontainer image and the build image the Dockerfiles take as GO_IMAGE. One pull request has to move them together, which is what docs/versions.md means by GO_VERSION tracking the `go` directive.",
+      "groupName": "go toolchain",
+      "groupSlug": "go-toolchain",
+      "matchDatasources": ["golang-version", "docker"],
+      "matchPackageNames": ["go", "golang"]
+    },
+    {
       "description": "coturn is the relay data plane. The pins Renovate moves are the Makefile pair (`COTURN_IMAGE` with `COTURN_IMAGE_DIGEST`, which `make load-coturn` requires to agree) and the example pool; grouping them means one pull request moves both, tag and digest together. The copies under test/ move by hand with the pin: Renovate's default ignorePaths skips `test/**`, and the e2e default is only a fallback for `make test-e2e`, which passes the Makefile value explicitly (docs/versions.md).",
       "groupName": "coturn",
       "matchDatasources": ["docker"],
@@ -76,22 +83,57 @@
   },
   "customManagers": [
     {
-      "description": "Pin the Go toolchain used by CI: GO_VERSION in .github/workflows.",
+      "description": "Pin the Go toolchain used by CI: GO_VERSION in .github/workflows. The match includes the `GO_VERSION: \"` around the value, so the replacement writes that syntax back instead of a bare version.",
       "customType": "regex",
       "managerFilePatterns": ["/^\\.github/workflows/.*\\.ya?ml$/"],
       "matchStrings": ["GO_VERSION: \"(?<currentValue>[\\d.]+)\""],
+      "autoReplaceStringTemplate": "GO_VERSION: \"{{{newValue}}}\"",
       "datasourceTemplate": "golang-version",
       "depNameTemplate": "go"
     },
     {
-      "description": "The coturn data plane, as the Makefile pins it: the tag and the digest are one dependency, because `make load-coturn` refuses a tag that does not resolve to COTURN_IMAGE_DIGEST, so they can never be bumped apart.",
+      "description": "The coturn data plane, as the Makefile pins it: the tag and the digest are one dependency, because `make load-coturn` refuses a tag that does not resolve to COTURN_IMAGE_DIGEST, so they can never be bumped apart. The match spans both lines, so the replacement writes both back, variable name and all.",
       "customType": "regex",
       "managerFilePatterns": ["/^Makefile$/"],
       "matchStrings": [
         "COTURN_IMAGE \\?= coturn/coturn:(?<currentValue>[^\\s@]+)[\\s\\S]*?COTURN_IMAGE_DIGEST \\?= (?<currentDigest>sha256:[0-9a-f]{64})"
       ],
+      "autoReplaceStringTemplate": "COTURN_IMAGE ?= coturn/coturn:{{{newValue}}}\nCOTURN_IMAGE_DIGEST ?= {{{newDigest}}}",
       "datasourceTemplate": "docker",
       "depNameTemplate": "coturn/coturn"
+    },
+    {
+      "description": "The kind node image, as the Makefile pins it: the only place it is written, so the `kind node image` rule above had nothing to group until now. It has to stay on the Kubernetes minor the envtest binaries use.",
+      "customType": "regex",
+      "managerFilePatterns": ["/^Makefile$/"],
+      "matchStrings": [
+        "KIND_IMAGE \\?= kindest/node:(?<currentValue>[^\\s@]+)@(?<currentDigest>sha256:[0-9a-f]{64})"
+      ],
+      "autoReplaceStringTemplate": "KIND_IMAGE ?= kindest/node:{{{newValue}}}@{{{newDigest}}}",
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "kindest/node"
+    },
+    {
+      "description": "The build image, as the Makefile pins it. It carries the Go toolchain (`golang:1.27.2-bookworm`) and the Dockerfiles only say `FROM ${GO_IMAGE}`, so the Makefile is the only place the pin exists.",
+      "customType": "regex",
+      "managerFilePatterns": ["/^Makefile$/"],
+      "matchStrings": [
+        "GO_IMAGE \\?= golang:(?<currentValue>[^\\s@]+)@(?<currentDigest>sha256:[0-9a-f]{64})"
+      ],
+      "autoReplaceStringTemplate": "GO_IMAGE ?= golang:{{{newValue}}}@{{{newDigest}}}",
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "golang"
+    },
+    {
+      "description": "The runtime base image, as the Makefile pins it: distroless `nonroot` is a tag rather than a version, so this dependency is digest upkeep for a re-pushed tag.",
+      "customType": "regex",
+      "managerFilePatterns": ["/^Makefile$/"],
+      "matchStrings": [
+        "RUNTIME_IMAGE \\?= gcr\\.io/distroless/static-debian12:(?<currentValue>[^\\s@]+)@(?<currentDigest>sha256:[0-9a-f]{64})"
+      ],
+      "autoReplaceStringTemplate": "RUNTIME_IMAGE ?= gcr.io/distroless/static-debian12:{{{newValue}}}@{{{newDigest}}}",
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "gcr.io/distroless/static-debian12"
     }
   ]
 }
