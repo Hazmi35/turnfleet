@@ -108,6 +108,12 @@ Because a `CLAUDE.md` in the working directory or any parent shadows
 `AGENTS.md`, `make verify` fails if one exists anywhere in the tree
 (`hack/verify-no-claude-md.sh`).
 
+The harness content itself carries no pin and names no vendor: the skills and
+subagent definitions live under `.agents/`, the hook policy under
+`hack/agent/`, and each harness is wired to them by symlinks and adapters (ADR
+10). Only a harness that reads the instruction file through its own rules needs
+a floor version, which is why the table above is about Claude Code alone.
+
 ## Verification log
 
 The pins above were verified against the sources listed, not from memory:

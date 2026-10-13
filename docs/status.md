@@ -56,7 +56,8 @@ active allocation, and `turnfleet-probe` run from the host.
 **Tooling.** `make ci` (verify, lint, test, vuln, licenses, dco) and
 `make test-e2e`; every version pinned and recorded in `docs/versions.md`;
 GitHub Actions pinned by SHA with least-privilege permissions; DCO enforced by
-`hack/verify-dco.sh`.
+`hack/verify-dco.sh`; harness-agnostic agent skills, subagents and hook policy
+under `.agents/` and `hack/agent/`, wired into Claude Code and omp (ADR 10).
 
 ## Known limitations
 

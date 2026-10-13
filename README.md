@@ -127,10 +127,16 @@ saturation and peer-policy cases.
 | `cmd/` | `turnfleet-controller` and `turnfleet-probe`. |
 | `docs/` | Architecture, capacity model, ADRs, pinned versions, status, generated API reference. |
 | `test/e2e` | The kind end-to-end suite. |
+| `.agents/` | The skills and subagent definitions every agent harness shares; `.claude/` and `.omp/` hold the per-harness wiring and symlinks, `hack/agent/` the hook policy. |
 
 `AGENTS.md` is the single instruction file for coding agents. **Do not create a
 `CLAUDE.md` or `CLAUDE.local.md`**: either one shadows `AGENTS.md` for Claude
 Code, and `make verify` fails if one exists anywhere in the tree.
+
+The agent harness is harness-agnostic: the skills, the subagent definitions and
+the hook policy live once under `.agents/` and `hack/agent/`, and `.claude/`
+(Claude Code) and `.omp/` (omp) only wire them in — see `docs/adr/0010`. Editing
+an alias instead of the canonical file fails `make verify`.
 
 ## Development
 

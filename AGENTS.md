@@ -68,6 +68,23 @@ change affects relay behaviour, rendering, drain, or the probe.
 | `config/` | kustomize manifests. `config/default` (what `make deploy` applies) runs the controller without admission webhooks; `config/with-webhook` adds them and their cert-manager certificates. |
 | `docs/` | `architecture.md`, `capacity-model.md`, `api.md` (generated), `adr/`, `versions.md`, `status.md`. |
 
+## Agent harness
+
+Skills, subagent definitions and hook policy live once and are wired into each
+harness instead of being maintained per harness:
+
+| Path | What it is |
+| --- | --- |
+| `.agents/skills/<name>/SKILL.md` | Canonical skills; `.claude/skills/<name>/SKILL.md` is a symlink to it. |
+| `.agents/agents/<name>.md` | Canonical subagent definitions; `.claude/agents/<name>.md` and `.omp/agents/<name>.md` are symlinks to them. |
+| `hack/agent/*.sh` | Hook policy (kubectl guard, Go formatting, `make verify-fast`), harness-neutral: arguments in, exit code out. See `hack/agent/README.md`. |
+| `.claude/hooks/*.sh` | Claude Code adapters: stdin JSON in, Claude's decision JSON or exit 2 out. `.claude/settings.json` holds Claude's permission lists, which are harness-specific. |
+| `.omp/hooks/{pre,post}/*.ts` | omp adapters over the same scripts, on `tool_call` and `tool_result`. |
+
+Edit the canonical file under `.agents/`; `hack/verify-harness-links.sh` (part of
+`make verify`) fails when an alias is missing, points elsewhere, or was replaced
+by a copy.
+
 ## Conventions
 
 * Errors: wrap with `%w` and enough context to act on; never return a bare
@@ -111,9 +128,12 @@ change affects relay behaviour, rendering, drain, or the probe.
 * Change API types without regenerating and updating `docs/api.md`.
 * Bump a version without updating `docs/versions.md`.
 * Run `kubectl` against any context other than `kind-turnfleet`
-  (`.claude/hooks/guard-kubectl.sh` blocks it); `make` sets the context for you.
+  (`hack/agent/guard-kubectl.sh`, wired into every harness, blocks it); `make`
+  sets the context for you.
 * Create `CLAUDE.md` or `CLAUDE.local.md`: either shadows this file, and
   `make verify` fails if one exists.
+* Edit a `.claude/` or `.omp/` alias, or replace it with a copy: the content
+  under `.agents/` is canonical, and `make verify` checks the links.
 * Put a Service, Ingress or load balancer in the relay data path, or move the
   relay range behind one public IP: that is the bug this project removes.
 * Change a field that invalidates live allocations (relay port range,
