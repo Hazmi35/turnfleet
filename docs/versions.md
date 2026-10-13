@@ -36,10 +36,20 @@ manifests cannot express — which pins are deliberately held, and why (ADR 11).
 
 Two transitive dependencies are held at or above the versions that fix known
 vulnerabilities, because `make vuln` (govulncheck) fails on a reachable one:
-`google.golang.org/grpc` at `v1.83.1` (GO-2026-6348, heap exhaustion via HTTP/2
-DATA frame fragmentation) and `go.opentelemetry.io/otel/*` at `v1.45.0`
-(GO-2026-6505, fixed in the OTLP trace exporter and SDK). Lowering either floor
-re-introduces a failing `make vuln` run.
+`google.golang.org/grpc` at `v1.83.2` (GO-2026-6443, an xDS server panic on a
+request carrying neither `:authority` nor `Host`, and with it GO-2026-6348, heap
+exhaustion via HTTP/2 DATA frame fragmentation) and
+`go.opentelemetry.io/otel/*` at `v1.45.0` (GO-2026-6505, fixed in the OTLP trace
+exporter and SDK). Lowering either floor re-introduces a failing `make vuln`
+run.
+
+Neither grpc advisory is reachable from this code today: `make vuln` lists them
+among the vulnerabilities in packages the build imports but does not call. The
+import is controller-runtime's metrics filters into `k8s.io/apiserver`'s webhook
+token authenticator and from there the egress selector, which is a gRPC
+*client*; turnfleet serves no gRPC, so the xDS server panic has no path in. The
+floor stays current because the module is pinned here anyway and the fix is an
+upstream backport, not because the code is exploitable.
 
 `k8s.io/kube-openapi` is held at `v0.0.0-20260721132016-d427ff9ee9ad`, the
 version every `k8s.io/*` v0.37.0 library requires. kustomize `v5.8.3`
