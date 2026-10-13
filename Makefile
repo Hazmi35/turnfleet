@@ -259,7 +259,13 @@ undeploy: ## Remove the controller from the kind cluster.
 
 .PHONY: vuln
 vuln: ## Scan the module for known vulnerabilities.
-	$(GOVULNCHECK) ./...
+	# govulncheck loads the test dependency graph, which needs go.sum entries
+	# that `go mod tidy` deliberately prunes. It adds them while it runs, so the
+	# file is restored afterwards: a quality target must not leave the working
+	# tree dirty, or the next `make verify` fails for a reason that has nothing
+	# to do with the change under review.
+	@cp go.sum $(LOCALBIN)/go.sum.vuln-base
+	@$(GOVULNCHECK) ./... ; status=$$?; cp $(LOCALBIN)/go.sum.vuln-base go.sum; rm -f $(LOCALBIN)/go.sum.vuln-base; exit $$status
 
 .PHONY: licenses
 licenses: ## Fail if a dependency is incompatible with AGPL-3.0-only.
