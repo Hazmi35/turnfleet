@@ -106,7 +106,7 @@ func (r *TURNPoolReconciler) renderRelays(
 	secret string,
 	pods []corev1.Pod,
 ) ([]*relayState, error) {
-	denied := relay.MergeCIDRs(pool.Spec.PeerPolicy.DeniedCIDRs, r.ClusterCIDRs, clusterPodCIDRs)
+	denied := relay.MergeCIDRs(policyDeniedCIDRs(pool), r.ClusterCIDRs, clusterPodCIDRs)
 	var allowed []string
 	if pool.Spec.PeerPolicy != nil {
 		allowed = pool.Spec.PeerPolicy.AllowedCIDRs
@@ -171,6 +171,22 @@ func (r *TURNPoolReconciler) renderRelays(
 	}
 
 	return states, nil
+}
+
+// policyDeniedCIDRs is the pool's own peer deny list, or the operator's default
+// when the pool does not carry one.
+//
+// The defaulting webhook applies the same default, but it is not the only
+// install path: config/default runs the controller without admission webhooks,
+// and a spec that reaches the controller from there has been defaulted by
+// nobody. A relay whose only denied peers are the ones this controller knows
+// about is an SSRF pivot into the cluster, so the operator applies the default
+// itself rather than trusting that someone else did.
+func policyDeniedCIDRs(pool *turnfleetv1alpha1.TURNPool) []string {
+	if pool.Spec.PeerPolicy != nil && len(pool.Spec.PeerPolicy.DeniedCIDRs) > 0 {
+		return pool.Spec.PeerPolicy.DeniedCIDRs
+	}
+	return relay.DefaultDeniedCIDRs()
 }
 
 // previousRelays is the pool's last observed relay list, which is empty when the

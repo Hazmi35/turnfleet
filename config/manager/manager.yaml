@@ -69,7 +69,14 @@ spec:
         env:
         - name: ENABLE_WEBHOOKS
           value: "false"
+        # The placeholder tag would default the policy to Always, which sends
+        # the kubelet to the registry even when the image is already on the
+        # node: both `make load-images && make deploy` on kind and the e2e
+        # suite load the image into the cluster instead of pushing it.
+        # Releases are immutable tags (and the coturn data plane is pinned by
+        # digest), so a cached image is the intended one.
         image: controller:latest
+        imagePullPolicy: IfNotPresent
         name: manager
         ports:
         - containerPort: 8081

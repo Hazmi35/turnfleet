@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -217,6 +219,32 @@ func (f *testFixture) pods(pool string) []corev1.Pod {
 	return list.Items
 }
 
+// relayConfig returns the rendered coturn configuration of a pool's relays, as
+// the controller published it in the pool's relay ConfigMap.
+func (f *testFixture) relayConfig(pool string) string {
+	f.t.Helper()
+
+	name := RelayConfigMapName(&turnfleetv1alpha1.TURNPool{ObjectMeta: metav1.ObjectMeta{Name: pool}})
+	configMap := &corev1.ConfigMap{}
+	if err := k8sClient.Get(f.ctx, types.NamespacedName{Namespace: f.namespace, Name: name}, configMap); err != nil {
+		f.t.Fatalf("getting configmap %s: %v", name, err)
+	}
+	if len(configMap.Data) == 0 {
+		f.t.Fatalf("configmap %s holds no relay configuration", name)
+	}
+
+	keys := make([]string, 0, len(configMap.Data))
+	for key := range configMap.Data {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+	rendered := make([]string, 0, len(keys))
+	for _, key := range keys {
+		rendered = append(rendered, configMap.Data[key])
+	}
+	return strings.Join(rendered, "\n")
+}
+
 // markPodsReady makes every relay pod look like a running, ready pod with an
 // address. envtest runs no kubelet, so the test plays that part.
 func (f *testFixture) markPodsReady(pool string) {
@@ -310,11 +338,9 @@ func (f *testFixture) createPool(pool *turnfleetv1alpha1.TURNPool) {
 			Key:                  "secret",
 		}
 	}
-	if pool.Spec.PeerPolicy == nil {
-		// The defaulting webhook is not installed in this suite; the controller
-		// must work with whatever peer policy the spec carries.
-		pool.Spec.PeerPolicy = &turnfleetv1alpha1.PeerPolicySpec{DeniedCIDRs: []string{"10.0.0.0/8"}}
-	}
+	// No peer policy is injected here on purpose: the defaulting webhook is not
+	// installed in this suite, so the controller must work with whatever peer
+	// policy the spec carries, including none at all.
 	if len(pool.Spec.Listeners) == 0 {
 		pool.Spec.Listeners = []turnfleetv1alpha1.ListenerSpec{
 			{Name: "turn", Protocol: turnfleetv1alpha1.ListenerProtocolUDP, Port: 3478},

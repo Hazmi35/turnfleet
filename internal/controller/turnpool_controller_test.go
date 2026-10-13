@@ -560,6 +560,50 @@ func TestFinalizerDrainsBeforeDeletion(t *testing.T) {
 	})
 }
 
+// TestPeerPolicyDefaultsWithoutTheWebhook covers the install path config/default
+// takes: the controller runs with admission webhooks disabled, so nothing has
+// defaulted the spec, and the deny list is the operator's own responsibility.
+// A relay with no deny list can be pointed at the metadata service.
+func TestPeerPolicyDefaultsWithoutTheWebhook(t *testing.T) {
+	f := newFixture(t)
+	f.createSecret()
+	f.createNode("tf-worker-1", "203.0.113.21")
+
+	pool := hostNetworkPool("tpool-no-policy", 1)
+	pool.Spec.PeerPolicy = nil
+	f.createPool(pool)
+	f.reconcile("tpool-no-policy")
+
+	rendered := f.relayConfig("tpool-no-policy")
+	// 169.254.0.0/16 holds 169.254.169.254, the metadata address: denying it is
+	// what keeps an allocation from becoming an SSRF pivot into the cluster.
+	if !strings.Contains(rendered, "denied-peer-ip=169.254.0.0-169.254.255.255") {
+		t.Errorf("a pool that declares no peerPolicy does not deny link-local peers:\n%s", rendered)
+	}
+}
+
+// TestPeerPolicyFromTheSpecIsNotWidened pins the other side of the same rule:
+// a pool that declares its own deny list gets that list, not the default
+// silently added to it.
+func TestPeerPolicyFromTheSpecIsNotWidened(t *testing.T) {
+	f := newFixture(t)
+	f.createSecret()
+	f.createNode("tf-worker-1", "203.0.113.22")
+
+	pool := hostNetworkPool("tpool-own-policy", 1)
+	pool.Spec.PeerPolicy = &turnfleetv1alpha1.PeerPolicySpec{DeniedCIDRs: []string{"203.0.113.0/24"}}
+	f.createPool(pool)
+	f.reconcile("tpool-own-policy")
+
+	rendered := f.relayConfig("tpool-own-policy")
+	if !strings.Contains(rendered, "denied-peer-ip=203.0.113.0-203.0.113.255") {
+		t.Errorf("the pool's own deny list is not rendered:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "169.254.0.0-169.254.255.255") {
+		t.Errorf("the operator's default list was added to a pool that declares its own:\n%s", rendered)
+	}
+}
+
 func readyRelays(t *testing.T, f *testFixture, name string) int32 {
 	t.Helper()
 

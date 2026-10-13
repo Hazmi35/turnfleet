@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Turnfleet Authors
+#
+# Examples that need CRDs this repository does not ship: the KEDA ScaledObject
+# needs KEDA installed (its CRDs and its metrics adapter), so it is kept out of
+# the parent kustomization, which stays applicable on a bare cluster.
+#
+# Install KEDA first:
+#   helm repo add kedacore https://kedacore.github.io/charts
+#   helm install keda kedacore/keda --namespace keda --create-namespace
+#
+# Then apply it against a pool that exists:
+#   kubectl apply -k config/samples/keda
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- turnpool-scaledobject.yaml

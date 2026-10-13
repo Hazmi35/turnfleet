@@ -1,4 +1,7 @@
 ## Append samples of your project ##
 resources:
 - turnfleet_v1alpha1_turnpool.yaml
+- scaling-hpa.yaml
+# The keda/ example is deliberately not listed here: it needs KEDA's CRDs, so
+# including it would make this kustomization fail on a cluster without KEDA.
 # +kubebuilder:scaffold:manifestskustomizesamples

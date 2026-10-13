@@ -133,6 +133,12 @@ covers RFC 1918, RFC 6598 (CGNAT), loopback, link-local including
 `--allowed-peer-ip` entries. This is what stops a relay from being turned into
 an SSRF pivot into the cluster (see the e2e peer-policy case).
 
+A pool that declares no `peerPolicy`, or an empty `deniedCIDRs` list, gets that
+default: the defaulting webhook applies it, and so does the controller, because
+`config/default` runs without admission webhooks and a spec that arrives from
+there has been defaulted by nobody. A pool that declares its own list gets
+exactly that list, never the default added to it.
+
 ## What is deliberately not here
 
 The full list, including what each omission costs operationally, is in
