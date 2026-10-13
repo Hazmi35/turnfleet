@@ -126,6 +126,12 @@ func TestVantageRunnerInCluster(t *testing.T) {
 		t.Errorf("the in-cluster probe reports %s while the vantage point reports unreachable, want True: "+
 			"the in-cluster result is what must not mask it", got)
 	}
+	// The vantage failure is reported, and it does not reach into what the
+	// cluster says about the relay: the pool is ready and still usable from
+	// inside, which is exactly the shape of the failure ADR 7 describes.
+	if got := conditionAt(current, controller.ConditionReady); got != metav1.ConditionTrue {
+		t.Errorf("Ready is %s while the relay is healthy in-cluster, want True", got)
+	}
 	degraded := conditionAt(current, controller.ConditionDegraded)
 	if degraded != metav1.ConditionTrue {
 		t.Errorf("Degraded is %s while the vantage point cannot reach the pool, want True", degraded)
