@@ -4,6 +4,7 @@
 package controller
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"slices"
@@ -168,10 +169,35 @@ func (r *TURNPoolReconciler) addressConflicts(ctx context.Context, pool *turnfle
 		}
 	}
 
-	slices.SortFunc(conflicts, func(a, b addressConflict) int {
-		return strings.Compare(a.identity.key()+a.other.String(), b.identity.key()+b.other.String())
-	})
+	// A total order, so the condition message is stable across passes: an
+	// equally-ordered list would let the status flap between two spellings of
+	// the same fact and rewrite itself forever.
+	slices.SortFunc(conflicts, compareConflicts)
 	return conflicts, nil
+}
+
+// compareConflicts orders conflicts by identity, then by the pool holding the
+// overlapping one.
+func compareConflicts(a, b addressConflict) int {
+	if c := strings.Compare(a.identity.address, b.identity.address); c != 0 {
+		return c
+	}
+	if c := cmp.Compare(a.identity.portRange.Start, b.identity.portRange.Start); c != 0 {
+		return c
+	}
+	if c := cmp.Compare(a.identity.portRange.End, b.identity.portRange.End); c != 0 {
+		return c
+	}
+	if c := strings.Compare(a.other.Namespace, b.other.Namespace); c != 0 {
+		return c
+	}
+	if c := strings.Compare(a.other.Name, b.other.Name); c != 0 {
+		return c
+	}
+	if c := cmp.Compare(a.otherRange.Start, b.otherRange.Start); c != 0 {
+		return c
+	}
+	return cmp.Compare(a.otherRange.End, b.otherRange.End)
 }
 
 // describeConflicts is the condition message for a list of overlaps. It names
