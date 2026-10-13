@@ -19,6 +19,14 @@
       ]
     },
     {
+      "description": "kustomize is held at v5.8.2, and moving it is not a Renovate bump: v5.8.3 (kyaml v0.21.3) requires a newer kube-openapi whose schema conversion moved to structured-merge-diff/v7, which does not type-check against k8s.io/apimachinery (still v6), so `make lint` fails and the image build with it. The Makefile's KUSTOMIZE_VERSION pins the same version and no manager reads the Makefile, so a bot bump would move one copy of the pin and not the other. Moving past v5.8.2 means moving the whole k8s.io/* set, which is a deliberate change (docs/versions.md); re-enable this rule when that happens.",
+      "matchPackageNames": [
+        "sigs.k8s.io/kustomize/kustomize/v5",
+        "sigs.k8s.io/kustomize/**"
+      ],
+      "enabled": false
+    },
+    {
       "description": "Lint toolchain lives in tools/go.mod as a `tool` directive.",
       "groupName": "golangci-lint toolchain",
       "matchManagers": ["gomod"],
