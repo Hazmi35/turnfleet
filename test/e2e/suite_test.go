@@ -386,10 +386,10 @@ func kubectl(ctx context.Context, t *testing.T, args ...string) string {
 // kubectlTimeout bounds one kubectl call.
 const kubectlTimeout = 30 * time.Second
 
-// hostProbe runs the probe CLI from the host and parses its JSON output.
-//
-//nolint:gosec // the binary path is a repository-local build artifact named in the environment.
-func hostProbe(ctx context.Context, t *testing.T, uri string, extraArgs ...string) probeCLIResult {
+// hostProbe runs the probe CLI from the host and parses its JSON output. It
+// also returns how long the process took, so a caller can hold the probe's own
+// latency against the clock it was observed with.
+func hostProbe(ctx context.Context, t *testing.T, uri string, extraArgs ...string) (probeCLIResult, time.Duration) {
 	t.Helper()
 
 	secretFile := writeSecretFile(t)
@@ -401,7 +401,9 @@ func hostProbe(ctx context.Context, t *testing.T, uri string, extraArgs ...strin
 
 	//nolint:gosec // the binary path is a repository-local build artifact.
 	cmd := exec.CommandContext(ctx, probeBinary, args...)
+	started := time.Now()
 	output, err := cmd.Output()
+	elapsed := time.Since(started)
 	if err != nil {
 		t.Fatalf("turnfleet-probe %s failed: %v\n%s", strings.Join(args, " "), err, output)
 	}
@@ -410,7 +412,7 @@ func hostProbe(ctx context.Context, t *testing.T, uri string, extraArgs ...strin
 	if err := json.Unmarshal(output, &result); err != nil {
 		t.Fatalf("turnfleet-probe did not return valid JSON: %v\n%s", err, output)
 	}
-	return result
+	return result, elapsed
 }
 
 // writeSecretFile writes the shared secret to a temporary file, the way an

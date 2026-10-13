@@ -440,7 +440,7 @@ func TestProbeCLIFromTheHost(t *testing.T) {
 	relayStatus := status.Status.Relays[0]
 	address, port := relayListenerHostPort(t, &relayStatus)
 
-	result := hostProbe(ctx, t, fmt.Sprintf("turn:%s:%d?transport=udp", address, port),
+	result, elapsed := hostProbe(ctx, t, fmt.Sprintf("turn:%s:%d?transport=udp", address, port),
 		"--expect-address", address,
 		"--expect-port-range", fmt.Sprintf("%d-%d", relayStatus.PortRange.Start, relayStatus.PortRange.End),
 	)
@@ -455,8 +455,13 @@ func TestProbeCLIFromTheHost(t *testing.T) {
 		t.Errorf("probe reported relayed port %d, outside %d-%d",
 			result.RelayedPort, relayStatus.PortRange.Start, relayStatus.PortRange.End)
 	}
-	if result.LatencyMillis <= 0 {
-		t.Errorf("probe reported latency %dms", result.LatencyMillis)
+	// LatencyMillis is truncated to whole milliseconds, so a relay on the same
+	// host as the probe legitimately reports 0 and asserting more than that
+	// would fail whenever the allocation is quick. What is worth checking is
+	// that the probe did not claim more time than its own process took.
+	if result.LatencyMillis > elapsed.Milliseconds() {
+		t.Errorf("probe reported latency %dms, more than the %dms the turnfleet-probe process took",
+			result.LatencyMillis, elapsed.Milliseconds())
 	}
 	if result.URI == "" {
 		t.Error("probe reported no URI")
