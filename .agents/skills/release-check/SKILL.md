@@ -19,8 +19,8 @@ evidence for each one; "looks fine" is not evidence.
    relay.
 4. **Version pins agree**: each pin's copies in `go.mod`, `tools/go.mod`, the
    `Makefile`, `.custom-gcl.yml`, the Dockerfiles and the workflows hold the same
-   value, and the held modules and vulnerability floors described in
-   `docs/versions.md` still describe what is in the tree. Diff them.
+   value, and the held modules, vulnerability floors and the held cosign pin
+   described in `docs/versions.md` still describe what is in the tree. Diff them.
 5. **`docs/api.md` and the CRDs** are regenerated from the tagged commit
    (`make verify` is the check).
 6. **The docs reflect reality**: `docs/architecture.md` and
@@ -35,15 +35,41 @@ evidence for each one; "looks fine" is not evidence.
 8. **License obligations**: `make licenses` is green; `LICENSE` is the verbatim
    AGPL-3.0 text; the coturn image is still the unmodified upstream image
    (ADR 2).
-
-## Out of scope today
-
-Signing, SBOM publication, provenance attestations and a Helm chart are open
-issues, not implemented features (`gh issue list --label roadmap` is the current
-list). Do not claim them in release notes.
+9. **`.github/workflows/release.yaml` is on the commit being tagged**: a tag push
+   runs that file as the tag's tree has it, and it is what signs the digests,
+   attaches the SBOM and the provenance and writes the release notes (ADR 16).
+   The Helm chart is still an open issue, not an implemented feature
+   (`gh issue list --label roadmap` is the current list); do not claim it in
+   release notes.
 
 ## After tagging
 
-* Record the tag and the digest of both published images in the release notes.
+* Watch the Release workflow for the tag. It waits for the Image workflow to
+  publish `ghcr.io/hazmi35/turnfleet-{controller,probe}:<tag>`, signs both index
+  digests keyless, attaches an SPDX SBOM and SLSA provenance to each, verifies
+  all three with the identity it records, and writes the release body from the
+  digests and the commands. It fails loudly if the digests never appear (look at
+  the Image run for the tag) or if one of its own verifications fails.
+* Check what it published rather than trusting it. The release notes carry the
+  digests, the certificate identity and the exact commands; `identity` is
+  `https://github.com/Hazmi35/turnfleet/.github/workflows/release.yaml@refs/tags/<tag>`:
+
+  ```sh
+  ref="ghcr.io/hazmi35/turnfleet-controller:<tag>@sha256:<digest>"
+  identity="https://github.com/Hazmi35/turnfleet/.github/workflows/release.yaml@refs/tags/<tag>"
+  issuer=https://token.actions.githubusercontent.com
+
+  cosign verify --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" "$ref"
+  cosign verify-attestation --type slsaprovenance --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" "$ref" |
+    jq -r .payload | base64 -d | jq -r .predicate.invocation.configSource.digest.sha1
+  cosign verify-attestation --type spdxjson --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" "$ref" |
+    jq -r .payload | base64 -d | jq -r '.predicate.packages[] | select(.name == "coturn") | .versionInfo'
+  ```
+
+  The first command proves the signature, the second prints the commit the
+  provenance names (it must be the tagged commit) and the third prints the pinned
+  coturn digest. Repeat for `turnfleet-probe`. A consumer that holds a public key
+  instead of trusting the Fulcio identity uses `cosign verify --key cosign.pub
+  <ref>`, which needs a key-based signature this repository does not produce.
 * Bump the image tags referenced from `config/` if the chart uses fixed tags.
 * Re-run `make verify` on the tag: a tag is a commit, not a branch state.
