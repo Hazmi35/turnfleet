@@ -25,6 +25,11 @@ PROBE_IMG ?= $(IMAGE_REGISTRY)/turnfleet-probe:$(IMAGE_TAG)
 CONTROLLER_TOOLS_VERSION ?= v0.22.0
 ENVTEST_K8S_VERSION ?= 1.37.0
 KUSTOMIZE_VERSION ?= v5.8.2
+# Helm renders and lints the chart. It is not a Go tool, so it is downloaded
+# from the release into $(LOCALBIN) and verified against the checksum the
+# release publishes next to it (see the `helm` target). Renovate reads this
+# line (customManager in renovate.json).
+HELM_VERSION ?= v4.3.0
 KIND_IMAGE ?= kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
 # The coturn data plane. COTURN_IMAGE is the tag the kind cluster is loaded
 # with (a multi-arch index digest cannot be loaded with `docker save`), and
@@ -67,6 +72,14 @@ GOVULNCHECK = $(GO) tool govulncheck
 CRD_REF_DOCS = $(GO) tool crd-ref-docs
 LICENSE_CHECK = $(GO) tool licenses
 KUSTOMIZE = $(GO) tool kustomize
+
+# The chart, and the helm binary that renders and lints it.
+HELM = $(LOCALBIN)/helm
+LOCAL_KUSTOMIZE = $(abspath $(LOCALBIN))/kustomize
+HELM_CHART ?= charts/turnfleet
+# Extra `--set` arguments for `make helm-install` and `make helm-render`, e.g.
+# HELM_VALUES='--set webhook.enabled=true' on a cluster with cert-manager.
+HELM_VALUES ?=
 
 .PHONY: all
 all: build
@@ -152,6 +165,21 @@ test-e2e: kind-up docker-build build install ## Run the end-to-end suite against
 	KUBE_CONTEXT=$(KUBE_CONTEXT) KIND_CLUSTER=$(KIND_CLUSTER) COTURN_IMAGE="$(COTURN_IMAGE)" \
 		PROBE_BIN="$(abspath $(PROBE_BIN))" \
 		$(GO) test -tags=e2e -count=1 -timeout 30m ./test/e2e/
+
+# The chart path through the same cluster: the controller (and the CRDs) come
+# from `helm install` instead of kustomize, and the probe case from the suite
+# runs against it. What `make test-e2e` deployed first is removed, because Helm
+# will not adopt objects that kustomize created and the CRDs have to belong to
+# the release that installs them.
+.PHONY: test-e2e-chart
+test-e2e-chart: kind-up docker-build build ## Install the CRDs and the controller from the chart, then probe a relay.
+	$(MAKE) load-images
+	$(MAKE) undeploy KUSTOMIZE_OVERLAY=config/e2e
+	$(MAKE) uninstall
+	$(MAKE) helm-install
+	KUBE_CONTEXT=$(KUBE_CONTEXT) KIND_CLUSTER=$(KIND_CLUSTER) COTURN_IMAGE="$(COTURN_IMAGE)" \
+		PROBE_BIN="$(abspath $(PROBE_BIN))" \
+		$(GO) test -tags=e2e -count=1 -timeout 15m -run TestProbeCLIFromTheHost ./test/e2e/
 
 .PHONY: envtest
 envtest: ## Download the envtest control plane binaries.
@@ -255,6 +283,77 @@ deploy: ## Deploy the controller into the kind cluster.
 undeploy: ## Remove the controller from the kind cluster.
 	-$(KUSTOMIZE) build $(KUSTOMIZE_OVERLAY) | $(KUBECTL) delete --ignore-not-found -f -
 
+##@ Helm
+
+# The chart installs the controller, never the relays: relays come from the
+# planner. charts/turnfleet renders what config/default and config/with-webhook
+# render, which `make helm-drift` holds it to.
+
+# helm is not a Go tool, so its version is a Makefile pin and the release is
+# downloaded into $(LOCALBIN) with the checksum the release publishes next to
+# it. HELM_VERSION is what Renovate moves (customManager in renovate.json).
+.PHONY: helm
+helm: ## Download the pinned helm binary into bin/.
+	@mkdir -p "$(LOCALBIN)"
+	@if [ -x "$(HELM)" ] && "$(HELM)" version --short 2>/dev/null | grep -qF "$(HELM_VERSION)"; then \
+		echo "helm $(HELM_VERSION) is already in $(LOCALBIN)"; \
+	else \
+	os="$$($(GO) env GOOS)"; arch="$$($(GO) env GOARCH)"; \
+	archive="helm-$(HELM_VERSION)-$$os-$$arch.tar.gz"; \
+	url="https://get.helm.sh/$$archive"; \
+	tmp="$$(mktemp -d)"; \
+	trap 'rm -rf "$$tmp"' EXIT; \
+	curl -fsSL -o "$$tmp/$$archive" "$$url"; \
+	curl -fsSL -o "$$tmp/$$archive.sha256sum" "$$url.sha256sum"; \
+	(cd "$$tmp" && sha256sum --check --strict "$$archive.sha256sum"); \
+	tar -xzf "$$tmp/$$archive" -C "$$tmp"; \
+	install -m 0755 "$$tmp/$$os-$$arch/helm" "$(HELM)"; \
+	fi
+	@"$(HELM)" version --short
+
+.PHONY: helm-lint
+helm-lint: helm ## Lint the chart.
+	"$(HELM)" lint --strict $(HELM_CHART)
+
+.PHONY: helm-render
+helm-render: helm ## Render the chart with the image the Makefile builds.
+	"$(HELM)" template turnfleet $(HELM_CHART) --namespace turnfleet-system --include-crds \
+		--set image.repository=$(IMAGE_REGISTRY)/turnfleet-controller --set image.tag=$(IMAGE_TAG) \
+		$(HELM_VALUES)
+
+.PHONY: helm-crds
+helm-crds: ## Copy the generated CRDs from config/crd/bases into the chart.
+	rm -f $(HELM_CHART)/crds/*.yaml
+	cp config/crd/bases/*.yaml $(HELM_CHART)/crds/
+
+.PHONY: helm-drift
+helm-drift: helm kustomize ## Fail when the chart and config/ no longer render the same controller.
+	# The kustomize binary is the one the `kustomize` target installs from
+	# KUSTOMIZE_VERSION, the same pin `$(KUSTOMIZE) build` resolves.
+	$(GO) run ./hack/helm-drift -helm "$(HELM)" -kustomize "$(LOCAL_KUSTOMIZE)" -chart $(HELM_CHART)
+
+.PHONY: helm-verify
+helm-verify: helm-lint helm-drift ## Lint the chart and check it against config/.
+
+.PHONY: helm-install
+helm-install: helm ## Install the controller from the chart into the kind cluster.
+	# The image comes from the Makefile, the way `make deploy` sets it on the
+	# cluster: the chart's own default is the release repository and the chart
+	# version, which is not what a local kind cluster has loaded.
+	$(HELM) upgrade --install turnfleet $(HELM_CHART) \
+		--kube-context $(KUBE_CONTEXT) \
+		--namespace turnfleet-system --create-namespace \
+		--set image.repository=$(IMAGE_REGISTRY)/turnfleet-controller --set image.tag=$(IMAGE_TAG) \
+		$(HELM_VALUES)
+	# Same reason as `make deploy`: the tag is constant, so a freshly loaded
+	# image needs a new pod.
+	$(KUBECTL) -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+	$(KUBECTL) -n turnfleet-system rollout status deployment/turnfleet-controller-manager --timeout=180s
+
+.PHONY: helm-uninstall
+helm-uninstall: helm ## Remove the chart from the kind cluster.
+	-$(HELM) uninstall turnfleet --kube-context $(KUBE_CONTEXT) --namespace turnfleet-system
+
 ##@ Quality
 
 # Some quality targets walk the whole dependency graph, which needs go.sum
@@ -282,7 +381,7 @@ dco: ## Check that every commit in the branch is signed off.
 	@hack/verify-dco.sh
 
 .PHONY: ci
-ci: verify lint test vuln licenses dco ## Run everything CI runs.
+ci: verify helm-verify lint test vuln licenses dco ## Run everything CI runs.
 
 ##@ Tooling
 

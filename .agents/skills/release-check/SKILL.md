@@ -12,8 +12,8 @@ evidence for each one; "looks fine" is not evidence.
 
 1. **Clean history on `main`**: no merge commits, Conventional Commits, every
    commit signed off. `make dco` and `git log --oneline main`.
-2. **`make ci`** green on the exact commit being tagged: verify, lint, test,
-   vuln, licenses, dco.
+2. **`make ci`** green on the exact commit being tagged: verify, helm-verify,
+   lint, test, vuln, licenses, dco.
 3. **`make test-e2e`** green: all three addressing modes, saturation, peer
    policy, drain with an active allocation, and `turnfleet-probe` against a real
    relay.
@@ -45,5 +45,6 @@ list). Do not claim them in release notes.
 ## After tagging
 
 * Record the tag and the digest of both published images in the release notes.
-* Bump the image tags referenced from `config/` if the chart uses fixed tags.
+* Bump `charts/turnfleet`'s `appVersion` with the released image tag, so a chart
+  install without flags uses the released image (`docs/versions.md`, "Helm").
 * Re-run `make verify` on the tag: a tag is a commit, not a branch state.

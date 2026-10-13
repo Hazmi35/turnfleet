@@ -1,0 +1,20 @@
+# The Turnfleet controller as a chart.
+#
+# The manifests here mirror config/default (webhooks off) and
+# config/with-webhook (webhooks on), which stay the source of truth for what the
+# controller is: `make helm-drift` renders both and fails when they part ways.
+# The chart is for installing the controller, never the relays — relay pods are
+# created by the controller from a TURNPool, and nothing in the relay data path
+# goes through this chart.
+apiVersion: v2
+name: turnfleet
+description: The Turnfleet controller for TURN relay fleets.
+type: application
+version: 0.1.0
+# The tag a controller image built by this repository carries until the project
+# tags a release (`IMAGE_TAG` in the Makefile, which `make helm-install` passes
+# as the image tag).
+appVersion: "dev"
+home: https://github.com/Hazmi35/turnfleet
+sources:
+  - https://github.com/Hazmi35/turnfleet
