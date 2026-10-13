@@ -107,6 +107,10 @@ generate: ## Generate DeepCopy methods.
 .PHONY: manifests
 manifests: ## Generate CRDs, RBAC and webhook manifests.
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd:generateEmbeddedObjectMeta=true webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+	# The chart ships the same CRDs from crds/. Helm reads that directory when it
+	# installs, never when it renders, so a stale copy would install an old API
+	# without any template showing it.
+	$(MAKE) helm-crds
 
 .PHONY: api-docs
 api-docs: ## Generate docs/api.md from the API types.
@@ -136,6 +140,7 @@ verify: ## Verify generated code, manifests, docs and module files produce no di
 	$(CONTROLLER_GEN) object:headerFile=hack/boilerplate.go.txt paths="./..."
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd:generateEmbeddedObjectMeta=true webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 	$(CRD_REF_DOCS) --source-path=api/v1alpha1 --output-path=docs/api.md --renderer=markdown --config=$(CONTROLLER_GEN_CONFIG)
+	$(MAKE) helm-crds
 	$(GO) mod tidy
 	cd tools && $(GO) mod tidy
 	@hack/verify-headers.sh
