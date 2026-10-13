@@ -142,7 +142,7 @@ test: generate manifests envtest ## Run unit and envtest suites.
 
 .PHONY: test-fuzz
 test-fuzz: generate ## Fuzz the renderer and the webhook validators.
-	$(GO) test -run '^$$' -fuzz '^FuzzRenderer$' -fuzztime $(FUZZ_TIME) ./internal/relay/
+	$(GO) test -run '^$$' -fuzz '^FuzzRenderer$$' -fuzztime $(FUZZ_TIME) ./internal/relay/
 	$(GO) test -run '^$$' -fuzz '^FuzzWebhookValidation$$' -fuzztime $(FUZZ_TIME) ./internal/webhook/v1alpha1/
 
 .PHONY: test-e2e
