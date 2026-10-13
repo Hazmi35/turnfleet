@@ -40,6 +40,12 @@ const (
 	rangeRoundTripHigh uint16 = 55110
 	rangeDeniedLow     uint16 = 55120
 	rangeDeniedHigh    uint16 = 55130
+
+	// Relay port ranges for the IPv6 servers.
+	rangeV6Low     uint16 = 55140
+	rangeV6High    uint16 = 55150
+	rangeV6BadLow  uint16 = 55160
+	rangeV6BadHigh uint16 = 55170
 )
 
 // turnServer is a real TURN server, in-process, so the probe is tested against
@@ -78,6 +84,49 @@ func startTurnServer(t *testing.T, portLow, portHigh uint16, permission turn.Per
 	})
 	if err != nil {
 		t.Fatalf("starting the TURN server: %v", err)
+	}
+	t.Cleanup(func() { _ = server.Close() })
+
+	return &turnServer{
+		address:  conn.LocalAddr().String(),
+		secret:   testSecret,
+		portLow:  int32(portLow),
+		portHigh: int32(portHigh),
+	}
+}
+
+// startTurnServerV6 is the same in-process TURN server, on IPv6 loopback: the
+// probe's IPv6 path is tested against the protocol too, not against a mock.
+func startTurnServerV6(t *testing.T, portLow, portHigh uint16, permission turn.PermissionHandler) *turnServer {
+	t.Helper()
+
+	conn, err := net.ListenPacket("udp6", "[::1]:0")
+	if err != nil {
+		if strings.Contains(err.Error(), "address family not supported") {
+			t.Skipf("no IPv6 loopback on this host: %v", err)
+		}
+		t.Fatalf("listening on IPv6 loopback: %v", err)
+	}
+
+	server, err := turn.NewServer(turn.ServerConfig{
+		Realm:         testRealm,
+		AuthHandler:   turn.LongTermTURNRESTAuthHandler(testSecret, nil),
+		LoggerFactory: quietLoggerFactory(),
+		PacketConnConfigs: []turn.PacketConnConfig{
+			{
+				PacketConn: conn,
+				RelayAddressGenerator: &turn.RelayAddressGeneratorPortRange{
+					RelayAddress: net.ParseIP("::1"),
+					Address:      "::1",
+					MinPort:      portLow,
+					MaxPort:      portHigh,
+				},
+				PermissionHandler: permission,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("starting the IPv6 TURN server: %v", err)
 	}
 	t.Cleanup(func() { _ = server.Close() })
 
@@ -157,6 +206,28 @@ func TestParseURI(t *testing.T) {
 		{name: "bad transport", uri: "turn:203.0.113.10:3478?transport=sctp", wantError: true},
 		{name: "tls over udp", uri: "turns:203.0.113.10:5349?transport=udp", wantError: true},
 		{name: "bad port", uri: "turn:203.0.113.10:notaport", wantError: true},
+		// RFC 7065 wraps an IPv6 authority in brackets, because the address
+		// itself carries the colons the port separator would otherwise be.
+		{
+			name: "bracketed ipv6 with an explicit port",
+			uri:  "turn:[2001:db8::10]:3478?transport=udp",
+			want: Endpoint{Host: "2001:db8::10", Port: 3478, Transport: "udp"},
+		},
+		{
+			name: "bracketed ipv6 with the default port",
+			uri:  "turn:[2001:db8::10]?transport=tcp",
+			want: Endpoint{Host: "2001:db8::10", Port: DefaultPlainPort, Transport: "tcp"},
+		},
+		{
+			name: "bracketed ipv6 as an authority",
+			uri:  "turns://[2001:db8::10]:5349?transport=tcp",
+			want: Endpoint{Host: "2001:db8::10", Port: 5349, Transport: "tcp", Secure: true},
+		},
+		{
+			name:      "unbracketed ipv6 is ambiguous",
+			uri:       "turn:2001:db8::10:3478?transport=udp",
+			wantError: true,
+		},
 	}
 
 	for _, tc := range tests {
@@ -263,6 +334,49 @@ func TestAllocateReleasesTheAllocation(t *testing.T) {
 		if err != nil {
 			t.Fatalf("round %d: the previous probe never released its allocation: %+v", round+1, last)
 		}
+	}
+}
+
+// TestAllocateSucceedsOverIPv6 is the IPv6 half of the probe's contract: it
+// parses a v6 XOR-RELAYED-ADDRESS, reports it bracketed in the URI, and matches
+// it against the expected address.
+func TestAllocateSucceedsOverIPv6(t *testing.T) {
+	t.Parallel()
+
+	server := startTurnServerV6(t, rangeV6Low, rangeV6High, nil)
+	portRange := relay.PortRange{Start: int32(rangeV6Low), End: int32(rangeV6High)}
+
+	result := Allocate(context.Background(), server.config(t, "::1", &portRange))
+
+	if !result.Succeeded {
+		t.Fatalf("probe failed against an IPv6 relay: %+v", result)
+	}
+	if result.RelayedAddress != "::1" {
+		t.Errorf("relayed address = %q, want ::1", result.RelayedAddress)
+	}
+	if !portRange.Contains(result.RelayedPort) {
+		t.Errorf("relayed port = %d, want a port in %s", result.RelayedPort, portRange)
+	}
+	if !strings.HasPrefix(result.URI, "turn:[::1]:") {
+		t.Errorf("URI = %q, want the bracketed authority RFC 7065 requires", result.URI)
+	}
+}
+
+// TestAllocateDetectsWrongIPv6Address is the assertion half: a v6 relayed
+// address is compared, not accepted because it is not IPv4.
+func TestAllocateDetectsWrongIPv6Address(t *testing.T) {
+	t.Parallel()
+
+	server := startTurnServerV6(t, rangeV6BadLow, rangeV6BadHigh, nil)
+	portRange := relay.PortRange{Start: int32(rangeV6BadLow), End: int32(rangeV6BadHigh)}
+
+	result := Allocate(context.Background(), server.config(t, "2001:db8::1", &portRange))
+
+	if result.Succeeded {
+		t.Fatalf("probe passed although the relay advertised %s instead of 2001:db8::1", result.RelayedAddress)
+	}
+	if !strings.Contains(result.Message, "want 2001:db8::1") {
+		t.Errorf("message %q does not say which address was expected", result.Message)
 	}
 }
 

@@ -178,7 +178,7 @@ func Allocate(ctx context.Context, cfg *Config) Result {
 	// A port from net is 0-65535.
 	//nolint:gosec // a UDP port always fits in int32.
 	result.RelayedPort = int32(relayed.Port)
-	logger.Debugf("relayed address is %s:%d", result.RelayedAddress, result.RelayedPort)
+	logger.Debugf("relayed address is %s", net.JoinHostPort(result.RelayedAddress, strconv.Itoa(int(result.RelayedPort))))
 
 	if err := checkExpectations(cfg, relayed); err != nil {
 		return finish(&result, start, err, 0, "the relay answered with an address it does not own")
