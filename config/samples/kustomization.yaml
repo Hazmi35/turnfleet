@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- turnfleet_v1alpha1_turnpool.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

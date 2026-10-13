@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Turnfleet Authors
+#
+# Configuration for crd-ref-docs (docs/api.md is generated, never edited).
+renderer: markdown
+source:
+  paths:
+    - api/v1alpha1
+  # Document the whole API package, including the shared addressing and
+  # listener types referenced from the TURNPool spec.
+  excludedPackages: []
+processor:
+  # Keep the documented depth in step with the nested spec: listeners[].tlsSecretRef
+  # is four levels deep.
+  maxDepth: 10
+  # Rendering the package even when a type is unused keeps PortRange and
+  # AddressingMode in the reference.
+  doNotHideFields: []
+  skipFields: []

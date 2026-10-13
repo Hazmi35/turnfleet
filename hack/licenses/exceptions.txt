@@ -1,0 +1,5 @@
+# Reviewed, per-module exceptions for hack/licenses.
+#
+# Format: <module path>\t<SPDX license id>\t<reason>
+# One module per line. Never widen the allow list to fix a single dependency;
+# add the module here with a reason that a reviewer can verify.
