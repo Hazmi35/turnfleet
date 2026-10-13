@@ -25,9 +25,11 @@ func FuzzRenderer(f *testing.F) {
 		spec := specFromBytes(data)
 
 		nodes := []Node{
-			{Name: "worker-1", Address: "203.0.113.11", BindAddress: "203.0.113.11"},
-			{Name: "worker-2", Address: "203.0.113.12", BindAddress: "203.0.113.12"},
-			{Name: "worker-3", Address: "10.0.0.13", BindAddress: "10.0.0.13"},
+			dualStackNode("worker-1", "203.0.113.11", "2001:db8::11"),
+			dualStackNode("worker-2", "203.0.113.12", "2001:db8::12"),
+			// An IPv4-only node: an IPv6 or DualStack pool must simply place
+			// nothing on it, not fall back to its IPv4 address.
+			v4Node("worker-3", "10.0.0.13"),
 		}
 
 		plan := ComputePlan(&PlanInput{PoolName: "fuzz", Spec: spec, Nodes: nodes})
@@ -115,13 +117,22 @@ func specFromBytes(data []byte) turnfleetv1alpha1.TURNPoolSpec {
 		"SomethingElse",
 	}[int(byteAt(4))%4]
 
+	// byteAt(11) is past every byte the seeds use, so the stored corpus keeps
+	// meaning what it meant before the family existed.
+	family := []turnfleetv1alpha1.AddressingFamily{
+		turnfleetv1alpha1.AddressingFamilyIPv4,
+		turnfleetv1alpha1.AddressingFamilyIPv6,
+		turnfleetv1alpha1.AddressingFamilyDualStack,
+		"",
+	}[int(byteAt(11))%4]
+
 	spec := turnfleetv1alpha1.TURNPoolSpec{
 		Replicas: int32(byteAt(5)%8) + 1,
 		Dataplane: turnfleetv1alpha1.DataplaneSpec{
 			Image: "coturn/coturn:4.18.0-r0@sha256:" +
 				"bbefd3e1fdfdc0d58770fe01b581fd8b00d9f3a5580d00acb77cf719a6bc78e3",
 		},
-		Addressing:     turnfleetv1alpha1.AddressingSpec{Mode: mode},
+		Addressing:     turnfleetv1alpha1.AddressingSpec{Mode: mode, Family: family},
 		RelayPortRange: turnfleetv1alpha1.PortRange{Start: start, End: end},
 		Auth: turnfleetv1alpha1.AuthSpec{
 			Realm: "turnfleet.fuzz",
@@ -153,6 +164,8 @@ func specFromBytes(data []byte) turnfleetv1alpha1.TURNPoolSpec {
 			Addresses: []turnfleetv1alpha1.ExternalAddress{
 				{NodeName: "worker-1", Address: "198.51.100.11"},
 				{NodeName: "worker-2", Address: "198.51.100.12"},
+				{NodeName: "worker-1", Address: "2001:db8:100::1"},
+				{NodeName: "worker-2", Address: "2001:db8:100::2"},
 			},
 		}
 	case turnfleetv1alpha1.AddressingModeHostNetwork:

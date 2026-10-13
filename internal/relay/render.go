@@ -104,6 +104,24 @@ func validateRenderInput(in *RenderInput) error {
 	case in.Relay.PortRange.Ports() <= 0:
 		return fmt.Errorf("relay %s has an empty port range %s", in.Relay.Name, in.Relay.PortRange)
 	}
+
+	// coturn's external-ip mapping maps one address to another within one
+	// address family ("that ip will be reported as relay IP address of all
+	// allocations of its own address family"). A relay that advertises an IPv6
+	// address while binding an IPv4 one would advertise an address no peer can
+	// reach it on, so refuse instead of rendering it.
+	advertised := AddressFamilyOf(in.Relay.Address)
+	if advertised == "" {
+		return fmt.Errorf("relay address %q is not an IP address", in.Relay.Address)
+	}
+	bound := AddressFamilyOf(in.Relay.BindAddress)
+	if bound == "" {
+		return fmt.Errorf("relay bind address %q is not an IP address", in.Relay.BindAddress)
+	}
+	if advertised != bound {
+		return fmt.Errorf("relay %s advertises %s (%s) but binds %s (%s): an advertised address is reachable from the address it is mapped to in the same family",
+			in.Relay.Name, in.Relay.Address, advertised, in.Relay.BindAddress, bound)
+	}
 	return nil
 }
 
@@ -119,12 +137,20 @@ func writeHeader(b *strings.Builder, in *RenderInput) {
 // writeAddressing binds the listener and the relay sockets on the address the
 // relay owns, so traffic addressed to (address, port) reaches this process and
 // no other.
+//
+// The flags are the same for both address families and take the address bare:
+// coturn writes listening-ip, relay-ip and external-ip as they are given, so an
+// IPv6 relay renders listening-ip=2001:db8::1 with no brackets. external-ip
+// takes "public/private" and coturn splits it on the slash, which is why an
+// IPv6 pair needs no quoting either.
 func writeAddressing(b *strings.Builder, in *RenderInput) {
 	fmt.Fprintf(b, "listening-ip=%s\n", in.Relay.BindAddress)
 	fmt.Fprintf(b, "relay-ip=%s\n", in.Relay.BindAddress)
 	if in.Relay.Address != in.Relay.BindAddress {
 		// The advertised address is not local (NAT or an explicit override):
-		// coturn has to be told what to put in XOR-RELAYED-ADDRESS.
+		// coturn has to be told what to put in XOR-RELAYED-ADDRESS. The mapping
+		// is per family: coturn reports the external address only to
+		// allocations of that family's own address family.
 		fmt.Fprintf(b, "external-ip=%s/%s\n", in.Relay.Address, in.Relay.BindAddress)
 	}
 }

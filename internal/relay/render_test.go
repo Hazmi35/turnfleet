@@ -47,6 +47,25 @@ func renderSpec(mode turnfleetv1alpha1.AddressingMode) turnfleetv1alpha1.TURNPoo
 	return spec
 }
 
+// v6Spec is the same pool, planned on IPv6 addresses.
+func v6Spec(mode turnfleetv1alpha1.AddressingMode) turnfleetv1alpha1.TURNPoolSpec {
+	spec := renderSpec(mode)
+	spec.Addressing.Family = turnfleetv1alpha1.AddressingFamilyIPv6
+	return spec
+}
+
+// externalV6Spec declares an IPv6 secondary address, which is what an IPv6
+// ExternalIPPool pool plans on.
+func externalV6Spec() turnfleetv1alpha1.TURNPoolSpec {
+	spec := v6Spec(turnfleetv1alpha1.AddressingModeExternalIPPool)
+	spec.Addressing.ExternalIPPool = &turnfleetv1alpha1.ExternalIPPoolSpec{
+		Addresses: []turnfleetv1alpha1.ExternalAddress{
+			{NodeName: "worker-1", Address: "2001:db8:100::11"},
+		},
+	}
+	return spec
+}
+
 func goldenInputs(t *testing.T) map[string]RenderInput {
 	t.Helper()
 
@@ -62,6 +81,8 @@ func goldenInputs(t *testing.T) map[string]RenderInput {
 	}
 
 	denied := DefaultDeniedCIDRs()
+	deniedV6 := DefaultDeniedCIDRsV6()
+
 	return map[string]RenderInput{
 		"hostnetwork": {
 			Relay: Relay{
@@ -88,8 +109,10 @@ func goldenInputs(t *testing.T) map[string]RenderInput {
 				BindAddress: "10.0.0.11",
 				PortRange:   PortRange{Start: 49164, End: 49175},
 				// The second relay on this shared address: its listener port is
-				// offset so it does not collide with the first relay's.
+				// offset so it does not collide with the first relay's, and its
+				// metrics port is offset for the same reason.
 				ListenerPortOffset: 1,
+				MetricsPortOffset:  1,
 			},
 			PoolNamespace: "default",
 			PoolName:      "demo",
@@ -142,6 +165,78 @@ func goldenInputs(t *testing.T) map[string]RenderInput {
 			PoolName:      "demo",
 			Spec:          tlsSpec,
 			DeniedCIDRs:   denied,
+			AuthSecret:    testSecret,
+		},
+		// One golden per addressing mode for an IPv6 relay, plus the NAT case:
+		// the same flags with IPv6 values, and the IPv6 peer deny list.
+		"hostnetwork-v6": {
+			Relay: Relay{
+				Name:        "demo-relay-1a2b3",
+				Identity:    "2001:db8::10|49152-49199",
+				NodeName:    "worker-1",
+				Address:     "2001:db8::10",
+				BindAddress: "2001:db8::10",
+				PortRange:   PortRange{Start: 49152, End: 49199},
+			},
+			PoolNamespace: "default",
+			PoolName:      "demo",
+			Spec:          v6Spec(turnfleetv1alpha1.AddressingModeHostNetwork),
+			DeniedCIDRs:   deniedV6,
+			AllowedCIDRs:  []string{"2001:db8:100::/48"},
+			AuthSecret:    testSecret,
+		},
+		"partitionedip-v6": {
+			Relay: Relay{
+				Name:        "demo-relay-2b3c4",
+				Identity:    "2001:db8::11|49164-49175",
+				NodeName:    "worker-1",
+				Address:     "2001:db8::11",
+				BindAddress: "2001:db8::11",
+				PortRange:   PortRange{Start: 49164, End: 49175},
+				// The second relay on this address: the listener port and the
+				// metrics port are both offset, because one address can only be
+				// listened on once and coturn's metrics endpoint binds every
+				// address on the node.
+				ListenerPortOffset: 1,
+				MetricsPortOffset:  1,
+			},
+			PoolNamespace: "default",
+			PoolName:      "demo",
+			Spec:          v6Spec(turnfleetv1alpha1.AddressingModePartitionedIP),
+			DeniedCIDRs:   deniedV6,
+			AuthSecret:    testSecret,
+		},
+		"externalippool-v6": {
+			Relay: Relay{
+				Name:        "demo-relay-3c4d5",
+				Identity:    "2001:db8:100::11|49152-49199",
+				NodeName:    "worker-1",
+				Address:     "2001:db8:100::11",
+				BindAddress: "2001:db8:100::11",
+				PortRange:   PortRange{Start: 49152, End: 49199},
+			},
+			PoolNamespace: "turnfleet",
+			PoolName:      "demo",
+			Spec:          externalV6Spec(),
+			DeniedCIDRs:   deniedV6,
+			AuthSecret:    testSecret,
+		},
+		"hostnetwork-v6-nat": {
+			// A public IPv6 address that is not local: coturn's external-ip
+			// mapping takes "public/private" for IPv6 as it does for IPv4, and
+			// reports the public address to the allocations of its own family.
+			Relay: Relay{
+				Name:        "demo-relay-4d5e6",
+				Identity:    "2001:db8:ffff::77|49152-49199",
+				NodeName:    "worker-1",
+				Address:     "2001:db8:ffff::77",
+				BindAddress: "fd00::11",
+				PortRange:   PortRange{Start: 49152, End: 49199},
+			},
+			PoolNamespace: "default",
+			PoolName:      "demo",
+			Spec:          v6Spec(turnfleetv1alpha1.AddressingModeHostNetwork),
+			DeniedCIDRs:   deniedV6,
 			AuthSecret:    testSecret,
 		},
 	}
