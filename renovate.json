@@ -1,6 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>kakushindev/renovate-config", "docker:pinDigests"],
+  "extends": [
+    "github>kakushindev/renovate-config",
+    "docker:pinDigests",
+    ":gitSignOff"
+  ],
   "packageRules": [
     {
       "description": "controller-runtime, k8s.io/* and controller-tools must always move as one unit: a mismatch between the client libraries and the API server version breaks envtest and the generated CRDs.",
