@@ -24,12 +24,14 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -120,6 +122,13 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
+	// Start from a known pool state: remove the pools this run did not create
+	// before the first case runs.
+	if err := resetPoolState(ctx); err != nil {
+		fmt.Fprintf(os.Stderr, "resetting the cluster's pool state: %v\n", err)
+		os.Exit(1)
+	}
+
 	code := m.Run()
 
 	// Leave nothing behind: a leftover pool would keep relays bound to node
@@ -192,15 +201,110 @@ func isAlreadyExists(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "already exists")
 }
 
-// cleanupPools deletes every pool in the test namespace.
+// poolRemovalTimeout bounds each wait in the pool cleanup, so a pool that
+// cannot be removed fails the run visibly instead of hanging it.
+const poolRemovalTimeout = 3 * time.Minute
+
+// cleanupPools deletes the pools the run created. It is best effort — the
+// run's result is already decided — but bounded, and it must not hang the
+// teardown on a pool that cannot drain.
 func cleanupPools(ctx context.Context) {
-	pools := &turnfleetv1alpha1.TURNPoolList{}
-	if err := k8sClient.List(ctx, pools, client.InNamespace(testNamespace)); err != nil {
-		return
+	if err := removePools(ctx, "the run that created it is over", client.InNamespace(testNamespace)); err != nil {
+		fmt.Fprintf(os.Stderr, "e2e: cleaning up after the run: %v\n", err)
+	}
+}
+
+// resetPoolState removes every TURNPool the cluster already holds, so the run
+// starts from a known state instead of from whatever the previous run left.
+//
+// "Did not create" is defined by the moment, not the name. The suite creates
+// every pool it owns as e2e-<case> in the turnfleet-e2e namespace, and this
+// runs before the first case, so no pool present now can be this run's. The
+// naming cannot separate this run's pools from a previous run's either: a
+// previous run used the same names, and a failed run leaves exactly those
+// pools behind. So any pool present here is a leftover to remove: a stray
+// applied by hand (config/samples/turnfleet_v1alpha1_turnpool.yaml) or an
+// e2e-* pool an earlier run failed to delete.
+//
+// The reason is not tidiness. A pool holds a relay address and a port range;
+// a leftover pool bound to the node address the suite's own pool also uses
+// leaves the two sharing one address, which the operator reports as a degraded
+// state, so the suite would fail for a reason that is in that earlier run and
+// not in its own diff. The suite owns KIND_CLUSTER — make kind-up and make
+// kind-down manage it — so every pool on it is the suite's to clear.
+func resetPoolState(ctx context.Context) error {
+	return removePools(ctx, "it holds a relay address and a port range the suite's pools would share")
+}
+
+// removePools deletes every pool the list options select and waits, bounded,
+// for them to go.
+//
+// A TURNPool carries a drain finalizer (controller.FinalizerName) that only a
+// running controller removes: a pool deleted while the controller is down —
+// the case here, a leftover from an earlier failed run — would sit in
+// Terminating forever, and anything waiting on it would block. So if a pool is
+// still there after the bounded wait and still carries that finalizer, strip
+// it and delete again, then wait once more. Nothing else removes it.
+func removePools(ctx context.Context, reason string, listOpts ...client.ListOption) error {
+	selected := func(ctx context.Context) (*turnfleetv1alpha1.TURNPoolList, error) {
+		list := &turnfleetv1alpha1.TURNPoolList{}
+		if err := k8sClient.List(ctx, list, listOpts...); err != nil {
+			return nil, err
+		}
+		return list, nil
+	}
+
+	pools, err := selected(ctx)
+	if err != nil {
+		return fmt.Errorf("listing pools to remove: %w", err)
 	}
 	for i := range pools.Items {
-		_ = k8sClient.Delete(ctx, &pools.Items[i])
+		leftover := &pools.Items[i]
+		// Log what is removed and why.
+		fmt.Fprintf(os.Stderr, "e2e: removing pool %s/%s: %s\n", leftover.Namespace, leftover.Name, reason)
+		if err := k8sClient.Delete(ctx, leftover); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("deleting pool %s/%s: %w", leftover.Namespace, leftover.Name, err)
+		}
 	}
+	if len(pools.Items) == 0 {
+		return nil
+	}
+
+	empty := func(ctx context.Context) (bool, error) {
+		list, err := selected(ctx)
+		if err != nil {
+			//nolint:nilerr // a transient API error is not a stuck pool: keep polling until the deadline.
+			return false, nil
+		}
+		return len(list.Items) == 0, nil
+	}
+	if err := wait.PollUntilContextTimeout(ctx, pollInterval, poolRemovalTimeout, true, empty); err == nil {
+		return nil
+	}
+
+	stragglers, err := selected(ctx)
+	if err != nil {
+		return fmt.Errorf("listing pools to strip: %w", err)
+	}
+	for i := range stragglers.Items {
+		leftover := &stragglers.Items[i]
+		if !slices.Contains(leftover.Finalizers, controller.FinalizerName) {
+			continue
+		}
+		fmt.Fprintf(os.Stderr, "e2e: stripping the drain finalizer from pool %s/%s: no controller is running to drain it\n", leftover.Namespace, leftover.Name)
+		patch := client.MergeFrom(leftover.DeepCopy())
+		leftover.Finalizers = slices.DeleteFunc(leftover.Finalizers, func(name string) bool { return name == controller.FinalizerName })
+		if err := k8sClient.Patch(ctx, leftover, patch); err != nil {
+			return fmt.Errorf("stripping the drain finalizer from pool %s/%s: %w", leftover.Namespace, leftover.Name, err)
+		}
+		if err := k8sClient.Delete(ctx, leftover); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("deleting pool %s/%s again: %w", leftover.Namespace, leftover.Name, err)
+		}
+	}
+	if err := wait.PollUntilContextTimeout(ctx, pollInterval, poolRemovalTimeout, true, empty); err != nil {
+		return fmt.Errorf("waiting for pools to be removed: %w", err)
+	}
+	return nil
 }
 
 // metricsServiceName is the Service in front of the controller's metrics
