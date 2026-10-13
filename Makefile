@@ -257,19 +257,25 @@ undeploy: ## Remove the controller from the kind cluster.
 
 ##@ Quality
 
+# Some quality targets walk the whole dependency graph, which needs go.sum
+# entries that `go mod tidy` deliberately prunes (the test graph, the module
+# list). The Go tooling adds those entries while it runs, so these targets
+# restore the file afterwards: a quality target must not leave the working tree
+# dirty, or the next `make verify` fails for a reason that has nothing to do with
+# the change under review.
+# $1 is the command to run with go.sum held constant.
+define with_clean_gosum
+@cp go.sum "$(LOCALBIN)/go.sum.base"
+@$(1) ; status=$$?; cp "$(LOCALBIN)/go.sum.base" go.sum; rm -f "$(LOCALBIN)/go.sum.base"; exit $$status
+endef
+
 .PHONY: vuln
-vuln: ## Scan the module for known vulnerabilities.
-	# govulncheck loads the test dependency graph, which needs go.sum entries
-	# that `go mod tidy` deliberately prunes. It adds them while it runs, so the
-	# file is restored afterwards: a quality target must not leave the working
-	# tree dirty, or the next `make verify` fails for a reason that has nothing
-	# to do with the change under review.
-	@cp go.sum $(LOCALBIN)/go.sum.vuln-base
-	@$(GOVULNCHECK) ./... ; status=$$?; cp $(LOCALBIN)/go.sum.vuln-base go.sum; rm -f $(LOCALBIN)/go.sum.vuln-base; exit $$status
+vuln: $(LOCALBIN) ## Scan the module for known vulnerabilities.
+	$(call with_clean_gosum,$(GOVULNCHECK) ./...)
 
 .PHONY: licenses
-licenses: ## Fail if a dependency is incompatible with AGPL-3.0-only.
-	$(LICENSE_CHECK) -v
+licenses: $(LOCALBIN) ## Fail if a dependency is incompatible with AGPL-3.0-only.
+	$(call with_clean_gosum,$(LICENSE_CHECK) -v)
 
 .PHONY: dco
 dco: ## Check that every commit in the branch is signed off.
