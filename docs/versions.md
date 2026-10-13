@@ -74,10 +74,8 @@ tokens.
 
 ## Agent tooling
 
-Because a `CLAUDE.md` in the working directory or any parent shadows
-`AGENTS.md`, `make verify` fails if one exists anywhere in the tree
-(`hack/verify-no-claude-md.sh`), and Claude Code needs 2.1.278 or newer to read
-`AGENTS.md` in the first place (see Provenance below).
+Claude Code needs 2.1.278 or newer to read `AGENTS.md` instead of its own
+`CLAUDE.md` (see Provenance below).
 
 The harness content itself carries no pin and names no vendor: the skills and
 subagent definitions live under `.agents/`, the hook policy under `hack/agent/`,

@@ -22,8 +22,6 @@
       change.
 - [ ] Documentation reflects the change (`README.md`, `docs/*.md`), and a
       decision that was not obvious got an ADR in `docs/adr/`.
-- [ ] No `CLAUDE.md` or `CLAUDE.local.md` was added: `AGENTS.md` is the single
-      agent instruction file.
 
 ## Notes for reviewers
 

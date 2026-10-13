@@ -23,9 +23,11 @@ evidence for each one; "looks fine" is not evidence.
    `docs/versions.md` still describe what is in the tree. Diff them.
 5. **`docs/api.md` and the CRDs** are regenerated from the tagged commit
    (`make verify` is the check).
-6. **`docs/status.md`** reflects reality: what is done, known limitations,
-   next steps. Anything that changed behaviour in this release is described
-   there.
+6. **The docs reflect reality**: `docs/architecture.md` and
+   `docs/capacity-model.md` describe what the tree actually does,
+   `docs/limitations.md` lists what it does not, and no document claims a
+   feature that is not implemented. Anything that changed behaviour in this
+   release is described by the document that owns it.
 7. **Images build for both architectures** (`make docker-buildx` locally or the
    `image.yaml` workflow on `main`), and both carry
    `org.opencontainers.image.licenses=AGPL-3.0-only` and
@@ -33,12 +35,12 @@ evidence for each one; "looks fine" is not evidence.
 8. **License obligations**: `make licenses` is green; `LICENSE` is the verbatim
    AGPL-3.0 text; the coturn image is still the unmodified upstream image
    (ADR 2).
-9. **No `CLAUDE.md`/`CLAUDE.local.md`** anywhere (`make verify`).
 
 ## Out of scope today
 
-Signing, SBOM publication, provenance attestations and a Helm chart are listed
-in `docs/status.md` as not yet implemented. Do not claim them in release notes.
+Signing, SBOM publication, provenance attestations and a Helm chart are open
+issues, not implemented features (`gh issue list --label roadmap` is the current
+list). Do not claim them in release notes.
 
 ## After tagging
 

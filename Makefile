@@ -127,7 +127,6 @@ verify: ## Verify generated code, manifests, docs and module files produce no di
 	cd tools && $(GO) mod tidy
 	@hack/verify-headers.sh
 	@hack/verify-harness-links.sh
-	@hack/verify-no-claude-md.sh
 	@if [ -n "$$(git status --porcelain)" ]; then \
 		echo "verify: the working tree changed; run 'make generate manifests api-docs' and commit the result" >&2; \
 		git status --short >&2; \

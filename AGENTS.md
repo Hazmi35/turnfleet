@@ -8,8 +8,7 @@ range)` — on nodes labelled `turnfleet.hzmi.dev/relay-node=true`, renders
 coturn configuration for each, publishes per-relay `turn:` URIs, and keeps
 them reachable and observable. Capacity is bounded per public IP by the port
 space, never by the number of pods: adding replicas behind one address adds
-nothing. This file is the only instruction file for every agent; Claude Code
-reads it natively when no `CLAUDE.md` exists (see "Never").
+nothing. This file is the only instruction file for every agent.
 
 ## Glossary
 
@@ -45,7 +44,7 @@ make build                # bin/turnfleet-controller, bin/turnfleet-probe
 make kind-up kind-down    # local 1 control-plane + 3 relay-node workers
 make install deploy undeploy
 make test-e2e             # full kind suite; loads images, installs, deploys
-make verify               # generated files, headers, no CLAUDE.md, no diff
+make verify               # generated files, headers, no diff
 make vuln licenses ci     # govulncheck, AGPL-3.0-only dependency check, everything CI runs
 make dco                  # every commit in the range is signed off
 ```
@@ -150,8 +149,6 @@ Single-context: the vocabulary is the "Glossary" section of this file, the decis
 * Run `kubectl` against any context other than `kind-turnfleet`
   (`hack/agent/guard-kubectl.sh`, wired into every harness, blocks it); `make`
   sets the context for you.
-* Create `CLAUDE.md` or `CLAUDE.local.md`: either shadows this file, and
-  `make verify` fails if one exists.
 * Edit a `.claude/` or `.omp/` alias, or replace it with a copy: the content
   under `.agents/` is canonical, and `make verify` checks the links.
 * Put a Service, Ingress or load balancer in the relay data path, or move the

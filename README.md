@@ -132,9 +132,8 @@ saturation and peer-policy cases.
 | `test/e2e` | The kind end-to-end suite. |
 | `.agents/` | The skills and subagent definitions every agent harness shares; `.claude/` and `.omp/` hold the per-harness wiring and symlinks, `hack/agent/` the hook policy. |
 
-`AGENTS.md` is the single instruction file for coding agents. **Do not create a
-`CLAUDE.md` or `CLAUDE.local.md`**: either one shadows `AGENTS.md` for Claude
-Code, and `make verify` fails if one exists anywhere in the tree.
+`AGENTS.md` is the single instruction file for coding agents, and every harness
+here reads it.
 
 The agent harness is harness-agnostic: the skills, the subagent definitions and
 the hook policy live once under `.agents/` and `hack/agent/`, and `.claude/`
