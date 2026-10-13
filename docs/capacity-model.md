@@ -20,7 +20,10 @@ pool capacity (allocations)  = Σ over relays of that relay's range
 ```
 
 `spec.relayPortRange` is the pool's port space. A relay owning the whole range
-serves `end - start + 1` concurrent allocations.
+serves `end - start + 1` concurrent allocations. coturn allocates the relay
+port for *both* relay transports from that range (its UDP and TCP port maps are
+built from the same bounds), so a TCP relay endpoint counts against the same
+capacity as a UDP one — verified against the pinned image.
 
 The UDP port space is 65536 ports total, minus what the node needs for the
 listener ports, ephemeral traffic and anything else bound on that address. In

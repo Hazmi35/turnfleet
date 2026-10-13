@@ -21,13 +21,15 @@ The renderer enables coturn's own Prometheus endpoint
 pinned image's `turnserver --help`) and the controller scrapes
 `http://<relay pod IP>:9641/metrics` from inside the cluster.
 
-* `coturn_turn_total_allocations{type="udp|tcp|tls"}` is a **gauge** of the
-  current allocation count per socket type (registered as
+* `turn_total_allocations{type="UDP|TCP|TLS"}` is a **gauge** of the current
+  allocation count per socket type (registered as
   `prom_gauge_new("turn_total_allocations", "Represents current allocations
-  number", ...)` in `src/apps/relay/prom_server.c` of the pinned tag). The
-  controller sums the label values and reports them as
-  `turnfleet_relay_allocations` and `turnfleet_relay_ports_in_use` — one
-  allocation occupies exactly one relay port.
+  number", ...)` in `src/apps/relay/prom_server.c` of the pinned tag; the
+  exposition carries no `coturn_` prefix). The controller sums the label values
+  and reports them as `turnfleet_relay_allocations` and
+  `turnfleet_relay_ports_in_use` — one allocation occupies exactly one relay
+  port, for every relay transport, because coturn allocates UDP and TCP relay
+  ports from the same configured range (see ADR 8).
 * `spec.relayPortRange` gives `turnfleet_relay_ports_total` (the slice a relay
   owns, not the configured range of the pool).
 * coturn exposes **no per-error-code allocation failure counters**, so
