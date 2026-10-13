@@ -38,10 +38,15 @@
       "matchPackageNames": ["kindest/node"]
     },
     {
-      "description": "coturn is the relay data plane; the Makefile pins it by tag and digest, and the webhook enforces the digest.",
+      "description": "coturn is the relay data plane. The pins Renovate moves are the Makefile pair (`COTURN_IMAGE` with `COTURN_IMAGE_DIGEST`, which `make load-coturn` requires to agree) and the example pool; grouping them means one pull request moves both, tag and digest together. The copies under test/ move by hand with the pin: Renovate's default ignorePaths skips `test/**`, and the e2e default is only a fallback for `make test-e2e`, which passes the Makefile value explicitly (docs/versions.md).",
       "groupName": "coturn",
       "matchDatasources": ["docker"],
       "matchPackageNames": ["coturn/coturn"]
+    },
+    {
+      "description": "The kubernetes manager also reads apiVersion fields, and the HPA example's `autoscaling/v2` is the manifest API the cluster serves, not a version to track: a newer API only matters when the CRD moves to it on purpose.",
+      "matchDatasources": ["kubernetes-api"],
+      "enabled": false
     },
     {
       "description": "ginkgo and gomega move together on a major bump.",
@@ -53,6 +58,10 @@
   "gomod": {
     "postUpdateOptions": ["gomodTidy"]
   },
+  "kubernetes": {
+    "description": "Scoped to the examples: the kubernetes manager matches no file by default, and the rest of config/ carries only this project's own placeholder image (`controller:latest`), which is not a dependency to track.",
+    "managerFilePatterns": ["/^config/samples/.*\\.ya?ml$/"]
+  },
   "customManagers": [
     {
       "description": "Pin the Go toolchain used by CI: GO_VERSION in .github/workflows.",
@@ -61,6 +70,16 @@
       "matchStrings": ["GO_VERSION: \"(?<currentValue>[\\d.]+)\""],
       "datasourceTemplate": "golang-version",
       "depNameTemplate": "go"
+    },
+    {
+      "description": "The coturn data plane, as the Makefile pins it: the tag and the digest are one dependency, because `make load-coturn` refuses a tag that does not resolve to COTURN_IMAGE_DIGEST, so they can never be bumped apart.",
+      "customType": "regex",
+      "managerFilePatterns": ["/^Makefile$/"],
+      "matchStrings": [
+        "COTURN_IMAGE \\?= coturn/coturn:(?<currentValue>[^\\s@]+)[\\s\\S]*?COTURN_IMAGE_DIGEST \\?= (?<currentDigest>sha256:[0-9a-f]{64})"
+      ],
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "coturn/coturn"
     }
   ]
 }
