@@ -160,10 +160,18 @@ func (r *TURNPoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	r.measureRelays(ctx, pool, states)
 
+	// Relay identities are unique cluster-wide, so the pass that computes
+	// them also compares them with the identities the other pools hold.
+	conflicts, err := r.addressConflicts(ctx, pool, states)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	if err := r.writeStatus(ctx, pool, &statusInputs{
 		plan:      &plan,
 		states:    states,
 		truncated: plan.Unplaced > 0,
+		conflicts: conflicts,
 	}); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -326,6 +334,12 @@ func (r *TURNPoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		// plan, so nodes are watched as well.
 		Watches(&corev1.Node{}, handler.EnqueueRequestsFromMapFunc(r.poolsForNode),
 			builder.WithPredicates(nodeChanged())).
+		// Relay identities must be unique across pools, and the pool that has
+		// to react to another pool's identity is not the one that changed it,
+		// so a change in what a pool holds wakes the pools sharing its
+		// addresses.
+		Watches(&turnfleetv1alpha1.TURNPool{}, handler.EnqueueRequestsFromMapFunc(r.poolsForHeldAddresses),
+			builder.WithPredicates(heldIdentitiesChanged())).
 		Named(ControllerName).
 		Complete(r)
 }
@@ -434,4 +448,8 @@ type statusInputs struct {
 	// secretMissing is set when the pool's auth Secret is unusable, which makes
 	// the whole pool Degraded regardless of what the relays are doing.
 	secretMissing string
+
+	// conflicts are the relay identities this pool holds that another pool
+	// holds too, with overlapping ports.
+	conflicts []addressConflict
 }

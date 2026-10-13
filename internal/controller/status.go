@@ -27,7 +27,8 @@ import (
 )
 
 // Condition types reported on a TURNPool. Ready and ProbeSucceeded are
-// normal-true; CapacityPressure and Degraded are abnormal-true.
+// normal-true; CapacityPressure, AddressConflict and Degraded are
+// abnormal-true.
 const (
 	// ConditionReady is true when the desired relays exist, are ready and are
 	// not draining.
@@ -41,8 +42,14 @@ const (
 	// limit, or a probe was refused with 508 Insufficient Capacity.
 	ConditionCapacityPressure = "CapacityPressure"
 
+	// ConditionAddressConflict is true when this pool holds a relay identity
+	// that another pool holds too, on the same address and with overlapping
+	// ports. Disjoint ranges on a shared address are legal.
+	ConditionAddressConflict = "AddressConflict"
+
 	// ConditionDegraded is true when the pool is not what it should be: relays
-	// that could not be placed, a missing pod, or an unusable auth Secret.
+	// that could not be placed, a missing pod, an unusable auth Secret, or a
+	// relay identity that overlaps another pool's.
 	ConditionDegraded = "Degraded"
 )
 
@@ -145,8 +152,9 @@ func countRelays(status *turnfleetv1alpha1.TURNPoolStatus, inputs *statusInputs,
 	return counts
 }
 
-// writeConditions sets the four condition types from the counted state.
-func writeConditions(status *turnfleetv1alpha1.TURNPoolStatus, pool *turnfleetv1alpha1.TURNPool, counts relayCounts, _ *statusInputs) {
+// writeConditions sets the condition types from the counted state and from the
+// relay identities other pools hold.
+func writeConditions(status *turnfleetv1alpha1.TURNPoolStatus, pool *turnfleetv1alpha1.TURNPool, counts relayCounts, inputs *statusInputs) {
 	desired := pool.Spec.Replicas
 
 	if counts.readyRelays >= desired && len(counts.degraded) == 0 {
@@ -181,10 +189,23 @@ func writeConditions(status *turnfleetv1alpha1.TURNPoolStatus, pool *turnfleetv1
 			fmt.Sprintf("%d of %d ports in use across %d relay(s)", counts.portsInUse, counts.portsTotal, len(status.Relays)))
 	}
 
-	if len(counts.degraded) > 0 {
-		setCondition(status, ConditionDegraded, metav1.ConditionTrue, "RelaysUnavailable", strings.Join(firstN(counts.degraded, 3), "; "))
-	} else {
-		setCondition(status, ConditionDegraded, metav1.ConditionFalse, "AsExpected", "every planned relay exists and is placeable")
+	// A conflict with another pool is reported on both conditions: it is its
+	// own fact about the pool's identity, and it degrades the pool, because a
+	// relay that shares its ports with another process serves less than it
+	// reports.
+	switch {
+	case len(inputs.conflicts) > 0:
+		message := describeConflicts(inputs.conflicts)
+		setCondition(status, ConditionAddressConflict, metav1.ConditionTrue, "RelayIdentityOverlap", message)
+		setCondition(status, ConditionDegraded, metav1.ConditionTrue, "RelayIdentityOverlap", message)
+	default:
+		setCondition(status, ConditionAddressConflict, metav1.ConditionFalse, "NoOverlap",
+			"no other pool holds a relay on this pool's addresses with overlapping ports")
+		if len(counts.degraded) > 0 {
+			setCondition(status, ConditionDegraded, metav1.ConditionTrue, "RelaysUnavailable", strings.Join(firstN(counts.degraded, 3), "; "))
+		} else {
+			setCondition(status, ConditionDegraded, metav1.ConditionFalse, "AsExpected", "every planned relay exists and is placeable")
+		}
 	}
 }
 
@@ -296,7 +317,14 @@ func (r *TURNPoolReconciler) reconcileDeletion(ctx context.Context, pool *turnfl
 		return ctrl.Result{}, err
 	}
 
-	if err := r.writeStatus(ctx, pool, &statusInputs{states: states}); err != nil {
+	// A draining pool still holds its ports until its relays are gone, so it
+	// still takes part in the cluster-wide identity check.
+	conflicts, err := r.addressConflicts(ctx, pool, states)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if err := r.writeStatus(ctx, pool, &statusInputs{states: states, conflicts: conflicts}); err != nil {
 		return ctrl.Result{}, err
 	}
 
