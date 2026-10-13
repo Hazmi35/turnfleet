@@ -135,7 +135,10 @@ Single-context: the vocabulary is the "Glossary" section of this file, the decis
 5. A version bump that moves a pin `docs/versions.md` records as held (a held
    module, a vulnerability floor, an image digest) updates that note in the same
    pull request.
-6. Commits are Conventional Commits with `git commit -s` (DCO).
+6. Commits are Conventional Commits with `git commit -s` (DCO). Renovate's
+   commits carry the trailer too, through the `:gitSignOff` preset in
+   `renovate.json`: a dependency pull request is not an exception, and the
+   sign-off is the identity Renovate commits as.
 
 ## Never
 
