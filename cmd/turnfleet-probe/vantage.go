@@ -63,10 +63,9 @@ func runVantage(ctx context.Context, opts *options, stdout, stderr io.Writer) in
 		}
 	}
 
-	username, password := probe.Credentials(secret, opts.user, opts.ttl, time.Now())
 	results := make([]probe.Result, 0, len(uris))
 	for _, uri := range uris {
-		results = append(results, probeListener(ctx, opts, uri, username, password))
+		results = append(results, probeListener(ctx, opts, uri, secret))
 	}
 
 	payload := &vantage.Payload{
@@ -173,11 +172,17 @@ func publishedURIs(ctx context.Context, cluster client.Client, namespace, name s
 // The expectation is the address the URI names: from a vantage point that is
 // the only thing that can be asserted without reading the pool's spec, and it
 // is what catches a relay advertising an address clients cannot use.
-func probeListener(ctx context.Context, opts *options, uri, username, password string) probe.Result {
+func probeListener(ctx context.Context, opts *options, uri, secret string) probe.Result {
 	endpoint, err := probe.ParseURI(uri)
 	if err != nil {
 		return probe.Result{URI: uri, Message: fmt.Sprintf("unreadable TURN URI in the pool's list: %v", err)}
 	}
+
+	// The credential is issued per probe, as the controller issues it: a pass
+	// over a large pool can outlive one credential's validity, and a relay that
+	// refuses an expired one would be reported as unreachable.
+	username, password := probe.Credentials(secret, opts.user, opts.ttl, time.Now())
+
 	return probe.Allocate(ctx, &probe.Config{
 		Endpoint:      endpoint,
 		Username:      username,
