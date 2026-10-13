@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Turnfleet Authors
+#
+# Cluster used by `make kind-up` and the e2e suite.
+#
+# Three workers are labelled as relay nodes because a relay binds its listener
+# and relay port range directly on a node address (hostNetwork). The node image
+# is pinned by tag and digest; the Kubernetes minor version matches the envtest
+# binaries and the client-go version in go.mod.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: turnfleet
+networking:
+  podSubnet: 10.244.0.0/16
+  serviceSubnet: 10.96.0.0/12
+nodes:
+  - role: control-plane
+  - role: worker
+    labels:
+      turnfleet.hzmi.dev/relay-node: "true"
+  - role: worker
+    labels:
+      turnfleet.hzmi.dev/relay-node: "true"
+  - role: worker
+    labels:
+      turnfleet.hzmi.dev/relay-node: "true"

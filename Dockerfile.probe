@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Turnfleet Authors
+#
+# Probe image. Ships the same probe the controller runs, so an operator can
+# reproduce a failing relay check from outside the cluster. It is a standalone
+# client binary: no shell, no package manager, nonroot by default.
+ARG GO_IMAGE
+ARG RUNTIME_IMAGE
+
+FROM --platform=${BUILDPLATFORM} ${GO_IMAGE} AS builder
+ARG TARGETOS
+ARG TARGETARCH
+ARG LDFLAGS
+
+WORKDIR /workspace
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+    go build -trimpath -a -ldflags "${LDFLAGS}" -o /out/turnfleet-probe ./cmd/turnfleet-probe
+
+FROM ${RUNTIME_IMAGE}
+ARG TARGETOS
+ARG TARGETARCH
+LABEL org.opencontainers.image.title="turnfleet-probe" \
+      org.opencontainers.image.description="Turnfleet relay probe (TURN Allocate)" \
+      org.opencontainers.image.licenses="AGPL-3.0-only" \
+      org.opencontainers.image.source="https://github.com/hzmi/turnfleet" \
+      org.opencontainers.image.url="https://github.com/hzmi/turnfleet" \
+      org.opencontainers.image.documentation="https://github.com/hzmi/turnfleet/blob/main/docs/capacity-model.md" \
+      org.opencontainers.image.vendor="Turnfleet Authors" \
+      org.opencontainers.image.base.name="${RUNTIME_IMAGE}"
+COPY --from=builder /out/turnfleet-probe /turnfleet-probe
+USER 65532:65532
+ENTRYPOINT ["/turnfleet-probe"]

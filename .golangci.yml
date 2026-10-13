@@ -1,0 +1,155 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Turnfleet Authors
+#
+# golangci-lint configuration (v2 schema, golangci-lint v2.14.0).
+#
+# Exceptions are never broad: each rule below names the linters it applies to
+# and the path it applies to, with the reason next to it.
+version: "2"
+run:
+  allow-parallel-runners: true
+linters:
+  default: none
+  enable:
+    - bodyclose
+    - contextcheck
+    - copyloopvar
+    - depguard
+    - errcheck
+    - errorlint
+    - exhaustive
+    - ginkgolinter
+    - goconst
+    - gocritic
+    - gocyclo
+    - goheader
+    - gosec
+    - govet
+    - ineffassign
+    - kubeapilinter
+    - logcheck
+    - misspell
+    - modernize
+    - nakedret
+    - nilerr
+    - nolintlint
+    - prealloc
+    - revive
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+  settings:
+    custom:
+      logcheck:
+        type: "module"
+        description: Checks Go logging calls for Kubernetes logging conventions.
+      kubeapilinter:
+        type: "module"
+        description: Lints Kubernetes API types against API conventions.
+        settings:
+          linters:
+            # nodurations is disabled deliberately: the API models
+            # drainTimeout and the probe interval/timeout as metav1.Duration,
+            # which serialises as a Kubernetes duration string ("30s") and is
+            # the form every other Kubernetes API uses for these fields. The
+            # linter's advice (integer fields with the unit in the name) would
+            # make the API less familiar, not more correct.
+            disable:
+              - nodurations
+          lintersConfig:
+            conditions:
+              # Conditions are CRD-only here: no protobuf or patch tags.
+              useProtobuf: Forbid
+              usePatchStrategy: Forbid
+            optionalfields:
+              pointers:
+                # A pointer is only required where the zero value is a valid
+                # value: counters and flags in status, not fields that already
+                # carry a minimum length, a default or an enum.
+                preference: WhenRequired
+    depguard:
+      rules:
+        # The standard library sorts through `slices`; `sort` is redundant.
+        forbid-sort-pkg:
+          deny:
+            - pkg: sort
+              desc: Use the slices package instead.
+        # Minimise the dependency surface of the controller.
+        forbid-insecure-randomness:
+          deny:
+            - pkg: math/rand
+              desc: Use math/rand/v2, or crypto/rand for secrets.
+    exhaustive:
+      check:
+        - switch
+      default-signifies-exhaustive: true
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - opinionated
+        - performance
+      disabled-checks:
+        # Short variable names are idiomatic in this codebase (relay, pool).
+        - singleCaseSwitch
+    gocyclo:
+      min-complexity: 20
+    goheader:
+      values:
+        regexp:
+          year: 20\d\d
+      template: |-
+        SPDX-License-Identifier: AGPL-3.0-only
+        Copyright (C) {{ year }} Turnfleet Authors
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+      allow-unused: false
+    revive:
+      rules:
+        - name: comment-spacings
+        - name: import-shadowing
+        - name: error-strings
+        - name: error-return
+        - name: error-naming
+        - name: context-as-argument
+        - name: context-keys-type
+    staticcheck:
+      checks:
+        - all
+        - -ST1003 # initialisms: Id/Url vs ID/URL is not enforced project-wide
+        - -ST1000 # package comments are required only in packages with exported API
+    gosec:
+      excludes:
+        # G304 file inclusion via variable: the renderer writes config files at
+        # controller-controlled paths.
+        - G304
+  exclusions:
+    generated: lax
+    rules:
+      # kube-api-linter only has meaning for the API package.
+      - linters:
+          - kubeapilinter
+        path-except: ^api/
+      # Tests may share fixtures and ignore errors from test-only helpers.
+      - linters:
+          - goconst
+          - errcheck
+        path: _test\.go
+      # Generated deepcopy code carries the SPDX header but not our doc style.
+      - linters:
+          - revive
+        path: zz_generated\.
+formatters:
+  enable:
+    - gofumpt
+    - gci
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/hzmi/turnfleet)
+      custom-order: true
+  exclusions:
+    generated: lax

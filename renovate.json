@@ -1,0 +1,82 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Turnfleet Authors
+#
+# Renovate configuration.
+#
+# Rules that matter for this repository:
+#   * Kubernetes dependencies move together: controller-runtime and the
+#     k8s.io/* libraries must be upgraded in one pull request, because
+#     controller-runtime pins the compatible k8s.io minor version.
+#   * Container images and GitHub Actions are pinned by digest/SHA, so
+#     Renovate rewrites the digest and keeps the human-readable tag.
+#   * Every version bump requires docs/versions.md in the same pull request;
+#     .github/pull_request_template.md asks for it.
+extends:
+  - config:recommended
+  - :dependencyDashboard
+  - :semanticCommits
+  - :enablePreCommitAutoupdate
+  - docker:pinDigests
+  - helpers:pinGitHubActionDigests
+packageRules:
+  # controller-runtime, k8s.io/* and controller-tools must always move as one
+  # unit: a mismatch between the client libraries and the API server version
+  # breaks envtest and the generated CRDs.
+  - groupName: kubernetes
+    matchManagers:
+      - gomod
+    matchPackageNames:
+      - sigs.k8s.io/controller-runtime
+      - sigs.k8s.io/controller-runtime/tools/setup-envtest
+      - sigs.k8s.io/controller-tools
+      - k8s.io/**
+    groupSlug: kubernetes
+  # Lint toolchain lives in tools/go.mod as a `tool` directive.
+  - groupName: golangci-lint toolchain
+    matchManagers:
+      - gomod
+    matchFileNames:
+      - tools/go.mod
+    matchPackageNames:
+      - github.com/golangci/golangci-lint/v2
+  # Tool directives in the root module: bump them together with the pins in
+  # docs/versions.md, which the pull request template enforces.
+  - matchManagers:
+      - gomod
+    matchPackageNames:
+      - github.com/elastic/crd-ref-docs
+      - golang.org/x/vuln
+      - github.com/google/licensecheck
+    groupName: go tools
+  # The kind node image must stay on the same Kubernetes minor version as the
+  # envtest binaries; a major/minor bump is a deliberate change.
+  - matchDatasources:
+      - docker
+    matchPackageNames:
+      - kindest/node
+    groupName: kind node image
+  - matchDatasources:
+      - docker
+    matchPackageNames:
+      - coturn/coturn
+    groupName: coturn
+  - matchUpdateTypes:
+      - major
+    matchPackageNames:
+      - github.com/onsi/ginkgo/v2
+      - github.com/onsi/gomega
+    groupName: test frameworks
+gomod:
+  # Keep the tool directives in go.mod and tools/go.mod tidy after an update.
+  postUpdateOptions:
+    - gomodTidy
+customManagers:
+  # Pin the Go toolchain used by CI: GO_VERSION in .github/workflows.
+  - customType: regex
+    managerFilePatterns:
+      - /^\.github/workflows/.*\.ya?ml$/
+    matchStrings:
+      - 'GO_VERSION: "(?<currentValue>[\d.]+)"'
+    datasourceTemplate: golang-version
+    depNameTemplate: go
+regexManagers: []

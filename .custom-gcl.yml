@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Turnfleet Authors
+#
+# Module plugins for the golangci-lint build used by `make lint`.
+# `make golangci-lint` builds golangci-lint at the version pinned here together
+# with the plugins below; every version is exact, nothing resolves to latest.
+# The source of truth for these pins is docs/versions.md.
+version: v2.14.0
+name: golangci-lint-custom
+destination: ./bin
+plugins:
+  # logcheck validates structured logging calls: key/value pairs must be
+  # balanced and keys must be constants. It enforces the logr conventions the
+  # controller is written against.
+  - module: "sigs.k8s.io/logtools"
+    import: "sigs.k8s.io/logtools/logcheck/gclplugin"
+    version: v0.10.1
+  # kube-api-linter checks api/ against the Kubernetes API conventions
+  # (required/optional markers, no floats, list types, condition shape).
+  # It has no tagged releases yet, so the pseudo-version is the pin.
+  - module: "sigs.k8s.io/kube-api-linter"
+    version: v0.0.0-20261012124120-79b557aa8c8d

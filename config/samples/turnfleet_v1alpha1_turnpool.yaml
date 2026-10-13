@@ -1,0 +1,9 @@
+apiVersion: turnfleet.hzmi.dev/v1alpha1
+kind: TURNPool
+metadata:
+  labels:
+    app.kubernetes.io/name: turnfleet
+    app.kubernetes.io/managed-by: kustomize
+  name: turnpool-sample
+spec:
+  # TODO(user): Add fields here

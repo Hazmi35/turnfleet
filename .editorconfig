@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Turnfleet Authors
+#
+# .editorconfig keeps editors from fighting the formatters: tabs, LF, a final
+# newline, and no trailing whitespace. Go is formatted by gofumpt and gci
+# (`make fmt`), YAML and Markdown follow whatever the tooling emits.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.go]
+indent_style = tab
+
+[*.{yaml,yml,json,md}]
+indent_style = space
+indent_size = 2
+
+[Makefile]
+indent_style = tab
+
+[*.{sh}]
+indent_style = space
+indent_size = 2
+
+[LICENSE]
+insert_final_newline = false
+trim_trailing_whitespace = false

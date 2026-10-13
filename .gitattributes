@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Turnfleet Authors
+#
+# Generated files are marked so GitHub collapses them in review and so
+# `git diff` output is easier to read. Anything listed here is produced by
+# `make generate`, `make manifests` or `make api-docs`; never edit it by hand.
+* text=auto eol=lf
+
+api/v1alpha1/zz_generated.deepcopy.go linguist-generated=true
+config/crd/bases/*.yaml linguist-generated=true
+config/rbac/role.yaml linguist-generated=true
+config/webhook/manifests.yaml linguist-generated=true
+docs/api.md linguist-generated=true
