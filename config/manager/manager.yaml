@@ -58,11 +58,17 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-      - command:
-        - /manager
-        args:
+      # The image's entrypoint is /turnfleet-controller (see Dockerfile), so the
+      # container only supplies arguments.
+      - args:
           - --leader-elect
           - --health-probe-bind-address=:8081
+        # Admission webhooks need serving certificates, which config/default does
+        # not provide; config/with-webhook turns them back on together with the
+        # cert-manager integration.
+        env:
+        - name: ENABLE_WEBHOOKS
+          value: "false"
         image: controller:latest
         name: manager
         ports:

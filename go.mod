@@ -1,4 +1,4 @@
-module github.com/hzmi/turnfleet
+module github.com/Hazmi35/turnfleet
 
 go 1.27.2
 
@@ -145,8 +145,8 @@ require (
 )
 
 tool (
+	github.com/Hazmi35/turnfleet/hack/licenses
 	github.com/elastic/crd-ref-docs
-	github.com/hzmi/turnfleet/hack/licenses
 	golang.org/x/vuln/cmd/govulncheck
 	sigs.k8s.io/controller-runtime/tools/setup-envtest
 	sigs.k8s.io/controller-tools/cmd/controller-gen

@@ -8,6 +8,10 @@
 version: "2"
 run:
   allow-parallel-runners: true
+  # The end-to-end suite is behind a build tag so it never runs as a unit test;
+  # it is still linted, because it is source like any other.
+  build-tags:
+    - e2e
 linters:
   default: none
   enable:
@@ -157,7 +161,7 @@ formatters:
       sections:
         - standard
         - default
-        - prefix(github.com/hzmi/turnfleet)
+        - prefix(github.com/Hazmi35/turnfleet)
       custom-order: true
   exclusions:
     generated: lax

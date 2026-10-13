@@ -57,13 +57,13 @@ jobs:
         id: meta-controller
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ghcr.io/hzmi/turnfleet-controller
+          images: ghcr.io/hazmi35/turnfleet-controller
 
       - name: Derive tags for turnfleet-probe
         id: meta-probe
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
-          images: ghcr.io/hzmi/turnfleet-probe
+          images: ghcr.io/hazmi35/turnfleet-probe
 
       - name: Build and push turnfleet-controller
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -79,7 +79,7 @@ jobs:
           build-args: |
             GO_IMAGE=${{ env.GO_IMAGE }}
             RUNTIME_IMAGE=${{ env.RUNTIME_IMAGE }}
-            LDFLAGS=-s -w -X github.com/hzmi/turnfleet/internal/version.version=${{ steps.meta-controller.outputs.version }} -X github.com/hzmi/turnfleet/internal/version.commit=${{ github.sha }}
+            LDFLAGS=-s -w -X github.com/Hazmi35/turnfleet/internal/version.version=${{ steps.meta-controller.outputs.version }} -X github.com/Hazmi35/turnfleet/internal/version.commit=${{ github.sha }}
 
       - name: Build and push turnfleet-probe
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -95,4 +95,4 @@ jobs:
           build-args: |
             GO_IMAGE=${{ env.GO_IMAGE }}
             RUNTIME_IMAGE=${{ env.RUNTIME_IMAGE }}
-            LDFLAGS=-s -w -X github.com/hzmi/turnfleet/internal/version.version=${{ steps.meta-probe.outputs.version }} -X github.com/hzmi/turnfleet/internal/version.commit=${{ github.sha }}
+            LDFLAGS=-s -w -X github.com/Hazmi35/turnfleet/internal/version.version=${{ steps.meta-probe.outputs.version }} -X github.com/Hazmi35/turnfleet/internal/version.commit=${{ github.sha }}

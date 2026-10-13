@@ -16,6 +16,24 @@ patches:
 - path: manager_webhook_patch.yaml
   target:
     kind: Deployment
+# Turn admission back on: this overlay is the one that installs the serving
+# certificates the webhook server reads.
+- target:
+    kind: Deployment
+    name: turnfleet-controller-manager
+  patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: turnfleet-controller-manager
+    spec:
+      template:
+        spec:
+          containers:
+          - name: manager
+            env:
+            - name: ENABLE_WEBHOOKS
+              value: "true"
 
 replacements:
 # - source: # Uncomment the following block to enable certificates for metrics

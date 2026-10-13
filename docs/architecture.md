@@ -41,7 +41,10 @@ flowchart LR
 Relays run with `hostNetwork: true` on nodes labelled
 `turnfleet.hzmi.dev/relay-node=true` and bind their listener ports and relay
 port range directly on a node address. There is no Service, Ingress or cloud
-load balancer in the relay data path (ADR 3, ADR 4).
+load balancer in the relay data path (ADR 3, ADR 4). Relays that share an address
+(PartitionedIP) each get their own listener port — `spec.listeners[].port` plus
+the relay's slot on its node — because a listening socket binds once per address
+(ADR 9).
 
 ## Components
 

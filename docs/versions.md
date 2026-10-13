@@ -61,8 +61,8 @@ index digest unless stated otherwise.
 | `gcr.io/distroless/static-debian12:nonroot` | `@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab` | both runtime stages | <https://github.com/GoogleContainerTools/distroless> (index digest read from the registry `Docker-Content-Digest` header) |
 | `kindest/node:v1.37.0` | `@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5` | `make kind-up`, e2e | <https://hub.docker.com/v2/repositories/kindest/node/tags/v1.37.0> |
 | `coturn/coturn:4.18.0-r0` | `@sha256:bbefd3e1fdfdc0d58770fe01b581fd8b00d9f3a5580d00acb77cf719a6bc78e3` | relay data plane | <https://github.com/coturn/coturn/releases/tag/docker%2F4.18.0-r0> (published 2026-09-08) |
-| `ghcr.io/hzmi/turnfleet-controller` | built by CI | operator | `image.yaml` |
-| `ghcr.io/hzmi/turnfleet-probe` | built by CI | probe CLI | `image.yaml` |
+| `ghcr.io/hazmi35/turnfleet-controller` | built by CI | operator | `image.yaml` |
+| `ghcr.io/hazmi35/turnfleet-probe` | built by CI | probe CLI | `image.yaml` |
 
 The coturn image is the upstream, unmodified BSD-3-Clause data plane. It is
 never vendored into this repository (see `docs/adr/0002-coturn-data-plane.md`).

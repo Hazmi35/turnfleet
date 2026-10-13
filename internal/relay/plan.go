@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	turnfleetv1alpha1 "github.com/hzmi/turnfleet/api/v1alpha1"
+	turnfleetv1alpha1 "github.com/Hazmi35/turnfleet/api/v1alpha1"
 )
 
 // ComputePlan derives the desired relay set for a pool.

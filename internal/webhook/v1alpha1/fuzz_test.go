@@ -10,8 +10,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	turnfleetv1alpha1 "github.com/hzmi/turnfleet/api/v1alpha1"
-	"github.com/hzmi/turnfleet/internal/relay"
+	turnfleetv1alpha1 "github.com/Hazmi35/turnfleet/api/v1alpha1"
+	"github.com/Hazmi35/turnfleet/internal/relay"
 )
 
 // FuzzWebhookValidation checks that validation never panics on an arbitrary

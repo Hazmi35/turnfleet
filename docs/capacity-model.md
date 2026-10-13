@@ -73,8 +73,9 @@ Growing capacity:
 
   Relays that share an address also need listener ports of their own: a
   listening socket binds once per address, so relay *n* on a node serves
-  `spec.listeners[].port + n` (see `docs/adr/0009-partitioned-listener-ports.md`).
-  Those `relaysPerNode` consecutive ports must sit outside
+  `spec.listeners[].port + n`, and its coturn metrics port is `9641 + n` for the
+  same reason (see `docs/adr/0009-partitioned-listener-ports.md`). Those
+  `relaysPerNode` consecutive listener ports must sit outside
   `spec.relayPortRange`, and the webhook rejects a pool where they do not.
 
 `status.portsTotal` sums the slices actually assigned, so a pool whose

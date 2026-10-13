@@ -7,7 +7,7 @@ domain: hzmi.dev
 layout:
 - go.kubebuilder.io/v4
 projectName: turnfleet
-repo: github.com/hzmi/turnfleet
+repo: github.com/Hazmi35/turnfleet
 resources:
 - api:
     crdVersion: v1
@@ -16,7 +16,7 @@ resources:
   domain: hzmi.dev
   group: turnfleet
   kind: TURNPool
-  path: github.com/hzmi/turnfleet/api/v1alpha1
+  path: github.com/Hazmi35/turnfleet/api/v1alpha1
   version: v1alpha1
   webhooks:
     defaulting: true

@@ -6,7 +6,7 @@ package controller
 import (
 	"fmt"
 
-	turnfleetv1alpha1 "github.com/hzmi/turnfleet/api/v1alpha1"
+	turnfleetv1alpha1 "github.com/Hazmi35/turnfleet/api/v1alpha1"
 )
 
 // Object names, labels and annotations this operator defines. They are part of

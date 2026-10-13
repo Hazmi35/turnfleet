@@ -13,7 +13,7 @@ import (
 	"github.com/pion/turn/v5"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"github.com/hzmi/turnfleet/internal/relay"
+	"github.com/Hazmi35/turnfleet/internal/relay"
 )
 
 const (
@@ -21,8 +21,25 @@ const (
 	testRealm  = "turnfleet.test"
 	testUser   = "turnfleet-probe"
 
-	// testPortLow is the base of the relay port range the test server hands out.
-	testPortLow uint16 = 55000
+	// Relay port ranges the test servers hand out. Every test gets its own: the
+	// tests run in parallel, and two servers sharing a port range would fight
+	// over the same relay port.
+	rangeSuccessLow    uint16 = 55000
+	rangeSuccessHigh   uint16 = 55010
+	rangeOnePortLow    uint16 = 55020
+	rangeOnePortHigh   uint16 = 55020
+	rangeWrongAddrLow  uint16 = 55030
+	rangeWrongAddrHigh uint16 = 55040
+	rangeEscapeLow     uint16 = 55050
+	rangeEscapeHigh    uint16 = 55060
+	rangeAuthLow       uint16 = 55070
+	rangeAuthHigh      uint16 = 55080
+	rangeCapacityLow   uint16 = 55090
+	rangeCapacityHigh  uint16 = 55090
+	rangeRoundTripLow  uint16 = 55100
+	rangeRoundTripHigh uint16 = 55110
+	rangeDeniedLow     uint16 = 55120
+	rangeDeniedHigh    uint16 = 55130
 )
 
 // turnServer is a real TURN server, in-process, so the probe is tested against
@@ -34,7 +51,7 @@ type turnServer struct {
 	portHigh int32
 }
 
-func startTurnServer(t *testing.T, portHigh uint16, permission turn.PermissionHandler) *turnServer {
+func startTurnServer(t *testing.T, portLow, portHigh uint16, permission turn.PermissionHandler) *turnServer {
 	t.Helper()
 
 	conn, err := net.ListenPacket("udp4", "127.0.0.1:0")
@@ -52,7 +69,7 @@ func startTurnServer(t *testing.T, portHigh uint16, permission turn.PermissionHa
 				RelayAddressGenerator: &turn.RelayAddressGeneratorPortRange{
 					RelayAddress: net.ParseIP("127.0.0.1"),
 					Address:      "127.0.0.1",
-					MinPort:      testPortLow,
+					MinPort:      portLow,
 					MaxPort:      portHigh,
 				},
 				PermissionHandler: permission,
@@ -67,7 +84,7 @@ func startTurnServer(t *testing.T, portHigh uint16, permission turn.PermissionHa
 	return &turnServer{
 		address:  conn.LocalAddr().String(),
 		secret:   testSecret,
-		portLow:  int32(testPortLow),
+		portLow:  int32(portLow),
 		portHigh: int32(portHigh),
 	}
 }
@@ -200,8 +217,8 @@ func TestCredentials(t *testing.T) {
 func TestAllocateSucceeds(t *testing.T) {
 	t.Parallel()
 
-	server := startTurnServer(t, 55010, nil)
-	range55000to55010 := relay.PortRange{Start: 55000, End: 55010}
+	server := startTurnServer(t, rangeSuccessLow, rangeSuccessHigh, nil)
+	range55000to55010 := relay.PortRange{Start: int32(rangeSuccessLow), End: int32(rangeSuccessHigh)}
 
 	result := Allocate(context.Background(), server.config(t, "127.0.0.1", &range55000to55010))
 
@@ -233,8 +250,8 @@ func TestAllocateSucceeds(t *testing.T) {
 func TestAllocateReleasesTheAllocation(t *testing.T) {
 	t.Parallel()
 
-	server := startTurnServer(t, 55000, nil)
-	onePort := relay.PortRange{Start: 55000, End: 55000}
+	server := startTurnServer(t, rangeOnePortLow, rangeOnePortHigh, nil)
+	onePort := relay.PortRange{Start: int32(rangeOnePortLow), End: int32(rangeOnePortHigh)}
 
 	for round := range 3 {
 		var last Result
@@ -252,8 +269,8 @@ func TestAllocateReleasesTheAllocation(t *testing.T) {
 func TestAllocateDetectsWrongAddress(t *testing.T) {
 	t.Parallel()
 
-	server := startTurnServer(t, 55010, nil)
-	portRange := relay.PortRange{Start: 55000, End: 55010}
+	server := startTurnServer(t, rangeWrongAddrLow, rangeWrongAddrHigh, nil)
+	portRange := relay.PortRange{Start: int32(rangeWrongAddrLow), End: int32(rangeWrongAddrHigh)}
 
 	result := Allocate(context.Background(), server.config(t, "203.0.113.10", &portRange))
 
@@ -268,7 +285,7 @@ func TestAllocateDetectsWrongAddress(t *testing.T) {
 func TestAllocateDetectsPortOutsideTheRelayRange(t *testing.T) {
 	t.Parallel()
 
-	server := startTurnServer(t, 55010, nil)
+	server := startTurnServer(t, rangeEscapeLow, rangeEscapeHigh, nil)
 	elsewhere := relay.PortRange{Start: 60000, End: 60010}
 
 	result := Allocate(context.Background(), server.config(t, "127.0.0.1", &elsewhere))
@@ -284,7 +301,7 @@ func TestAllocateDetectsPortOutsideTheRelayRange(t *testing.T) {
 func TestAllocateReportsAuthFailure(t *testing.T) {
 	t.Parallel()
 
-	server := startTurnServer(t, 55010, nil)
+	server := startTurnServer(t, rangeAuthLow, rangeAuthHigh, nil)
 	cfg := server.config(t, "127.0.0.1", nil)
 	cfg.Password = "definitely-not-the-password"
 
@@ -311,8 +328,8 @@ func TestAllocateReportsAuthFailure(t *testing.T) {
 func TestAllocateReportsInsufficientCapacity(t *testing.T) {
 	t.Parallel()
 
-	server := startTurnServer(t, 55000, nil)
-	onePort := relay.PortRange{Start: 55000, End: 55000}
+	server := startTurnServer(t, rangeCapacityLow, rangeCapacityHigh, nil)
+	onePort := relay.PortRange{Start: int32(rangeCapacityLow), End: int32(rangeCapacityHigh)}
 	cfg := server.config(t, "127.0.0.1", &onePort)
 
 	_, release := holdAllocation(t, server, cfg)
@@ -366,7 +383,7 @@ func holdAllocation(t *testing.T, server *turnServer, cfg *Config) (allocation n
 func TestAllocatePeerRoundTrip(t *testing.T) {
 	t.Parallel()
 
-	server := startTurnServer(t, 55010, nil)
+	server := startTurnServer(t, rangeRoundTripLow, rangeRoundTripHigh, nil)
 	cfg := server.config(t, "127.0.0.1", nil)
 	cfg.EchoListen = "127.0.0.1:0"
 
@@ -387,7 +404,7 @@ func TestAllocateRefusesDeniedPeer(t *testing.T) {
 	t.Parallel()
 
 	deny := func(_ net.Addr, peerIP net.IP) bool { return !peerIP.IsLoopback() }
-	server := startTurnServer(t, 55010, deny)
+	server := startTurnServer(t, rangeDeniedLow, rangeDeniedHigh, deny)
 	cfg := server.config(t, "127.0.0.1", nil)
 	cfg.EchoListen = "127.0.0.1:0"
 
