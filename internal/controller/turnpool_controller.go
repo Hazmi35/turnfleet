@@ -125,6 +125,15 @@ func (r *TURNPoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, fmt.Errorf("listing relay pods: %w", err)
 	}
 
+	// The published vantage result is read before anything is measured, and it
+	// takes no part in what the relays are: an in-cluster probe cannot speak
+	// for the vantage point, and the vantage point cannot speak for the cluster.
+	// It is read this early so the secret-missing path below reports it too.
+	vantageResult, err := r.observeVantage(ctx, pool)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	secret, err := r.sharedSecret(ctx, pool)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("reading the auth secret: %w", err)
@@ -135,7 +144,11 @@ func (r *TURNPoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		message := fmt.Sprintf("secret %s/%s has no key %q: relays cannot authenticate clients",
 			pool.Namespace, pool.Spec.Auth.SecretRef.Name, pool.Spec.Auth.SecretRef.Key)
 		r.Recorder.Eventf(pool, nil, corev1.EventTypeWarning, "AuthSecretMissing", "Validate", "%s", message)
-		if err := r.writeStatus(ctx, pool, &statusInputs{secretMissing: message}); err != nil {
+		if err := r.writeStatus(ctx, pool, &statusInputs{
+			secretMissing: message,
+			vantage:       vantageResult,
+			now:           r.now(),
+		}); err != nil {
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{RequeueAfter: secretRetryInterval}, nil
@@ -143,14 +156,6 @@ func (r *TURNPoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	plan := relay.ComputePlan(&relay.PlanInput{PoolName: pool.Name, Spec: pool.Spec, Nodes: observed.relays})
 	relay.SortRelays(plan.Relays)
-
-	// The published vantage result is read before the relays are measured, but
-	// it takes no part in what they are: an in-cluster probe cannot speak for
-	// the vantage point, and the vantage point cannot speak for the cluster.
-	vantageResult, err := r.observeVantage(ctx, pool)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
 
 	states, err := r.renderRelays(pool, &plan, observed.podCIDRs, secret, pods)
 	if err != nil {

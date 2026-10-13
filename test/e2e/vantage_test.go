@@ -148,6 +148,7 @@ func applyVantageManifest(t *testing.T) {
 	}
 
 	applied := filepath.Join(t.TempDir(), "runner.yaml")
+	//nolint:gosec // the path is this test's own temporary directory.
 	if err := os.WriteFile(applied, []byte(manifest), 0o600); err != nil {
 		t.Fatalf("writing the runner manifest: %v", err)
 	}

@@ -79,6 +79,10 @@ func (r *TURNPoolReconciler) observeVantage(ctx context.Context, pool *turnfleet
 		return vantageObservation{}, nil
 	}
 	if err != nil {
+		// An unreadable payload is data, not a failure to retry: nothing about
+		// reconciling again makes the object readable, and the condition says
+		// exactly what is wrong with it.
+		//nolint:nilerr // the parse error is carried in the observation.
 		return vantageObservation{problem: err.Error()}, nil
 	}
 	return vantageObservation{payload: payload}, nil
@@ -121,7 +125,7 @@ func writeVantageCondition(status *turnfleetv1alpha1.TURNPoolStatus, inputs *sta
 }
 
 // vantageCondition turns a published result into a condition.
-func vantageCondition(observation vantageObservation, now time.Time) (metav1.ConditionStatus, string, string) {
+func vantageCondition(observation vantageObservation, now time.Time) (conditionStatus metav1.ConditionStatus, reason, message string) {
 	switch {
 	case observation.problem != "":
 		return metav1.ConditionUnknown, reasonVantageResultInvalid,

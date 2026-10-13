@@ -47,11 +47,7 @@ func runVantage(ctx context.Context, opts *options, stdout, stderr io.Writer) in
 		return exitUsage
 	}
 
-	namespace, err := resolveNamespace(opts.namespace)
-	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "%v\n", err)
-		return exitFailure
-	}
+	namespace := resolveNamespace(opts.namespace)
 	cluster, err := clusterClient()
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "%v\n", err)
@@ -121,17 +117,17 @@ func validateVantageOptions(opts *options) error {
 
 // resolveNamespace finds the namespace the pool lives in: the flag, then the
 // pod's own namespace, then the kubeconfig's default.
-func resolveNamespace(flagValue string) (string, error) {
+func resolveNamespace(flagValue string) string {
 	if flagValue != "" {
-		return flagValue, nil
+		return flagValue
 	}
 	// A pod always has this file; a developer's machine does not.
 	if data, err := os.ReadFile(serviceAccountNamespaceFile); err == nil {
 		if namespace := strings.TrimSpace(string(data)); namespace != "" {
-			return namespace, nil
+			return namespace
 		}
 	}
-	return metav1.NamespaceDefault, nil
+	return metav1.NamespaceDefault
 }
 
 // clusterClient connects to the API server: in-cluster from the pod's service
@@ -164,7 +160,7 @@ func publishedURIs(ctx context.Context, cluster client.Client, namespace, name s
 	}
 
 	var uris []string
-	for _, line := range strings.Split(configMap.Data["uris"], "\n") {
+	for line := range strings.SplitSeq(configMap.Data["uris"], "\n") {
 		if uri := strings.TrimSpace(line); uri != "" {
 			uris = append(uris, uri)
 		}
