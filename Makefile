@@ -151,7 +151,7 @@ test-e2e: kind-up docker-build build install ## Run the end-to-end suite against
 	$(MAKE) deploy KUSTOMIZE_OVERLAY=config/e2e
 	KUBE_CONTEXT=$(KUBE_CONTEXT) KIND_CLUSTER=$(KIND_CLUSTER) COTURN_IMAGE="$(COTURN_IMAGE)" \
 		PROBE_BIN="$(abspath $(PROBE_BIN))" \
-		$(GO) test -tags=e2e -count=1 -v -timeout 30m ./test/e2e/
+		$(GO) test -tags=e2e -count=1 -timeout 30m ./test/e2e/
 
 .PHONY: envtest
 envtest: ## Download the envtest control plane binaries.
