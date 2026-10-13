@@ -87,6 +87,9 @@ func goldenInputs(t *testing.T) map[string]RenderInput {
 				Address:     "10.0.0.11",
 				BindAddress: "10.0.0.11",
 				PortRange:   PortRange{Start: 49164, End: 49175},
+				// The second relay on this shared address: its listener port is
+				// offset so it does not collide with the first relay's.
+				ListenerPortOffset: 1,
 			},
 			PoolNamespace: "default",
 			PoolName:      "demo",

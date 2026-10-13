@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"flag"
 	"os"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -39,6 +40,7 @@ func init() {
 }
 
 func main() {
+	var clusterCIDRs string
 	var metricsAddr string
 	var metricsCertPath, metricsCertName, metricsCertKey string
 	var webhookCertPath, webhookCertName, webhookCertKey string
@@ -51,6 +53,9 @@ func main() {
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	flag.StringVar(&clusterCIDRs, "cluster-cidrs", "",
+		"Comma-separated CIDRs every relay must deny as a peer, in addition to the pool's own deny list. "+
+			"Use it for a cluster service range that is not RFC 1918; the pod CIDRs of the relay nodes are added automatically.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -168,8 +173,9 @@ func main() {
 	}
 
 	if err := (&controller.TURNPoolReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:       mgr.GetClient(),
+		Scheme:       mgr.GetScheme(),
+		ClusterCIDRs: splitCIDRs(clusterCIDRs),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "Failed to create controller", "controller", "turnpool")
 		os.Exit(1)
@@ -181,7 +187,6 @@ func main() {
 			os.Exit(1)
 		}
 	}
-	// +kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "Failed to set up health check")
@@ -198,3 +203,20 @@ func main() {
 		os.Exit(1)
 	}
 }
+
+// splitCIDRs parses the --cluster-cidrs flag.
+func splitCIDRs(value string) []string {
+	if strings.TrimSpace(value) == "" {
+		return nil
+	}
+	parts := strings.Split(value, ",")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
+}
+
+// +kubebuilder:scaffold:builder

@@ -171,9 +171,12 @@ type ListenerSpec struct {
 	// +required
 	Protocol ListenerProtocol `json:"protocol,omitempty"`
 
-	// port is the listener port, bound on every relay's address. It must not
-	// fall inside spec.relayPortRange: a listener and an allocation cannot share
-	// a port.
+	// port is the base listener port. Relays that own their address serve
+	// exactly this port; in PartitionedIP mode, where several relays share one
+	// address, each relay serves port + its slot index, because a listening
+	// socket can only be bound once per address. The ports a pool uses must not
+	// overlap spec.relayPortRange: a listener and an allocation cannot share a
+	// port.
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=65535
 	// +required
@@ -259,9 +262,11 @@ type TURNPoolSpec struct {
 	// replicas is the desired number of relays. It is explicit rather than
 	// optional because the number of relays is the capacity decision: the value
 	// is capped by the addresses the addressing mode makes available, and the
-	// Ready condition says when it cannot be reached.
+	// Ready condition says when it cannot be reached. The upper bound reflects
+	// where the rendered relay configurations stop fitting in one ConfigMap;
+	// pools that need more relays than that need more than one pool.
 	// +kubebuilder:validation:Minimum=1
-	// +kubebuilder:validation:Maximum=1024
+	// +kubebuilder:validation:Maximum=256
 	// +required
 	Replicas int32 `json:"replicas,omitempty"`
 

@@ -14,6 +14,7 @@ decision gets a new ADR that says so.
 | [0006](0006-drain-semantics.md) | Drain semantics: out of `turnURIs` first, delete after allocations reach zero or `drainTimeout`. |
 | [0007](0007-probe-vantage-point.md) | The probe runs in-cluster for configuration and from outside for reachability. |
 | [0008](0008-coturn-config-rendering.md) | coturn configuration is rendered into a ConfigMap, from flags verified against the pinned image. |
+| [0009](0009-partitioned-listener-ports.md) | Partitioned relays get their own listener ports: a listening socket binds once per address. |
 
 Related documents that are not ADRs: [`../architecture.md`](../architecture.md),
 [`../capacity-model.md`](../capacity-model.md), [`../versions.md`](../versions.md).

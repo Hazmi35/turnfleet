@@ -225,11 +225,30 @@ func validateListeners(spec *turnfleetv1alpha1.TURNPoolSpec, path *field.Path) f
 				fmt.Sprintf("coturn serves udp and tcp on the same plain port (%d), so they must share it", plainPort)))
 		}
 
+		// Every port this listener will be served on has to stay clear of the
+		// relay port range: a listener and an allocation cannot share a port.
+		// In PartitionedIP mode the pool's relays serve a span of ports
+		// starting at the declared one, because each relay on a shared address
+		// needs a listening port of its own.
+		ports := spec.Addressing.PartitionedIP
+		span := int32(1)
+		if ports != nil && spec.Addressing.Mode == turnfleetv1alpha1.AddressingModePartitionedIP {
+			span = max(ports.RelaysPerNode, 1)
+		}
+		if listener.Port+span-1 > 65535 {
+			errs = append(errs, field.Invalid(item.Child("port"), listener.Port,
+				fmt.Sprintf("leaves no room for %d relays on one address: the last relay would need port %d",
+					span, listener.Port+span-1)))
+		}
 		if spec.RelayPortRange.Start != 0 || spec.RelayPortRange.End != 0 {
-			if listener.Port >= spec.RelayPortRange.Start && listener.Port <= spec.RelayPortRange.End {
-				errs = append(errs, field.Invalid(item.Child("port"), listener.Port,
-					fmt.Sprintf("falls inside relayPortRange %d-%d: a listener and an allocation cannot share a port",
-						spec.RelayPortRange.Start, spec.RelayPortRange.End)))
+			for offset := int32(0); offset < span; offset++ {
+				port := listener.Port + offset
+				if port >= spec.RelayPortRange.Start && port <= spec.RelayPortRange.End {
+					errs = append(errs, field.Invalid(item.Child("port"), listener.Port,
+						fmt.Sprintf("uses port %d, which falls inside relayPortRange %d-%d: a listener and an allocation cannot share a port",
+							port, spec.RelayPortRange.Start, spec.RelayPortRange.End)))
+					break
+				}
 			}
 		}
 	}

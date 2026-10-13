@@ -62,7 +62,7 @@ func Render(in *RenderInput) (string, error) {
 		return "", err
 	}
 
-	plainPort, tlsPort, hasPlain, hasTLS, err := listenerPorts(in.Spec.Listeners)
+	plainPort, tlsPort, hasPlain, hasTLS, err := listenerPorts(in.Spec.Listeners, in.Relay.ListenerPortOffset)
 	if err != nil {
 		return "", err
 	}
@@ -211,20 +211,21 @@ func writeExtraArgs(b *strings.Builder, args []string) {
 // listenerPorts returns the plain and TLS listener ports and whether each kind
 // is declared. coturn serves UDP and TCP on one plain port; the webhook already
 // guarantees that the declared plain listeners agree.
-func listenerPorts(listeners []turnfleetv1alpha1.ListenerSpec) (plain, tls int32, hasPlain, hasTLS bool, err error) {
+func listenerPorts(listeners []turnfleetv1alpha1.ListenerSpec, portOffset int32) (plain, tls int32, hasPlain, hasTLS bool, err error) {
 	for _, listener := range listeners {
+		port := listener.Port + portOffset
 		switch listener.Protocol {
 		case turnfleetv1alpha1.ListenerProtocolUDP, turnfleetv1alpha1.ListenerProtocolTCP:
-			if hasPlain && plain != listener.Port {
+			if hasPlain && plain != port {
 				return 0, 0, false, false, fmt.Errorf(
-					"listeners %d and %d disagree on the plain listening port", plain, listener.Port)
+					"listeners %d and %d disagree on the plain listening port", plain, port)
 			}
-			plain, hasPlain = listener.Port, true
+			plain, hasPlain = port, true
 		case turnfleetv1alpha1.ListenerProtocolTLS:
-			if hasTLS && tls != listener.Port {
-				return 0, 0, false, false, fmt.Errorf("more than one tls listener port (%d and %d)", tls, listener.Port)
+			if hasTLS && tls != port {
+				return 0, 0, false, false, fmt.Errorf("more than one tls listener port (%d and %d)", tls, port)
 			}
-			tls, hasTLS = listener.Port, true
+			tls, hasTLS = port, true
 		default:
 			return 0, 0, false, false, fmt.Errorf("unsupported listener protocol %q", listener.Protocol)
 		}

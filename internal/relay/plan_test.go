@@ -4,6 +4,8 @@
 package relay
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	turnfleetv1alpha1 "github.com/hzmi/turnfleet/api/v1alpha1"
@@ -126,6 +128,58 @@ func TestComputePlanRejectsOverlap(t *testing.T) {
 	}
 	if len(plan.Notes) == 0 {
 		t.Error("no note explains why the second relay was not placed")
+	}
+}
+
+// TestPartitionedRelaysGetTheirOwnListenerPorts is the property that makes
+// PartitionedIP work at all: two relays on one address cannot both bind the same
+// listening port, so each relay on an address gets its own port from the pool's
+// base port.
+func TestPartitionedRelaysGetTheirOwnListenerPorts(t *testing.T) {
+	t.Parallel()
+
+	spec := baseSpec()
+	spec.Replicas = 4
+	spec.RelayPortRange = turnfleetv1alpha1.PortRange{Start: 50000, End: 50009}
+	spec.Listeners = []turnfleetv1alpha1.ListenerSpec{
+		{Name: "turn", Protocol: turnfleetv1alpha1.ListenerProtocolUDP, Port: 3478},
+	}
+	spec.Addressing = turnfleetv1alpha1.AddressingSpec{
+		Mode:          turnfleetv1alpha1.AddressingModePartitionedIP,
+		PartitionedIP: &turnfleetv1alpha1.PartitionedIPSpec{RelaysPerNode: 2},
+	}
+
+	plan := ComputePlan(&PlanInput{
+		PoolName: "demo",
+		Spec:     spec,
+		Nodes: []Node{
+			{Name: "worker-1", Address: "10.0.0.11"},
+			{Name: "worker-2", Address: "10.0.0.12"},
+		},
+	})
+
+	portsPerAddress := map[string]map[int32]string{}
+	for i := range plan.Relays {
+		relay := plan.Relays[i]
+		listener := spec.Listeners[0]
+		port := relay.ListenerPort(&listener)
+
+		if portsPerAddress[relay.Address] == nil {
+			portsPerAddress[relay.Address] = map[int32]string{}
+		}
+		if other, clash := portsPerAddress[relay.Address][port]; clash {
+			t.Errorf("relays %s and %s would both bind %s:%d", other, relay.Name, relay.Address, port)
+		}
+		portsPerAddress[relay.Address][port] = relay.Name
+
+		for _, uri := range ListenerURIs(&plan.Relays[i], spec.Listeners) {
+			if !strings.Contains(uri, fmt.Sprintf(":%d?", port)) {
+				t.Errorf("URI %q does not carry the relay's own listener port %d", uri, port)
+			}
+		}
+	}
+	if len(portsPerAddress["10.0.0.11"]) != 2 {
+		t.Errorf("address 10.0.0.11 serves %d distinct listener ports, want 2", len(portsPerAddress["10.0.0.11"]))
 	}
 }
 
@@ -294,7 +348,8 @@ func TestRelayName(t *testing.T) {
 func TestListenerURIs(t *testing.T) {
 	t.Parallel()
 
-	uris := ListenerURIs("203.0.113.10", []turnfleetv1alpha1.ListenerSpec{
+	relay := Relay{Address: "203.0.113.10"}
+	uris := ListenerURIs(&relay, []turnfleetv1alpha1.ListenerSpec{
 		{Name: "turn", Protocol: turnfleetv1alpha1.ListenerProtocolUDP, Port: 3478},
 		{Name: "turns", Protocol: turnfleetv1alpha1.ListenerProtocolTLS, Port: 5349},
 		{Name: "turn-tcp", Protocol: turnfleetv1alpha1.ListenerProtocolTCP, Port: 3478},
