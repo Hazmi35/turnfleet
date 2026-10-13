@@ -1,0 +1,82 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Turnfleet Authors
+#
+# Continuous integration. This runs what `make ci` runs, one step per target so
+# a failure names itself instead of hiding behind an earlier one. Every pin used
+# here (the actions below and GO_VERSION) comes from docs/versions.md.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+# The repository is public and nothing here writes: read-only, no token scope.
+permissions:
+  contents: read
+
+# A new push to a branch supersedes the run it replaced.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Renovate reads this line (customManager in renovate.json) and keeps it in
+  # step with the Go pin in docs/versions.md.
+  GO_VERSION: "1.27.2"
+
+jobs:
+  ci:
+    name: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history and all branches: the DCO check walks a commit range
+          # that starts at origin/main.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      # The range the DCO covers: origin/main..HEAD. A pull_request event is
+      # checked out at GitHub's merge commit (actions/checkout uses
+      # github.ref = refs/pull/<n>/merge when no ref input is given), which is
+      # not a commit the contributor wrote and carries no Signed-off-by of its
+      # own, so there the range ends at the head commit of the pull request
+      # instead of at HEAD.
+      - name: Check the DCO sign-off
+        env:
+          DCO_RANGE: origin/main..HEAD
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if [ -n "${PR_HEAD_SHA}" ]; then
+            DCO_RANGE="origin/main..${PR_HEAD_SHA}" hack/verify-dco.sh
+          else
+            hack/verify-dco.sh
+          fi
+
+      - name: Verify generated files
+        run: make verify
+
+      - name: Lint
+        run: make lint
+
+      # envtest binaries are downloaded by the target's own prerequisite
+      # (`setup-envtest use`), so no runner-side setup is needed here.
+      - name: Test
+        run: make test
+
+      - name: Scan for vulnerabilities
+        run: make vuln
+
+      - name: Check dependency licenses
+        run: make licenses
