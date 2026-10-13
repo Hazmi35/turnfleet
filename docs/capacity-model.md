@@ -53,7 +53,7 @@ its own port range, delivered without a load balancer.
 | Mode | Relays per node | Address per relay | Ports per relay | Ports per node |
 | --- | --- | --- | --- | --- |
 | `HostNetwork` | 1 (required anti-affinity) | the node's `ExternalIP` (or the `turnfleet.hzmi.dev/relay-address` annotation) | the whole range | `end - start + 1` |
-| `PartitionedIP` | `addressing.partitionedIP.relaysPerNode` | the node address, shared by all relays on that node | `(end - start + 1) / relaysPerNode`, remainder to the last relay | still `end - start + 1` — **splitting an IP does not create ports** |
+| `PartitionedIP` | `addressing.partitionedIP.relaysPerNode` | the node address, shared by all relays on that node | `(end - start + 1) / relaysPerNode`, remainder to the first slices | still `end - start + 1` — **splitting an IP does not create ports** |
 | `ExternalIPPool` | one per declared address | the declared secondary address | the whole range | `addresses on that node × (end - start + 1)` |
 
 Growing capacity:
@@ -67,6 +67,12 @@ Growing capacity:
   more processes, more concurrency and per-process blast-radius isolation, but
   the sum of the slices is still one IP's port space. If you need more
   allocations, use `HostNetwork` or `ExternalIPPool`.
+
+  Relays that share an address also need listener ports of their own: a
+  listening socket binds once per address, so relay *n* on a node serves
+  `spec.listeners[].port + n` (see `docs/adr/0009-partitioned-listener-ports.md`).
+  Those `relaysPerNode` consecutive ports must sit outside
+  `spec.relayPortRange`, and the webhook rejects a pool where they do not.
 
 `status.portsTotal` sums the slices actually assigned, so a pool whose
 `PartitionedIP` split is misconfigured shows the real number instead of the

@@ -161,7 +161,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `name` _string_ | name identifies the listener within the pool, for example "turn" or<br />"turns". It must be unique within spec.listeners. |  | MaxLength: 63 <br />MinLength: 1 <br />Required: \{\} <br /> |
 | `protocol` _[ListenerProtocol](#listenerprotocol)_ | protocol is the transport the listener accepts. |  | Enum: [udp tcp tls] <br />Required: \{\} <br /> |
-| `port` _integer_ | port is the listener port, bound on every relay's address. It must not<br />fall inside spec.relayPortRange: a listener and an allocation cannot share<br />a port. |  | Maximum: 65535 <br />Minimum: 1 <br />Required: \{\} <br /> |
+| `port` _integer_ | port is the base listener port. Relays that own their address serve<br />exactly this port; in PartitionedIP mode, where several relays share one<br />address, each relay serves port + its slot index, because a listening<br />socket can only be bound once per address. The ports a pool uses must not<br />overlap spec.relayPortRange: a listener and an allocation cannot share a<br />port. |  | Maximum: 65535 <br />Minimum: 1 <br />Required: \{\} <br /> |
 | `tlsSecretRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v/#localobjectreference-v1-core)_ | tlsSecretRef is the Secret holding the listener's certificate, with the<br />usual tls.crt and tls.key keys. Required for protocol tls, forbidden<br />otherwise. Rotating it changes every relay's config hash and rolls the<br />pool one relay at a time. |  | Optional: \{\} <br /> |
 
 
@@ -360,7 +360,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `replicas` _integer_ | replicas is the desired number of relays. It is explicit rather than<br />optional because the number of relays is the capacity decision: the value<br />is capped by the addresses the addressing mode makes available, and the<br />Ready condition says when it cannot be reached. |  | Maximum: 1024 <br />Minimum: 1 <br />Required: \{\} <br /> |
+| `replicas` _integer_ | replicas is the desired number of relays. It is explicit rather than<br />optional because the number of relays is the capacity decision: the value<br />is capped by the addresses the addressing mode makes available, and the<br />Ready condition says when it cannot be reached. The upper bound reflects<br />where the rendered relay configurations stop fitting in one ConfigMap;<br />pools that need more relays than that need more than one pool. |  | Maximum: 256 <br />Minimum: 1 <br />Required: \{\} <br /> |
 | `dataplane` _[DataplaneSpec](#dataplanespec)_ | dataplane configures the relay processes. |  | Required: \{\} <br /> |
 | `addressing` _[AddressingSpec](#addressingspec)_ | addressing selects how relays are placed and addressed. Immutable. |  | Required: \{\} <br /> |
 | `relayPortRange` _[PortRange](#portrange)_ | relayPortRange is the pool's UDP port space. Each relay owns a disjoint<br />slice of it; for HostNetwork and ExternalIPPool that slice is the whole<br />range. Immutable: changing it invalidates live allocations. |  | Required: \{\} <br /> |

@@ -29,6 +29,18 @@ func ComputePlan(in *PlanInput) Plan {
 
 	replicas := max(in.Spec.Replicas, 0)
 
+	// A pool whose port space is empty or inverted cannot host a relay: the
+	// validation webhook rejects it, but the planner is also called with specs
+	// that never passed admission (a fuzzer, a test, a future code path), and
+	// placing a relay with an inverted range would render a coturn configuration
+	// whose capacity is nonsense.
+	declared := PortRange{Start: in.Spec.RelayPortRange.Start, End: in.Spec.RelayPortRange.End}
+	if declared.Ports() <= 0 {
+		return Plan{Unplaced: replicas, Notes: []string{fmt.Sprintf(
+			"the pool's relay port range %d-%d holds no ports, so no relay can be placed",
+			in.Spec.RelayPortRange.Start, in.Spec.RelayPortRange.End)}}
+	}
+
 	candidates := candidatesFor(&in.Spec, nodes)
 
 	plan := Plan{Relays: make([]Relay, 0, min(int(replicas), len(candidates)))}
@@ -69,21 +81,23 @@ func unplacedFrom(count int64) int32 {
 
 // candidate is a possible relay before it is checked for port overlap.
 type candidate struct {
-	nodeName    string
-	address     string
-	bindAddress string
-	portRange   PortRange
+	nodeName           string
+	address            string
+	bindAddress        string
+	portRange          PortRange
+	listenerPortOffset int32
 }
 
 func (c candidate) relay(poolName string) Relay {
 	id := identity(c.address, c.portRange)
 	return Relay{
-		Name:        RelayName(poolName, id),
-		Identity:    id,
-		NodeName:    c.nodeName,
-		Address:     c.address,
-		BindAddress: c.bindAddress,
-		PortRange:   c.portRange,
+		Name:               RelayName(poolName, id),
+		Identity:           id,
+		NodeName:           c.nodeName,
+		Address:            c.address,
+		BindAddress:        c.bindAddress,
+		PortRange:          c.portRange,
+		ListenerPortOffset: c.listenerPortOffset,
 	}
 }
 
@@ -132,12 +146,16 @@ func candidatesFor(spec *turnfleetv1alpha1.TURNPoolSpec, nodes []Node) []candida
 			if node.Address == "" {
 				continue
 			}
-			for _, slice := range portSlices {
+			for slot, slice := range portSlices {
 				out = append(out, candidate{
 					nodeName:    node.Name,
 					address:     node.Address,
 					bindAddress: bindAddressFor(node),
 					portRange:   slice,
+					// Every relay on this address needs its own listening
+					// port: a listening socket can only be bound once per
+					// address.
+					listenerPortOffset: int32(slot),
 				})
 			}
 		}

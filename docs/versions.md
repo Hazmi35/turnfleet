@@ -79,6 +79,7 @@ came from. Sources are the `refs/tags/<tag>` entries of each repository.
 | `actions/cache` | `55cc8345863c7cc4c66a329aec7e433d2d1c52a9` (v6.1.0) | <https://github.com/actions/cache/releases> |
 | `actions/upload-artifact` | `cf430e030ddbb5b0abf93d22962f4752f3646cd9` (v7.0.2) | <https://github.com/actions/upload-artifact/releases> |
 | `docker/setup-buildx-action` | `f87e5991a6d7451dcb8d9637bfbc97413f497069` (v4.4.1) | <https://github.com/docker/setup-buildx-action/releases> |
+| `docker/setup-qemu-action` | `99012661954931238ded8c8b007157a8430204e1` (v4.4.0) | <https://github.com/docker/setup-qemu-action/releases> |
 | `docker/login-action` | `dbcb813823bdd20940b903addbd779551569679f` (v4.6.0) | <https://github.com/docker/login-action/releases> |
 | `docker/build-push-action` | `c3c9e263c25d99ce0380d002d59b67737d91b0dc` (v7.4.0) | <https://github.com/docker/build-push-action/releases> |
 | `docker/metadata-action` | `dc802804100637a589fabce1cb79ff13a1411302` (v6.2.0) | <https://github.com/docker/metadata-action/releases> |

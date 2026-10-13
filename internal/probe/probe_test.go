@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/pion/turn/v5"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/hzmi/turnfleet/internal/relay"
 )
@@ -224,16 +225,26 @@ func TestAllocateSucceeds(t *testing.T) {
 // TestAllocateReleasesTheAllocation is the property that keeps the probe from
 // consuming the capacity it measures: a one-port relay must serve the probe over
 // and over.
+//
+// Releasing is asynchronous by design — the client sends Refresh with lifetime
+// zero and does not wait for the response — so the relay frees the port a moment
+// after the probe returns. The test therefore polls: what it proves is that the
+// port is released, not that it is released instantly.
 func TestAllocateReleasesTheAllocation(t *testing.T) {
 	t.Parallel()
 
 	server := startTurnServer(t, 55000, nil)
 	onePort := relay.PortRange{Start: 55000, End: 55000}
 
-	for i := range 3 {
-		result := Allocate(context.Background(), server.config(t, "127.0.0.1", &onePort))
-		if !result.Succeeded {
-			t.Fatalf("probe %d failed, so the previous probe did not release its allocation: %+v", i+1, result)
+	for round := range 3 {
+		var last Result
+		err := wait.PollUntilContextTimeout(context.Background(), 20*time.Millisecond, 5*time.Second, true,
+			func(ctx context.Context) (bool, error) {
+				last = Allocate(ctx, server.config(t, "127.0.0.1", &onePort))
+				return last.Succeeded, nil
+			})
+		if err != nil {
+			t.Fatalf("round %d: the previous probe never released its allocation: %+v", round+1, last)
 		}
 	}
 }

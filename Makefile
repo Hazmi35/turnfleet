@@ -26,7 +26,14 @@ ENVTEST_K8S_VERSION ?= 1.37.0
 GOLANGCI_LINT_VERSION ?= v2.14.0
 KUSTOMIZE_VERSION ?= v5.8.2
 KIND_IMAGE ?= kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
-COTURN_IMAGE ?= coturn/coturn:4.18.0-r0@sha256:bbefd3e1fdfdc0d58770fe01b581fd8b00d9f3a5580d00acb77cf719a6bc78e3
+# The coturn data plane. COTURN_IMAGE is the tag the kind cluster is loaded
+# with (a multi-arch index digest cannot be loaded with `docker save`), and
+# COTURN_IMAGE_DIGEST is what that tag must resolve to: `make load-coturn`
+# verifies the two before loading. Relay pods in the e2e suite reference the
+# tag, because it is what the cluster has; digest pinning itself is enforced by
+# the validating webhook and covered by the webhook envtest suite.
+COTURN_IMAGE ?= coturn/coturn:4.18.0-r0
+COTURN_IMAGE_DIGEST ?= sha256:bbefd3e1fdfdc0d58770fe01b581fd8b00d9f3a5580d00acb77cf719a6bc78e3
 GO_IMAGE ?= golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61
 RUNTIME_IMAGE ?= gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
 
@@ -138,7 +145,7 @@ test-fuzz: generate ## Fuzz the renderer and the webhook validators.
 	$(GO) test -run '^$$' -fuzz '^FuzzWebhookValidation$$' -fuzztime $(FUZZ_TIME) ./internal/webhook/v1alpha1/
 
 .PHONY: test-e2e
-test-e2e: kind-up install ## Run the end-to-end suite against the local kind cluster.
+test-e2e: kind-up docker-build install ## Run the end-to-end suite against the local kind cluster.
 	$(MAKE) load-images
 	$(MAKE) deploy
 	KUBE_CONTEXT=$(KUBE_CONTEXT) KIND_CLUSTER=$(KIND_CLUSTER) COTURN_IMAGE="$(COTURN_IMAGE)" \
@@ -202,9 +209,19 @@ kind-down: ## Delete the local kind cluster.
 	-$(KIND) delete cluster --name $(KIND_CLUSTER)
 
 .PHONY: load-images
-load-images: ## Load the locally built images into the kind cluster.
+load-images: load-coturn ## Load the controller, probe and coturn images into the kind cluster.
 	$(KIND) load docker-image $(CONTROLLER_IMG) --name $(KIND_CLUSTER)
 	$(KIND) load docker-image $(PROBE_IMG) --name $(KIND_CLUSTER)
+
+.PHONY: load-coturn
+load-coturn: ## Pull the pinned coturn image and load it into the kind cluster.
+	$(CONTAINER_TOOL) pull $(COTURN_IMAGE)
+	@digest="$$($(CONTAINER_TOOL) image inspect $(COTURN_IMAGE) --format '{{index .RepoDigests 0}}')"; \
+	case "$$digest" in \
+		*$(COTURN_IMAGE_DIGEST)) echo "coturn image matches the pin: $$digest" ;; \
+		*) echo "coturn image $$COTURN_IMAGE resolves to $$digest, which is not the pinned $(COTURN_IMAGE_DIGEST)" >&2; exit 1 ;; \
+	esac
+	$(KIND) load docker-image $(COTURN_IMAGE) --name $(KIND_CLUSTER)
 
 .PHONY: install
 install: manifests ## Install the CRDs into the kind cluster.
@@ -214,15 +231,21 @@ install: manifests ## Install the CRDs into the kind cluster.
 uninstall: ## Remove the CRDs from the kind cluster.
 	-$(KUSTOMIZE) build config/crd | $(KUBECTL) delete --ignore-not-found -f -
 
+# KUSTOMIZE_OVERLAY selects what `make deploy` applies. config/default runs the
+# controller without admission webhooks (nothing else to install); use
+# config/with-webhook on a cluster that has cert-manager, which is where the
+# webhooks and their serving certificates live.
+KUSTOMIZE_OVERLAY ?= config/default
+
 .PHONY: deploy
 deploy: ## Deploy the controller into the kind cluster.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(CONTROLLER_IMG)
-	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
-	$(KUBECTL) -n turnfleet-system rollout status deployment/turnfleet-controller --timeout=180s
+	$(KUSTOMIZE) build $(KUSTOMIZE_OVERLAY) | $(KUBECTL) apply -f -
+	$(KUBECTL) -n turnfleet-system rollout status deployment/turnfleet-controller-manager --timeout=180s
 
 .PHONY: undeploy
 undeploy: ## Remove the controller from the kind cluster.
-	-$(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found -f -
+	-$(KUSTOMIZE) build $(KUSTOMIZE_OVERLAY) | $(KUBECTL) delete --ignore-not-found -f -
 
 ##@ Quality
 

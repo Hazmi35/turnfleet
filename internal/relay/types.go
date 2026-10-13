@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 
 	turnfleetv1alpha1 "github.com/hzmi/turnfleet/api/v1alpha1"
 )
@@ -74,6 +75,16 @@ type Relay struct {
 
 	// PortRange is the slice of the pool's port space this relay owns.
 	PortRange PortRange
+
+	// ListenerPortOffset is added to every declared listener port.
+	//
+	// It is zero whenever a relay owns its address on its own (HostNetwork and
+	// ExternalIPPool). In PartitionedIP mode several relays share one node
+	// address, and a listening port can only be bound once per address, so each
+	// relay gets its own listener port from the pool's base: without this, every
+	// partitioned relay but the first would fail to bind and the mode would
+	// serve a fraction of the capacity it claims.
+	ListenerPortOffset int32
 }
 
 // Capacity is the number of concurrent allocations this relay can hold.
@@ -159,18 +170,58 @@ func ConfigHash(config string) string {
 // They are per relay and per listener: the credential issuer hands out the URI
 // of a relay that has capacity, so a client never wastes a gathering cycle on a
 // relay that is full or draining.
-func ListenerURIs(address string, listeners []turnfleetv1alpha1.ListenerSpec) []string {
+func ListenerURIs(r *Relay, listeners []turnfleetv1alpha1.ListenerSpec) []string {
 	uris := make([]string, 0, len(listeners))
 	for _, listener := range listeners {
+		port := listener.Port + r.ListenerPortOffset
 		switch listener.Protocol {
 		case turnfleetv1alpha1.ListenerProtocolUDP:
-			uris = append(uris, fmt.Sprintf("turn:%s:%d?transport=udp", address, listener.Port))
+			uris = append(uris, fmt.Sprintf("turn:%s:%d?transport=udp", r.Address, port))
 		case turnfleetv1alpha1.ListenerProtocolTCP:
-			uris = append(uris, fmt.Sprintf("turn:%s:%d?transport=tcp", address, listener.Port))
+			uris = append(uris, fmt.Sprintf("turn:%s:%d?transport=tcp", r.Address, port))
 		case turnfleetv1alpha1.ListenerProtocolTLS:
-			uris = append(uris, fmt.Sprintf("turns:%s:%d?transport=tcp", address, listener.Port))
+			uris = append(uris, fmt.Sprintf("turns:%s:%d?transport=tcp", r.Address, port))
 		}
 	}
 	slices.Sort(uris)
 	return uris
+}
+
+// ListenerPort is the port this relay serves for one of the pool's listeners.
+func (r *Relay) ListenerPort(listener *turnfleetv1alpha1.ListenerSpec) int32 {
+	return listener.Port + r.ListenerPortOffset
+}
+
+// HighestListenerPort is the largest listener port this relay serves.
+func (r *Relay) HighestListenerPort(listeners []turnfleetv1alpha1.ListenerSpec) int32 {
+	highest := int32(0)
+	for i := range listeners {
+		if port := r.ListenerPort(&listeners[i]); port > highest {
+			highest = port
+		}
+	}
+	return highest
+}
+
+// ParseIdentity decodes a relay identity back into the address and port range it
+// was built from. The controller uses it to recognise a relay pod whose status
+// entry was lost, without trusting the pod's annotations for anything else.
+func ParseIdentity(identity string) (string, PortRange, error) {
+	address, rangePart, ok := strings.Cut(identity, "|")
+	if !ok || address == "" {
+		return "", PortRange{}, fmt.Errorf("relay identity %q is not <address>|<start>-<end>", identity)
+	}
+	start, end, ok := strings.Cut(rangePart, "-")
+	if !ok {
+		return "", PortRange{}, fmt.Errorf("relay identity %q has no port range", identity)
+	}
+	startPort, err := strconv.ParseInt(start, 10, 32)
+	if err != nil {
+		return "", PortRange{}, fmt.Errorf("relay identity %q has an unreadable start port: %w", identity, err)
+	}
+	endPort, err := strconv.ParseInt(end, 10, 32)
+	if err != nil {
+		return "", PortRange{}, fmt.Errorf("relay identity %q has an unreadable end port: %w", identity, err)
+	}
+	return address, PortRange{Start: int32(startPort), End: int32(endPort)}, nil
 }

@@ -94,6 +94,14 @@ linters:
         - singleCaseSwitch
     gocyclo:
       min-complexity: 20
+    modernize:
+      disable:
+        # embedlit wants embedded fields written positionally in a struct
+        # literal, but Go forbids mixing positional and keyed elements, so a
+        # struct with an embedded field plus keyed fields (corev1.Probe,
+        # corev1.Volume) has no form that satisfies it. The keyed form is the
+        # readable one.
+        - embedlit
     goheader:
       values:
         regexp:

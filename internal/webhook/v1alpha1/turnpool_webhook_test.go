@@ -342,6 +342,33 @@ func TestValidateCreate(t *testing.T) {
 			wantField: "spec.peerPolicy.allowedCIDRs[0]",
 		},
 		{
+			name: "partitioned listener ports run into the relay range",
+			mutate: func(p *turnfleetv1alpha1.TURNPool) {
+				p.Spec.Addressing = turnfleetv1alpha1.AddressingSpec{
+					Mode:          turnfleetv1alpha1.AddressingModePartitionedIP,
+					PartitionedIP: &turnfleetv1alpha1.PartitionedIPSpec{RelaysPerNode: 2},
+				}
+				// The second relay on the shared address would serve 3479,
+				// which is inside the pool's relay port range.
+				p.Spec.RelayPortRange = turnfleetv1alpha1.PortRange{Start: 3478, End: 3480}
+			},
+			wantErr:   true,
+			wantField: "spec.listeners[0].port",
+		},
+		{
+			name: "partitioned listener ports run past the last port",
+			mutate: func(p *turnfleetv1alpha1.TURNPool) {
+				p.Spec.Addressing = turnfleetv1alpha1.AddressingSpec{
+					Mode:          turnfleetv1alpha1.AddressingModePartitionedIP,
+					PartitionedIP: &turnfleetv1alpha1.PartitionedIPSpec{RelaysPerNode: 2},
+				}
+				p.Spec.Listeners[0].Port = 65535
+				p.Spec.Listeners[1].Port = 65535
+			},
+			wantErr:   true,
+			wantField: "spec.listeners[0].port",
+		},
+		{
 			name: "probe timeout longer than the interval",
 			mutate: func(p *turnfleetv1alpha1.TURNPool) {
 				p.Spec.Probe = &turnfleetv1alpha1.ProbeSpec{
