@@ -48,8 +48,14 @@ func FuzzWebhookValidation(f *testing.F) {
 			PoolName: pool.Name,
 			Spec:     pool.Spec,
 			Nodes: []relay.Node{
-				{Name: "worker-1", Address: "203.0.113.11", BindAddress: "203.0.113.11"},
-				{Name: "worker-2", Address: "203.0.113.12", BindAddress: "203.0.113.12"},
+				{Name: "worker-1", Addresses: []relay.NodeAddress{
+					{Address: "203.0.113.11", BindAddress: "203.0.113.11"},
+					{Address: "2001:db8::11", BindAddress: "2001:db8::11"},
+				}},
+				{Name: "worker-2", Addresses: []relay.NodeAddress{
+					{Address: "203.0.113.12", BindAddress: "203.0.113.12"},
+					{Address: "2001:db8::12", BindAddress: "2001:db8::12"},
+				}},
 			},
 		})
 
@@ -87,6 +93,15 @@ func poolFromBytes(data []byte) *turnfleetv1alpha1.TURNPool {
 		"",
 	}[int(byteAt(0))%5]
 
+	// byteAt(11) is past every byte the seeds use, so the stored corpus keeps
+	// meaning what it meant before the family existed.
+	family := []turnfleetv1alpha1.AddressingFamily{
+		turnfleetv1alpha1.AddressingFamilyIPv4,
+		turnfleetv1alpha1.AddressingFamilyIPv6,
+		turnfleetv1alpha1.AddressingFamilyDualStack,
+		"",
+	}[int(byteAt(11))%4]
+
 	pool := &turnfleetv1alpha1.TURNPool{
 		Spec: turnfleetv1alpha1.TURNPoolSpec{
 			Replicas: int32(byteAt(1)%8) + 1,
@@ -94,7 +109,7 @@ func poolFromBytes(data []byte) *turnfleetv1alpha1.TURNPool {
 				Image: "coturn/coturn:4.18.0-r0@sha256:" +
 					"bbefd3e1fdfdc0d58770fe01b581fd8b00d9f3a5580d00acb77cf719a6bc78e3",
 			},
-			Addressing:     turnfleetv1alpha1.AddressingSpec{Mode: mode},
+			Addressing:     turnfleetv1alpha1.AddressingSpec{Mode: mode, Family: family},
 			RelayPortRange: turnfleetv1alpha1.PortRange{Start: portAt(2), End: portAt(4)},
 			Auth: turnfleetv1alpha1.AuthSpec{
 				Realm:     "turnfleet.fuzz",
@@ -133,6 +148,7 @@ func poolFromBytes(data []byte) *turnfleetv1alpha1.TURNPool {
 		pool.Spec.Addressing.ExternalIPPool = &turnfleetv1alpha1.ExternalIPPoolSpec{
 			Addresses: []turnfleetv1alpha1.ExternalAddress{
 				{NodeName: "worker-1", Address: "198.51.100.11"},
+				{NodeName: "worker-1", Address: "2001:db8:100::1"},
 			},
 		}
 	case turnfleetv1alpha1.AddressingModeHostNetwork:
