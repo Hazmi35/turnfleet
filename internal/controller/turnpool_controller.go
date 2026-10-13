@@ -144,6 +144,14 @@ func (r *TURNPoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	plan := relay.ComputePlan(&relay.PlanInput{PoolName: pool.Name, Spec: pool.Spec, Nodes: observed.relays})
 	relay.SortRelays(plan.Relays)
 
+	// The published vantage result is read before the relays are measured, but
+	// it takes no part in what they are: an in-cluster probe cannot speak for
+	// the vantage point, and the vantage point cannot speak for the cluster.
+	vantageResult, err := r.observeVantage(ctx, pool)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	states, err := r.renderRelays(pool, &plan, observed.podCIDRs, secret, pods)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -164,6 +172,8 @@ func (r *TURNPoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		plan:      &plan,
 		states:    states,
 		truncated: plan.Unplaced > 0,
+		vantage:   vantageResult,
+		now:       r.now(),
 	}); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -322,6 +332,11 @@ func (r *TURNPoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&turnfleetv1alpha1.TURNPool{}).
 		Owns(&corev1.Pod{}).
 		Owns(&corev1.ConfigMap{}).
+		// The vantage result is written by a runner the operator does not own
+		// and does not schedule, so it carries no owner reference and is
+		// matched by its labels instead. A runner's write lands in the pool's
+		// status on the next pass.
+		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(r.poolsForVantageResult)).
 		// A relay node losing its label, or changing its address, changes the
 		// plan, so nodes are watched as well.
 		Watches(&corev1.Node{}, handler.EnqueueRequestsFromMapFunc(r.poolsForNode),
@@ -430,6 +445,13 @@ type statusInputs struct {
 	plan      *relay.Plan
 	states    []*relayState
 	truncated bool
+
+	// vantage is what the pool's published result says, read this pass.
+	vantage vantageObservation
+
+	// now is the clock the pass ran on, which is what makes a published result
+	// stale rather than current.
+	now time.Time
 
 	// secretMissing is set when the pool's auth Secret is unusable, which makes
 	// the whole pool Degraded regardless of what the relays are doing.
