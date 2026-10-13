@@ -224,15 +224,13 @@ func (r *TURNPoolReconciler) observeNodes(ctx context.Context) (*nodeObservation
 	observed := &nodeObservation{relays: make([]relay.Node, 0, len(nodes.Items))}
 	for i := range nodes.Items {
 		node := &nodes.Items[i]
-		local := nodeAddress(node)
-		advertised := local
-		if override := node.Annotations[RelayAddressAnnotation]; override != "" {
-			advertised = override
+		addresses, err := nodeAddresses(node)
+		if err != nil {
+			return nil, err
 		}
 		observed.relays = append(observed.relays, relay.Node{
-			Name:        node.Name,
-			Address:     advertised,
-			BindAddress: local,
+			Name:      node.Name,
+			Addresses: addresses,
 		})
 		if node.Spec.PodCIDR != "" {
 			observed.podCIDRs = append(observed.podCIDRs, node.Spec.PodCIDR)
@@ -247,25 +245,71 @@ func (r *TURNPoolReconciler) observeNodes(ctx context.Context) (*nodeObservation
 	return observed, nil
 }
 
-// nodeAddress is the address a relay on this node binds: the node's ExternalIP,
-// or its InternalIP when there is none.
-func nodeAddress(node *corev1.Node) string {
-	var internal string
+// nodeAddresses returns the addresses a relay on this node could advertise, one
+// per address family, IPv4 first.
+//
+// Each family comes from the node's ExternalIP, or its InternalIP when there is
+// none. Both are collected: a dual-stack node has one of each, and a DualStack
+// pool plans a relay on each of them, because the two addresses are two relay
+// addresses with two port spaces.
+//
+// The turnfleet.hzmi.dev/relay-address annotation overrides the advertised
+// address of the family it names. One annotation therefore covers one family:
+// the other keeps the node's own address.
+func nodeAddresses(node *corev1.Node) ([]relay.NodeAddress, error) {
+	external := map[turnfleetv1alpha1.AddressingFamily]string{}
+	internal := map[turnfleetv1alpha1.AddressingFamily]string{}
 	for _, addr := range node.Status.Addresses {
+		family := relay.AddressFamilyOf(addr.Address)
+		if family == "" {
+			// Names are not addresses: a relay cannot bind or advertise them.
+			continue
+		}
 		switch addr.Type {
 		case corev1.NodeExternalIP:
-			if addr.Address != "" {
-				return addr.Address
+			if _, seen := external[family]; !seen {
+				external[family] = addr.Address
 			}
 		case corev1.NodeInternalIP:
-			if internal == "" {
-				internal = addr.Address
+			if _, seen := internal[family]; !seen {
+				internal[family] = addr.Address
 			}
 		case corev1.NodeHostName, corev1.NodeInternalDNS, corev1.NodeExternalDNS:
-			// Names are not addresses: a relay cannot bind or advertise them.
 		}
 	}
-	return internal
+
+	out := make([]relay.NodeAddress, 0, 2)
+	for _, family := range relay.AddressFamilies(turnfleetv1alpha1.AddressingFamilyDualStack) {
+		address := external[family]
+		if address == "" {
+			address = internal[family]
+		}
+		if address == "" {
+			continue
+		}
+		out = append(out, relay.NodeAddress{Address: address, BindAddress: address})
+	}
+
+	override := strings.TrimSpace(node.Annotations[RelayAddressAnnotation])
+	if override == "" {
+		return out, nil
+	}
+	family := relay.AddressFamilyOf(override)
+	if family == "" {
+		return nil, fmt.Errorf("node %s has an unusable %s annotation %q: it must be an IP address",
+			node.Name, RelayAddressAnnotation, override)
+	}
+	for i := range out {
+		if relay.AddressFamilyOf(out[i].Address) == family {
+			out[i].Address = override
+			return out, nil
+		}
+	}
+	// Standing in for an address the node does not have would make the relay
+	// bind something the node cannot route, so this is a misconfiguration
+	// rather than a nicety to ignore.
+	return nil, fmt.Errorf("node %s has %s=%s but no %s address to advertise on: the override must name a family the node has",
+		node.Name, RelayAddressAnnotation, override, family)
 }
 
 func (r *TURNPoolReconciler) addFinalizer(ctx context.Context, pool *turnfleetv1alpha1.TURNPool) error {
@@ -355,7 +399,7 @@ func (r *TURNPoolReconciler) poolsForNode(ctx context.Context, obj client.Object
 }
 
 // nodeChanged triggers on the two node properties that move relays: the relay
-// label and the address a relay would advertise.
+// label and the addresses a relay could advertise on.
 func nodeChanged() predicate.Predicate {
 	return predicate.Funcs{
 		CreateFunc: func(event.CreateEvent) bool { return true },
@@ -367,11 +411,28 @@ func nodeChanged() predicate.Predicate {
 				return true
 			}
 			return oldNode.Labels[RelayNodeLabel] != newNode.Labels[RelayNodeLabel] ||
-				nodeAddress(oldNode) != nodeAddress(newNode) ||
-				oldNode.Annotations[RelayAddressAnnotation] != newNode.Annotations[RelayAddressAnnotation]
+				nodeAddressKey(oldNode) != nodeAddressKey(newNode)
 		},
 		GenericFunc: func(event.GenericEvent) bool { return false },
 	}
+}
+
+// nodeAddressKey is the addresses a relay on this node would use, in one
+// comparable string. It includes the relay-address annotation, because the
+// annotation is what decides the advertised address.
+//
+// An address set that cannot be read is its own key rather than an empty one:
+// two different misconfigurations are two different changes.
+func nodeAddressKey(node *corev1.Node) string {
+	addresses, err := nodeAddresses(node)
+	if err != nil {
+		return "error:" + err.Error()
+	}
+	parts := make([]string, 0, len(addresses))
+	for _, address := range addresses {
+		parts = append(parts, address.Address+"/"+address.BindAddress)
+	}
+	return strings.Join(parts, ",")
 }
 
 // lastProbeFromStatus finds the previous probe result for a relay, so a
