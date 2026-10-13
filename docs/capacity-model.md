@@ -146,7 +146,8 @@ ConfigMap; the controller reads that object into the pool's
 
 ```sh
 bin/turnfleet-probe --uris-configmap <pool>-turn-uris \
-  --publish-configmap <pool>-vantage --pool <pool> --secret-file ./turn-secret
+  --publish-configmap <pool>-vantage --pool <pool> \
+  --namespace <pool-namespace> --secret-file ./turn-secret
 ```
 
 `config/vantage/runner.yaml` is that command as a CronJob, with the role that

@@ -80,8 +80,17 @@ func TestVantageRunnerInCluster(t *testing.T) {
 	// behind.
 	status := waitForRelays(ctx, t, vantagePool, 1)
 	relayStatus := status.Status.Relays[0]
+	if relayStatus.RelayAddress == nil {
+		t.Fatal("the relay has no address: there is nothing for a runner to probe")
+	}
+	if len(relayStatus.TurnURIs) == 0 {
+		t.Fatal("the relay publishes no turnURI: there is nothing for a runner to probe")
+	}
 
 	applyVantageManifest(t)
+	// The shipped CronJob runs every five minutes; this test runs its Job by
+	// hand, and the schedule must not publish over what the test asserts.
+	suspendVantageRunner(t, true)
 	runVantageRunner(t)
 
 	waitFor(ctx, t, "the vantage result to be reported as reachable", 2*time.Minute,
@@ -105,7 +114,6 @@ func TestVantageRunnerInCluster(t *testing.T) {
 
 	// Now the rule the whole delivery path exists for: a failing observation
 	// stays in the status even while the in-cluster probe keeps passing.
-	suspendVantageRunner(t, true)
 	publishFailingResult(ctx, t, relayStatus.TurnURIs[0])
 
 	waitFor(ctx, t, "the failing vantage result to be reported", 2*time.Minute,

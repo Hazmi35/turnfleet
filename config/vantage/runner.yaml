@@ -10,10 +10,10 @@
 #   kubectl apply -f config/vantage/runner.yaml     # the CronJob runs every 5m
 #   kubectl create job --from=cronjob/vantage-runner vantage-runner-once
 #
-# They are written for the pool `demo` in the namespace `default`, which is what
+# They are written for the pool `demo` in the `default` namespace, which is what
 # config/samples/turnfleet_v1alpha1_turnpool.yaml creates. For another pool,
 # replace `demo` in the ConfigMap names, the pool name argument and the labels,
-# and replace `namespace: default` everywhere below with that pool's namespace.
+# and replace every `default` namespace field below with that pool's namespace.
 #
 # A runner is the authoritative check only when it runs outside the cluster's
 # network: from a pod, hairpin NAT and a firewall in front of the relay node are
