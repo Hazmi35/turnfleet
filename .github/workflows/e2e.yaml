@@ -1,0 +1,62 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Turnfleet Authors
+#
+# End-to-end suite: `make test-e2e` creates the kind cluster from
+# hack/kind-config.yaml, installs the CRDs, deploys the controller and runs the
+# e2e tests against it. kind is pinned by version and by checksum here; the node
+# image and every other pin live in docs/versions.md and in the Makefile.
+name: E2E
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Renovate reads this line (customManager in renovate.json) and keeps it in
+  # step with the Go pin in docs/versions.md.
+  GO_VERSION: "1.27.2"
+  KIND_VERSION: v0.33.0
+  # sha256 of kind-linux-amd64 from the kind v0.33.0 release assets.
+  KIND_LINUX_AMD64_SHA256: aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
+
+jobs:
+  e2e:
+    name: e2e
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      # kubectl is not installed here: ubuntu-latest already ships the kubectl
+      # the Makefile uses, and adding an action for it would mean another pin.
+      - name: Install kind
+        run: |
+          set -euo pipefail
+          curl -fsSLo kind "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"
+          echo "${KIND_LINUX_AMD64_SHA256}  kind" | sha256sum --check --strict -
+          chmod +x kind
+          sudo install -m 0755 kind /usr/local/bin/kind
+          rm -f kind
+          kind version
+
+      - name: Run the end-to-end suite
+        timeout-minutes: 60
+        run: make test-e2e
