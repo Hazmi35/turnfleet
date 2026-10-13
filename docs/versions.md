@@ -61,6 +61,17 @@ what that tag must resolve to and `make load-coturn` verifies the two before
 loading. Digest pinning of the relay image itself is enforced by the validating
 webhook and covered by the webhook envtest suite.
 
+A coturn bump is a Renovate pull request. `renovate.json` extracts the
+`COTURN_IMAGE`/`COTURN_IMAGE_DIGEST` pair as a single dependency, so the two can
+never move apart (`make load-coturn` rejects a tag that does not resolve to the
+recorded digest), and groups the example pool in `config/samples/` with it, so
+one pull request moves both. Two copies still move by hand: the webhook test
+fixtures, which need a syntactically valid digest rather than this one, and
+`test/e2e`'s `defaultCoturnImage`, which Renovate's default `ignorePaths` skips
+(`test/**`) and which `make test-e2e` overrides with the Makefile value anyway.
+A coturn bump also re-captures `internal/relay/testdata/coturn-<version>-help.txt`,
+the flag list `TestRenderedFlagsExistInPinnedCoturn` holds the renderer to.
+
 The coturn image is the upstream, unmodified BSD-3-Clause data plane. It is
 never vendored into this repository (see `docs/adr/0002-coturn-data-plane.md`).
 
