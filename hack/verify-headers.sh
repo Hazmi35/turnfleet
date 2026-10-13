@@ -6,6 +6,10 @@
 # The goheader linter enforces the same rule for linted files; this script also
 # covers files that lint skips (build-tagged files, testdata helpers) and runs
 # in `make verify` without needing the lint toolchain.
+#
+# Vendored skill content under .agents/skills/ is third-party (provenance in
+# skills-lock.json) and keeps its upstream licensing, so it is not stamped with
+# this repo's header.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -22,6 +26,7 @@ while IFS= read -r -d '' file; do
 done < <(find . \( -name '*.go' -o -name '*.sh' \) -type f \
   -not -path './bin/*' \
   -not -path './vendor/*' \
+  -not -path './.agents/skills/*' \
   -not -path '*/testdata/*' \
   -print0)
 
