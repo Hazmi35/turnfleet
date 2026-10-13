@@ -34,7 +34,7 @@ import (
 	"github.com/pion/stun/v4"
 	"github.com/pion/turn/v5"
 
-	"github.com/hzmi/turnfleet/internal/relay"
+	"github.com/Hazmi35/turnfleet/internal/relay"
 )
 
 // Config describes one probe.

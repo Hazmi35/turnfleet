@@ -24,9 +24,9 @@ ARG TARGETARCH
 LABEL org.opencontainers.image.title="turnfleet-controller" \
       org.opencontainers.image.description="Turnfleet TURNPool operator" \
       org.opencontainers.image.licenses="AGPL-3.0-only" \
-      org.opencontainers.image.source="https://github.com/hzmi/turnfleet" \
-      org.opencontainers.image.url="https://github.com/hzmi/turnfleet" \
-      org.opencontainers.image.documentation="https://github.com/hzmi/turnfleet/blob/main/docs/architecture.md" \
+      org.opencontainers.image.source="https://github.com/Hazmi35/turnfleet" \
+      org.opencontainers.image.url="https://github.com/Hazmi35/turnfleet" \
+      org.opencontainers.image.documentation="https://github.com/Hazmi35/turnfleet/blob/main/docs/architecture.md" \
       org.opencontainers.image.vendor="Turnfleet Authors" \
       org.opencontainers.image.base.name="${RUNTIME_IMAGE}"
 COPY --from=builder /out/turnfleet-controller /turnfleet-controller

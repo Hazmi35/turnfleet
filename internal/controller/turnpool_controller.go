@@ -33,10 +33,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/recorder"
 
-	turnfleetv1alpha1 "github.com/hzmi/turnfleet/api/v1alpha1"
-	"github.com/hzmi/turnfleet/internal/metrics"
-	"github.com/hzmi/turnfleet/internal/probe"
-	"github.com/hzmi/turnfleet/internal/relay"
+	turnfleetv1alpha1 "github.com/Hazmi35/turnfleet/api/v1alpha1"
+	"github.com/Hazmi35/turnfleet/internal/metrics"
+	"github.com/Hazmi35/turnfleet/internal/probe"
+	"github.com/Hazmi35/turnfleet/internal/relay"
 )
 
 // Constants that bound how a pool converges.

@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	turnfleetv1alpha1 "github.com/hzmi/turnfleet/api/v1alpha1"
+	turnfleetv1alpha1 "github.com/Hazmi35/turnfleet/api/v1alpha1"
 )
 
 // PortRange is an inclusive range of relay ports a single relay owns.
@@ -190,6 +190,17 @@ func ListenerURIs(r *Relay, listeners []turnfleetv1alpha1.ListenerSpec) []string
 // ListenerPort is the port this relay serves for one of the pool's listeners.
 func (r *Relay) ListenerPort(listener *turnfleetv1alpha1.ListenerSpec) int32 {
 	return listener.Port + r.ListenerPortOffset
+}
+
+// MetricsPort is the port coturn serves its metrics endpoint on.
+//
+// It is offset for the same reason the listener ports are: relays that share a
+// node address cannot both bind one port, and the scheduler treats the ports a
+// hostNetwork pod declares as host ports, so an un-offset metrics port would
+// both fail to bind and stop a second relay on the node from being scheduled at
+// all.
+func (r *Relay) MetricsPort() int32 {
+	return DefaultPrometheusPort + r.ListenerPortOffset
 }
 
 // HighestListenerPort is the largest listener port this relay serves.

@@ -12,7 +12,7 @@ SHELL = /usr/bin/env bash -o pipefail
 GO ?= go
 
 # Identity. ORG_DOMAIN drives the API group and every label/annotation prefix.
-ORG ?= hzmi
+ORG ?= hazmi35
 ORG_DOMAIN ?= hzmi.dev
 IMAGE_REGISTRY ?= ghcr.io/$(ORG)
 IMAGE_TAG ?= dev
@@ -46,7 +46,7 @@ KIND ?= kind
 KUBECTL ?= kubectl --context $(KUBE_CONTEXT)
 
 # Build metadata stamped into the binaries.
-VERSION_PKG ?= github.com/hzmi/turnfleet/internal/version
+VERSION_PKG ?= github.com/Hazmi35/turnfleet/internal/version
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
@@ -54,6 +54,7 @@ LDFLAGS ?= -s -w -X $(VERSION_PKG).version=$(VERSION) -X $(VERSION_PKG).commit=$
 
 PLATFORMS ?= linux/amd64,linux/arm64
 FUZZ_TIME ?= 30s
+PROBE_BIN ?= bin/turnfleet-probe
 CONTROLLER_GEN_CONFIG ?= hack/crd-ref-docs.yaml
 
 LOCALBIN ?= $(shell pwd)/bin
@@ -145,10 +146,11 @@ test-fuzz: generate ## Fuzz the renderer and the webhook validators.
 	$(GO) test -run '^$$' -fuzz '^FuzzWebhookValidation$$' -fuzztime $(FUZZ_TIME) ./internal/webhook/v1alpha1/
 
 .PHONY: test-e2e
-test-e2e: kind-up docker-build install ## Run the end-to-end suite against the local kind cluster.
+test-e2e: kind-up docker-build build install ## Run the end-to-end suite against the local kind cluster.
 	$(MAKE) load-images
-	$(MAKE) deploy
+	$(MAKE) deploy KUSTOMIZE_OVERLAY=config/e2e
 	KUBE_CONTEXT=$(KUBE_CONTEXT) KIND_CLUSTER=$(KIND_CLUSTER) COTURN_IMAGE="$(COTURN_IMAGE)" \
+		PROBE_BIN="$(abspath $(PROBE_BIN))" \
 		$(GO) test -tags=e2e -count=1 -timeout 30m ./test/e2e/
 
 .PHONY: envtest
@@ -239,8 +241,14 @@ KUSTOMIZE_OVERLAY ?= config/default
 
 .PHONY: deploy
 deploy: ## Deploy the controller into the kind cluster.
-	cd config/manager && $(KUSTOMIZE) edit set image controller=$(CONTROLLER_IMG)
+	# The image is set on the cluster rather than in config/manager, so running
+	# the target never leaves the working tree dirty.
 	$(KUSTOMIZE) build $(KUSTOMIZE_OVERLAY) | $(KUBECTL) apply -f -
+	$(KUBECTL) -n turnfleet-system set image deployment/turnfleet-controller-manager manager=$(CONTROLLER_IMG)
+	# The tag is constant (dev), so a freshly loaded image needs a new pod:
+	# without this, a running pod keeps the image it started with and the
+	# cluster silently tests the previous build.
+	$(KUBECTL) -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
 	$(KUBECTL) -n turnfleet-system rollout status deployment/turnfleet-controller-manager --timeout=180s
 
 .PHONY: undeploy

@@ -22,9 +22,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 
-	turnfleetv1alpha1 "github.com/hzmi/turnfleet/api/v1alpha1"
-	"github.com/hzmi/turnfleet/internal/metrics"
-	"github.com/hzmi/turnfleet/internal/probe"
+	turnfleetv1alpha1 "github.com/Hazmi35/turnfleet/api/v1alpha1"
+	"github.com/Hazmi35/turnfleet/internal/metrics"
+	"github.com/Hazmi35/turnfleet/internal/probe"
 )
 
 var (

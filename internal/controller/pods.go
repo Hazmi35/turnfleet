@@ -19,8 +19,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	turnfleetv1alpha1 "github.com/hzmi/turnfleet/api/v1alpha1"
-	"github.com/hzmi/turnfleet/internal/relay"
+	turnfleetv1alpha1 "github.com/Hazmi35/turnfleet/api/v1alpha1"
+	"github.com/Hazmi35/turnfleet/internal/relay"
 )
 
 // relayHash is the value of the pod's config-hash annotation.
@@ -314,16 +314,26 @@ func relayContainer(pool *turnfleetv1alpha1.TURNPool, state *relayState) corev1.
 	container := corev1.Container{
 		Name:            relayContainerName,
 		Image:           pool.Spec.Dataplane.Image,
-		ImagePullPolicy: pullPolicy(pool.Spec.Dataplane.Image),
+		ImagePullPolicy: relayImagePullPolicy,
 		// Setting the command bypasses the image's entrypoint shell script,
 		// which evaluates its arguments before exec'ing the server.
 		Command: []string{turnserverPath},
 		Args:    []string{"-c", relay.ConfigPath},
-		Ports:   containerPorts(pool, state.relay.ListenerPortOffset),
+		Ports:   containerPorts(pool, &state.relay),
 		SecurityContext: &corev1.SecurityContext{
 			AllowPrivilegeEscalation: new(false),
 			ReadOnlyRootFilesystem:   new(true),
-			Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+			// The pinned coturn image carries a file capability on
+			// /usr/bin/turnserver (cap_net_bind_service), and the kernel refuses
+			// to exec such a binary when the container cannot be granted that
+			// capability: with everything dropped, the relay dies with "exec
+			// /usr/bin/turnserver: operation not permitted". Adding it back is
+			// also the only addition the restricted Pod Security Standard
+			// allows.
+			Capabilities: &corev1.Capabilities{
+				Drop: []corev1.Capability{"ALL"},
+				Add:  []corev1.Capability{"NET_BIND_SERVICE"},
+			},
 		},
 		Resources: resources(pool.Spec.Dataplane.Resources),
 		VolumeMounts: []corev1.VolumeMount{
@@ -364,18 +374,22 @@ func relayContainer(pool *turnfleetv1alpha1.TURNPool, state *relayState) corev1.
 	return container
 }
 
-func containerPorts(pool *turnfleetv1alpha1.TURNPool, portOffset int32) []corev1.ContainerPort {
+func containerPorts(pool *turnfleetv1alpha1.TURNPool, planned *relay.Relay) []corev1.ContainerPort {
 	ports := make([]corev1.ContainerPort, 0, len(pool.Spec.Listeners)+1)
-	for _, listener := range pool.Spec.Listeners {
+	for i := range pool.Spec.Listeners {
+		listener := &pool.Spec.Listeners[i]
 		ports = append(ports, corev1.ContainerPort{
 			Name:          listener.Name,
-			ContainerPort: listener.Port + portOffset,
+			ContainerPort: planned.ListenerPort(listener),
 			Protocol:      protocolFor(listener.Protocol),
 		})
 	}
+	// Declaring the ports is not cosmetic for a hostNetwork pod: the scheduler
+	// treats them as host ports, which is what stops two relays on one node from
+	// being scheduled onto the same port.
 	ports = append(ports, corev1.ContainerPort{
 		Name:          "metrics",
-		ContainerPort: relay.DefaultPrometheusPort,
+		ContainerPort: planned.MetricsPort(),
 		Protocol:      corev1.ProtocolTCP,
 	})
 	return ports
@@ -419,23 +433,11 @@ func tlsSecretName(listeners []turnfleetv1alpha1.ListenerSpec) string {
 	return ""
 }
 
-// pullPolicy keeps a digest-pinned image from being re-resolved: the pin is the
-// point, and the image is already there in a kind cluster.
-func pullPolicy(image string) corev1.PullPolicy {
-	if hasDigest(image) {
-		return corev1.PullIfNotPresent
-	}
-	return corev1.PullAlways
-}
-
-func hasDigest(image string) bool {
-	for i := range image {
-		if image[i] == '@' {
-			return true
-		}
-	}
-	return false
-}
+// pullPolicy is IfNotPresent for every relay image. The validating webhook
+// requires a digest, so the reference is immutable and a node that already has
+// the image never needs to resolve it again; a cluster that preloads the image
+// (kind, or an air-gapped registry mirror) therefore works without a pull.
+const relayImagePullPolicy = corev1.PullIfNotPresent
 
 func resources(spec *corev1.ResourceRequirements) corev1.ResourceRequirements {
 	if spec == nil {

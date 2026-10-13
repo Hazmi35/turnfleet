@@ -65,7 +65,7 @@ change affects relay behaviour, rendering, drain, or the probe.
 | `internal/webhook/v1alpha1/` | Defaulting and validating webhooks, immutability, mode-specific validation. |
 | `cmd/turnfleet-controller/`, `cmd/turnfleet-probe/` | Binaries; flag parsing and wiring only. |
 | `test/e2e/` | kind end-to-end suite (build-tagged `e2e`), `test/fixtures/` holds cluster fixtures. |
-| `config/` | kustomize manifests; `config/e2e/` is the overlay the e2e suite deploys. |
+| `config/` | kustomize manifests. `config/default` (what `make deploy` applies) runs the controller without admission webhooks; `config/with-webhook` adds them and their cert-manager certificates. |
 | `docs/` | `architecture.md`, `capacity-model.md`, `api.md` (generated), `adr/`, `versions.md`, `status.md`. |
 
 ## Conventions

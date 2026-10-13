@@ -32,9 +32,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/hzmi/turnfleet/internal/probe"
-	"github.com/hzmi/turnfleet/internal/relay"
-	"github.com/hzmi/turnfleet/internal/version"
+	"github.com/Hazmi35/turnfleet/internal/probe"
+	"github.com/Hazmi35/turnfleet/internal/relay"
+	"github.com/Hazmi35/turnfleet/internal/version"
 )
 
 const (

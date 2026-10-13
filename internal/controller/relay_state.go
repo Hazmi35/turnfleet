@@ -13,10 +13,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
-	turnfleetv1alpha1 "github.com/hzmi/turnfleet/api/v1alpha1"
-	"github.com/hzmi/turnfleet/internal/metrics"
-	"github.com/hzmi/turnfleet/internal/probe"
-	"github.com/hzmi/turnfleet/internal/relay"
+	turnfleetv1alpha1 "github.com/Hazmi35/turnfleet/api/v1alpha1"
+	"github.com/Hazmi35/turnfleet/internal/metrics"
+	"github.com/Hazmi35/turnfleet/internal/probe"
+	"github.com/Hazmi35/turnfleet/internal/relay"
 )
 
 // relayState is everything one reconcile pass knows about one relay.
@@ -295,7 +295,7 @@ func (r *TURNPoolReconciler) scrapeAllocations(ctx context.Context, state *relay
 	if podIP == "" {
 		return state.allocations
 	}
-	url, err := metrics.MetricsURL(podIP, relay.DefaultPrometheusPort, relay.DefaultPrometheusPath)
+	url, err := metrics.MetricsURL(podIP, state.relay.MetricsPort(), relay.DefaultPrometheusPath)
 	if err != nil {
 		return state.allocations
 	}

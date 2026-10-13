@@ -25,8 +25,8 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
-	turnfleetv1alpha1 "github.com/hzmi/turnfleet/api/v1alpha1"
-	"github.com/hzmi/turnfleet/internal/relay"
+	turnfleetv1alpha1 "github.com/Hazmi35/turnfleet/api/v1alpha1"
+	"github.com/Hazmi35/turnfleet/internal/relay"
 )
 
 // digestPinnedImage matches `repo/name:tag@sha256:<64 hex>` — a tag is optional,

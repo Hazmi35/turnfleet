@@ -1,0 +1,20 @@
+# Overlay for the end-to-end suite (make test-e2e).
+#
+# It is config/default with one difference: the controller's metrics endpoint is
+# served over plain HTTP, so the suite can read it through the API server's
+# service proxy. config/default keeps the secure (HTTPS) endpoint that a real
+# deployment should scrape.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- ../default
+
+patches:
+- target:
+    kind: Deployment
+    name: turnfleet-controller-manager
+  patch: |-
+    - op: add
+      path: /spec/template/spec/containers/0/args/-
+      value: --metrics-secure=false

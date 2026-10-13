@@ -12,7 +12,7 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 
-	turnfleetv1alpha1 "github.com/hzmi/turnfleet/api/v1alpha1"
+	turnfleetv1alpha1 "github.com/Hazmi35/turnfleet/api/v1alpha1"
 )
 
 // update rewrites the golden files: `go test ./internal/relay -update`.

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	turnfleetv1alpha1 "github.com/hzmi/turnfleet/api/v1alpha1"
+	turnfleetv1alpha1 "github.com/Hazmi35/turnfleet/api/v1alpha1"
 )
 
 func baseSpec() turnfleetv1alpha1.TURNPoolSpec {

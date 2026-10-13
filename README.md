@@ -64,7 +64,7 @@ make kind-up            # 1 control-plane + 3 workers labelled as relay nodes
 make docker-build       # build both images for your platform
 make load-images        # load them into the kind cluster
 make install            # install the CRDs
-make deploy             # deploy the controller (config/e2e overlay, no cert-manager)
+make deploy             # deploy the controller (config/default: no admission webhooks)
 ```
 
 Then create a pool. A minimal `HostNetwork` pool with three relays:
@@ -147,3 +147,7 @@ Commits are Conventional Commits and must be signed off (`git commit -s`).
 AGPL-3.0-only. See [LICENSE](LICENSE). The TURN data plane is the upstream
 `coturn/coturn` image, unmodified, under its own BSD-3-Clause license; nothing
 from coturn is vendored into this repository.
+
+The Go module is `github.com/Hazmi35/turnfleet` and the API group is
+`turnfleet.hzmi.dev` (version `v1alpha1`, kind `TURNPool`). Every label,
+annotation and finalizer carries the `turnfleet.hzmi.dev/` prefix.

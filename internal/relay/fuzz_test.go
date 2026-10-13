@@ -7,7 +7,7 @@ import (
 	"encoding/binary"
 	"testing"
 
-	turnfleetv1alpha1 "github.com/hzmi/turnfleet/api/v1alpha1"
+	turnfleetv1alpha1 "github.com/Hazmi35/turnfleet/api/v1alpha1"
 )
 
 // FuzzRenderer checks the two properties the renderer and the planner must never

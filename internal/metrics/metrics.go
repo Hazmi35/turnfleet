@@ -25,7 +25,7 @@ import (
 	"github.com/prometheus/common/model"
 	ctrlmetrics "sigs.k8s.io/controller-runtime/pkg/metrics"
 
-	"github.com/hzmi/turnfleet/internal/relay"
+	"github.com/Hazmi35/turnfleet/internal/relay"
 )
 
 const (
@@ -126,9 +126,15 @@ func RecordAllocationFailure(namespace, pool, relayName string, code int) {
 	}).Inc()
 }
 
-// ForgetPool drops every series of a pool before the caller republishes the
-// relays that still exist, so a deleted relay or pool leaves no stale series
+// ForgetPool drops the gauge series of a pool before the caller republishes the
+// relays that still exist, so a deleted relay or pool leaves no stale sample
 // behind.
+//
+// The allocation failure counter is deliberately left alone: it is cumulative,
+// and the controller calls ForgetPool on every reconcile, so deleting it would
+// reset the saturation signal to zero several times a minute. A counter that
+// keeps its history across reconciles is the honest representation; the series
+// disappears with the process.
 func ForgetPool(namespace, pool string) {
 	selector := prometheus.Labels{labelNamespace: namespace, labelPool: pool}
 	relayAllocations.DeletePartialMatch(selector)
@@ -136,7 +142,6 @@ func ForgetPool(namespace, pool string) {
 	relayPortsTotal.DeletePartialMatch(selector)
 	probeSuccess.DeletePartialMatch(selector)
 	probeDuration.DeletePartialMatch(selector)
-	allocationFailures.DeletePartialMatch(selector)
 }
 
 // CoturnSample is what the controller reads out of coturn's own metrics.

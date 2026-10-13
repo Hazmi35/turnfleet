@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	turnfleetv1alpha1 "github.com/hzmi/turnfleet/api/v1alpha1"
+	turnfleetv1alpha1 "github.com/Hazmi35/turnfleet/api/v1alpha1"
 )
 
 // Paths inside the relay container.
@@ -83,7 +83,7 @@ func Render(in *RenderInput) (string, error) {
 	writeCapacity(&b, in)
 	writeAuth(&b, in)
 	writePeerPolicy(&b, denied, allowed)
-	writeObservability(&b)
+	writeObservability(&b, &in.Relay)
 	writeExtraArgs(&b, in.Spec.Dataplane.ExtraArgs)
 
 	return b.String(), nil
@@ -185,10 +185,10 @@ func writePeerPolicy(b *strings.Builder, denied, allowed []string) {
 	}
 }
 
-func writeObservability(b *strings.Builder) {
+func writeObservability(b *strings.Builder, relay *Relay) {
 	// coturn's own metrics are the source of the allocation counts.
 	b.WriteString("prometheus\n")
-	fmt.Fprintf(b, "prometheus-port=%d\n", DefaultPrometheusPort)
+	fmt.Fprintf(b, "prometheus-port=%d\n", relay.MetricsPort())
 	fmt.Fprintf(b, "prometheus-path=%s\n", DefaultPrometheusPath)
 
 	// Logs go to stdout so kubectl logs works and nothing is written to a

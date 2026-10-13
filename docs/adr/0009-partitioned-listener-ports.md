@@ -26,6 +26,14 @@ and so on. `Relay.ListenerPortOffset` carries the slot, and the renderer, the
 `ExternalIPPool` mode each relay owns its address, so the offset is always zero
 and nothing changes.
 
+The same offset applies to coturn's metrics port
+(`Relay.MetricsPort()`): two relays on one node address cannot both bind 9641,
+and the Kubernetes scheduler treats the ports a `hostNetwork` pod declares as
+host ports, so a second partitioned relay would not even be *scheduled* while
+the first one held 9641. That failure mode is worth naming: the pod sat
+`Pending` with "didn't have free ports for the requested pod ports" while
+everything else looked fine.
+
 Clients never see this: they are handed the URI of a specific relay
 (`turn:203.0.113.10:3479?transport=udp`), so the offset is an implementation
 detail of sharing an address. The webhook rejects a pool whose listener port

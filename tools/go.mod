@@ -1,4 +1,4 @@
-module github.com/hzmi/turnfleet/tools
+module github.com/Hazmi35/turnfleet/tools
 
 go 1.27.2
 

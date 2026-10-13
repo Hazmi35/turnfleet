@@ -22,9 +22,9 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	turnfleetv1alpha1 "github.com/hzmi/turnfleet/api/v1alpha1"
-	"github.com/hzmi/turnfleet/internal/controller"
-	webhookv1alpha1 "github.com/hzmi/turnfleet/internal/webhook/v1alpha1"
+	turnfleetv1alpha1 "github.com/Hazmi35/turnfleet/api/v1alpha1"
+	"github.com/Hazmi35/turnfleet/internal/controller"
+	webhookv1alpha1 "github.com/Hazmi35/turnfleet/internal/webhook/v1alpha1"
 )
 
 var (
