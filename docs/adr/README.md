@@ -19,4 +19,6 @@ decision gets a new ADR that says so.
 | [0011](0011-pin-provenance-in-place.md) | Version pins live next to what they pin; `docs/versions.md` records only the pins that are held, and why. |
 
 Related documents that are not ADRs: [`../architecture.md`](../architecture.md),
-[`../capacity-model.md`](../capacity-model.md), [`../versions.md`](../versions.md).
+[`../capacity-model.md`](../capacity-model.md),
+[`../limitations.md`](../limitations.md),
+[`../versions.md`](../versions.md).

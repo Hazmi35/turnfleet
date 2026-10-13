@@ -25,7 +25,7 @@ If any of these files don't exist, **proceed silently**. Don't flag their absenc
 │   │   └── …
 │   ├── architecture.md
 │   ├── capacity-model.md
-│   ├── status.md
+│   ├── limitations.md
 │   └── versions.md
 └── internal/        ← one context, one vocabulary: relay, probe, metrics, controller
 ```

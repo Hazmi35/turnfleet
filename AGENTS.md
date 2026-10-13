@@ -66,7 +66,7 @@ change affects relay behaviour, rendering, drain, or the probe.
 | `cmd/turnfleet-controller/`, `cmd/turnfleet-probe/` | Binaries; flag parsing and wiring only. |
 | `test/e2e/` | kind end-to-end suite (build-tagged `e2e`), `test/fixtures/` holds cluster fixtures. |
 | `config/` | kustomize manifests. `config/default` (what `make deploy` applies) runs the controller without admission webhooks; `config/with-webhook` adds them and their cert-manager certificates. |
-| `docs/` | `architecture.md`, `capacity-model.md`, `api.md` (generated), `adr/`, `versions.md`, `status.md`. |
+| `docs/` | `architecture.md`, `capacity-model.md`, `api.md` (generated), `adr/`, `versions.md`, `limitations.md`. |
 
 ## Agent harness
 
@@ -130,8 +130,9 @@ Single-context: the vocabulary is the "Glossary" section of this file, the decis
 3. Generated files are regenerated and committed (`make generate manifests
    api-docs`), and `docs/api.md` reflects API changes.
 4. Docs and an ADR are updated: `docs/architecture.md`, `docs/capacity-model.md`
-   or `docs/status.md` as applicable; a decision that was not obvious gets
-   `docs/adr/NNNN-title.md`.
+   or `docs/limitations.md` as applicable; a decision that was not obvious gets
+   `docs/adr/NNNN-title.md`. Work that is planned but not done belongs in the
+   issue tracker, never as a section in a document.
 5. A version bump that moves a pin `docs/versions.md` records as held (a held
    module, a vulnerability floor, an image digest) updates that note in the same
    pull request.

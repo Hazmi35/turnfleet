@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Copyright (C) 2026 Turnfleet Authors
 #
-# Pull request template. The checklist is the short version of docs/status.md
-# and AGENTS.md: what has to be true before a change lands.
+# Pull request template. The checklist is the short version of the definition of
+# done in AGENTS.md: what has to be true before a change lands.
 
 ## What and why
 

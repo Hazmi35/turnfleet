@@ -62,4 +62,4 @@ hash of the identity for the pod name).
   mode, where the port slices are disjoint by construction. Overlap between
   *different* pools cannot be validated by an admission webhook (it cannot see
   other TURNPools' addresses atomically); it is recorded as a known limitation
-  in `docs/status.md`.
+  in `docs/limitations.md` and tracked in #10.

@@ -57,7 +57,8 @@ its own port range, delivered without a load balancer.
 | `ExternalIPPool` | one per declared address | the declared secondary address | the whole range | `addresses on that node × (end - start + 1)` |
 
 Every mode here binds a node address. A fourth mode for routable, stable pod or
-secondary addresses is listed in `docs/status.md`.
+secondary addresses is tracked in #15; its prerequisites are stated in the issue
+and in `docs/limitations.md`.
 
 Growing capacity:
 

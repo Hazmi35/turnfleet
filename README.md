@@ -51,7 +51,10 @@ reads allocation counts from coturn's own metrics endpoint, publishes
 `turnfleet_allocation_failures_total{code="508"}`, and raises
 `CapacityPressure` when a relay is genuinely full. The full model, including
 why an in-cluster probe can pass while external clients cannot connect, is in
-[`docs/capacity-model.md`](docs/capacity-model.md).
+[`docs/capacity-model.md`](docs/capacity-model.md). What the operator
+deliberately does not do — including the cluster shapes `HostNetwork` cannot
+work on, such as nodes with no public address — is in
+[`docs/limitations.md`](docs/limitations.md).
 
 ## Quickstart on kind
 
@@ -125,7 +128,7 @@ saturation and peer-policy cases.
 | `internal/probe` | The TURN `Allocate` probe, shared by the controller and the CLI. |
 | `internal/controller`, `internal/webhook` | Reconciliation and admission. |
 | `cmd/` | `turnfleet-controller` and `turnfleet-probe`. |
-| `docs/` | Architecture, capacity model, ADRs, pinned versions, status, generated API reference. |
+| `docs/` | Architecture, capacity model, ADRs, pinned versions, known limitations, generated API reference. |
 | `test/e2e` | The kind end-to-end suite. |
 | `.agents/` | The skills and subagent definitions every agent harness shares; `.claude/` and `.omp/` hold the per-harness wiring and symlinks, `hack/agent/` the hook policy. |
 

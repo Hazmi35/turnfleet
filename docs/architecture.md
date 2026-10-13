@@ -105,6 +105,25 @@ stateDiagram-v2
 `lastProbe{time,succeeded,latencyMillis,message}`. The API has no floats:
 consumers compute the ratio themselves.
 
+## Metrics
+
+Every `turnfleet_` metric carries exactly `namespace`, `pool` and `relay` — the
+relay identity, never the whole object. `turnfleet_relay_ports_total` is the
+capacity number; the pod count is not.
+
+| Metric | Type | Source |
+| --- | --- | --- |
+| `turnfleet_relay_allocations` | gauge | coturn's own endpoint (`turn_total_allocations`, summed over socket types) |
+| `turnfleet_relay_ports_in_use` | gauge | the same scrape; one allocation holds one port |
+| `turnfleet_relay_ports_total` | gauge | the planned relay identity — the ports that relay owns |
+| `turnfleet_allocation_failures_total{code}` | counter | allocations the probe observed failing, by TURN error code (ADR 5) |
+| `turnfleet_probe_success` | gauge (1/0) | the last `Allocate` probe of that relay |
+| `turnfleet_probe_duration_seconds` | gauge | the same probe |
+
+The gauges are republished on every reconcile and dropped when a relay or pool
+disappears; the failure counter is cumulative, so read it as a rate.
+`docs/capacity-model.md` says what to watch when a pool runs out.
+
 ## Peer policy
 
 A relay must never reach in-cluster or metadata addresses unless a pool
@@ -116,7 +135,10 @@ an SSRF pivot into the cluster (see the e2e peer-policy case).
 
 ## What is deliberately not here
 
+The full list, including what each omission costs operationally, is in
+`docs/limitations.md`.
+
 * The direct/STUN path, signalling, and the credential-issuing endpoint are out
   of scope. Turnfleet only consumes the shared HMAC secret the issuer uses.
 * No Service/LoadBalancer exposure, no ingress controller, no Helm chart (yet —
-  see `docs/status.md`).
+  tracked in #8).
