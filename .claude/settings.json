@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(make *)",
+      "Bash(go *)",
+      "Bash(git *)",
+      "Bash(kind *)",
+      "Bash(kubectl --context kind-turnfleet *)",
+      "Bash(docker build *)",
+      "Bash(docker run *)",
+      "Bash(docker ps *)",
+      "Bash(docker images *)",
+      "Bash(docker exec *)",
+      "Bash(docker inspect *)",
+      "Bash(docker manifest inspect *)",
+      "Bash(jq *)",
+      "Bash(curl *)",
+      "Bash(crictl *)",
+      "Bash(openssl *)"
+    ],
+    "deny": [
+      "Bash(git push --force *)",
+      "Bash(git push -f *)",
+      "Bash(git push --force-with-lease *)",
+      "Bash(git reset --hard *)",
+      "Bash(git checkout -- *)",
+      "Bash(git clean -fdx *)",
+      "Bash(rm -rf /*)",
+      "Bash(rm -rf ~*)",
+      "Bash(kubectl config use-context *)",
+      "Bash(kubectl config set-context *)",
+      "Bash(kubectl config delete-context *)",
+      "Bash(kubectl delete namespace *)",
+      "Bash(kubectl delete ns *)",
+      "Bash(kind delete cluster *)",
+      "Bash(docker system prune *)",
+      "Bash(docker volume rm *)",
+      "Bash(docker rmi -f *)",
+      "Bash(docker kill *)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-kubectl.sh",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/format-go.sh",
+            "timeout": 60
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/verify-fast.sh",
+            "timeout": 600
+          }
+        ]
+      }
+    ]
+  }
+}

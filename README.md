@@ -1,0 +1,149 @@
+# Turnfleet
+
+Turnfleet is a Kubernetes operator for TURN relay fleets.
+
+TURN is the fallback path for WebRTC peers that cannot establish a direct path:
+symmetric NAT, CGNAT, restrictive corporate and carrier networks. The usual
+deployment — N relay replicas behind one load-balanced public IP — does not
+work, and fails silently. A TURN allocation is a public `(IP, port)` pair, and
+peer traffic sent to that pair must reach the exact process holding the
+allocation. An L4 load balancer hashes on the 5-tuple, so replicas behind one
+address add processes, not capacity, while every pod reports healthy. Turnfleet
+gives every relay its own public relay identity — an address plus a disjoint
+port range, delivered without a load balancer — and turns capacity exhaustion
+into an observable signal.
+
+## How it works
+
+A `TURNPool` declares the realm and shared secret, the listeners, the relay port
+range and an addressing mode. The operator places one TURN process (a **relay**)
+per identity on nodes labelled `turnfleet.hzmi.dev/relay-node=true`, with
+`hostNetwork: true`, so the kernel delivers traffic addressed to
+`(node address, port)` to the one process that owns that port. Each relay gets a
+rendered coturn configuration, a stable pod name derived from its identity, and
+a readiness state that comes from a real TURN `Allocate` probe. Per-relay
+`turn:` URIs for ready, non-draining relays are published in the
+`<pool>-turn-uris` ConfigMap for the credential issuer to hand out. Scaling
+happens by adding relay addresses (nodes, or secondary IPs), never by adding
+replicas behind an address.
+
+## Capacity, in two paragraphs
+
+Capacity is ports, not processes. A relay can hold as many concurrent
+allocations as there are ports in the range it owns, so a pool's capacity is the
+number of distinct relay addresses times the ports per address. `HostNetwork`
+runs one relay per labelled node on the node's own address and grows with the
+node count; `ExternalIPPool` binds relays to secondary addresses already
+attached to nodes, one relay per address, and grows with the address count;
+`PartitionedIP` lets several relays share one node address, each owning a
+disjoint slice of the port range — that adds concurrency and isolation but no
+capacity, because the slices are still one IP's port space.
+
+Two things follow. First, a port range cannot be exposed through a Kubernetes
+Service or a cloud load balancer: Services have no port range field at all, and
+a load balancer that did support ranges would still hash on the 5-tuple and
+deliver peer packets to the wrong relay. So there is no Service in the relay
+data path, and the relay nodes' firewall must allow the listener ports and the
+relay range directly. Second, exhaustion must be visible per relay: the operator
+reads allocation counts from coturn's own metrics endpoint, publishes
+`turnfleet_relay_ports_in_use` / `turnfleet_relay_ports_total`, counts TURN
+`508 Insufficient Capacity` answers observed by the probe in
+`turnfleet_allocation_failures_total{code="508"}`, and raises
+`CapacityPressure` when a relay is genuinely full. The full model, including
+why an in-cluster probe can pass while external clients cannot connect, is in
+[`docs/capacity-model.md`](docs/capacity-model.md).
+
+## Quickstart on kind
+
+Prerequisites: Docker, Go (the version pinned in `go.mod`), and `make`. `kind`
+and `kubectl` are also needed; `make kind-up` uses the `kind` binary from your
+`PATH`.
+
+```sh
+make kind-up            # 1 control-plane + 3 workers labelled as relay nodes
+make docker-build       # build both images for your platform
+make load-images        # load them into the kind cluster
+make install            # install the CRDs
+make deploy             # deploy the controller (config/e2e overlay, no cert-manager)
+```
+
+Then create a pool. A minimal `HostNetwork` pool with three relays:
+
+```yaml
+apiVersion: turnfleet.hzmi.dev/v1alpha1
+kind: TURNPool
+metadata:
+  name: demo
+  namespace: default
+spec:
+  replicas: 3
+  dataplane:
+    image: coturn/coturn:4.18.0-r0@sha256:bbefd3e1fdfdc0d58770fe01b581fd8b00d9f3a5580d00acb77cf719a6bc78e3
+  addressing:
+    mode: HostNetwork
+  relayPortRange:
+    start: 49152
+    end: 49200
+  listeners:
+    - name: turn
+      protocol: udp
+      port: 3478
+  auth:
+    realm: turnfleet.example.com
+    secretRef:
+      name: turn-shared-secret
+      key: secret
+```
+
+```sh
+kubectl --context kind-turnfleet -n default create secret generic turn-shared-secret \
+  --from-literal=secret="$(openssl rand -hex 32)"
+kubectl --context kind-turnfleet -n default apply -f pool.yaml
+kubectl --context kind-turnfleet -n default get turnpools -w
+kubectl --context kind-turnfleet -n default get cm demo-turn-uris -o jsonpath='{.data}'
+```
+
+Check a relay by hand, the way an external client would:
+
+```sh
+kubectl --context kind-turnfleet -n default get secret turn-shared-secret \
+  -o jsonpath='{.data.secret}' | base64 -d > /tmp/turn-secret
+make build
+bin/turnfleet-probe --uri "turn:<relay-address>:3478?transport=udp" \
+  --secret-file /tmp/turn-secret --expect-address <relay-address> --json
+```
+
+`make test-e2e` runs the full suite against this cluster, including the
+saturation and peer-policy cases.
+
+## Repository layout
+
+| Path | What lives there |
+| --- | --- |
+| `api/v1alpha1` | `TURNPool` types and their markers. |
+| `internal/relay` | The planner (relay identities per addressing mode) and the coturn config renderer. |
+| `internal/probe` | The TURN `Allocate` probe, shared by the controller and the CLI. |
+| `internal/controller`, `internal/webhook` | Reconciliation and admission. |
+| `cmd/` | `turnfleet-controller` and `turnfleet-probe`. |
+| `docs/` | Architecture, capacity model, ADRs, pinned versions, status, generated API reference. |
+| `test/e2e` | The kind end-to-end suite. |
+
+`AGENTS.md` is the single instruction file for coding agents. **Do not create a
+`CLAUDE.md` or `CLAUDE.local.md`**: either one shadows `AGENTS.md` for Claude
+Code, and `make verify` fails if one exists anywhere in the tree.
+
+## Development
+
+```sh
+make help        # every target
+make ci          # what CI runs: verify, lint, test, vuln, licenses, dco
+make test-e2e    # the kind suite
+```
+
+Commits are Conventional Commits and must be signed off (`git commit -s`).
+
+## License
+
+AGPL-3.0-only. See [LICENSE](LICENSE). The TURN data plane is the upstream
+`coturn/coturn` image, unmodified, under its own BSD-3-Clause license; nothing
+from coturn is vendored into this repository.
