@@ -49,11 +49,13 @@ truth for what the controller is, and `make helm-drift` holds the chart to it.
   cert-manager objects and the webhook configurations. It never templates relay
   pods, and no Service, Ingress or load balancer enters the relay data path
   (ADR 3, ADR 4 stand unchanged).
-* The CRDs under `charts/turnfleet/crds/` are a copy of `config/crd/bases`.
-  Helm reads that directory on install and never on render, so `helm-drift`
-  cannot see it: `make manifests` regenerates the copy and `make verify` runs
-  the same copy, which turns a stale copy into a failed check instead of a chart
-  that installs an old API.
+* The CRDs under `charts/turnfleet/crds/` are a copy of `config/crd/bases`, and
+  two things hold them to it. `helm-drift` renders the chart with
+  `--include-crds` and compares the CustomResourceDefinition it finds against
+  `config/crd/bases`, so a copy that is a release behind fails the check.
+  `make manifests` also regenerates the copy and `make verify` runs the same
+  regeneration, because the file is generated: regeneration is the answer for a
+  generated file, and a chart whose CRDs are stale installs an old API.
 * `helm` is a pinned Makefile tool (`HELM_VERSION`), downloaded from the release
   with the checksum published beside it and tracked by Renovate like the image
   pins (ADR 11). `make helm-verify` (`helm-lint` + `helm-drift`) runs in
