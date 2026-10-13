@@ -56,6 +56,9 @@ its own port range, delivered without a load balancer.
 | `PartitionedIP` | `addressing.partitionedIP.relaysPerNode` | the node address, shared by all relays on that node | `(end - start + 1) / relaysPerNode`, remainder to the first slices | still `end - start + 1` — **splitting an IP does not create ports** |
 | `ExternalIPPool` | one per declared address | the declared secondary address | the whole range | `addresses on that node × (end - start + 1)` |
 
+Every mode here binds a node address. A fourth mode for routable, stable pod or
+secondary addresses is listed in `docs/status.md`.
+
 Growing capacity:
 
 * `HostNetwork`: add nodes with the relay-node label. Each new node is a new
