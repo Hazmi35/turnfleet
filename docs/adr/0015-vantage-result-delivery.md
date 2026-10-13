@@ -95,12 +95,12 @@ splitting it. The client it needs is controller-runtime's, which reads
 in-cluster configuration or `KUBECONFIG`, so the same binary publishes from a
 laptop or a CI job.
 
-**RBAC**: the runner's Role grants `get, list, create, update, patch` on
-ConfigMaps in the pool's namespace and nothing else. It is not scoped by
-`resourceNames`: `create` cannot be restricted that way, so a name-scoped rule
-would be documentation rather than a limit. The shared secret reaches the runner
-as a read-only volume mount of the pool's own Secret; an out-of-cluster runner
-has to be given the value out of band.
+**RBAC**: the runner's Role grants `get, create, update, patch` on ConfigMaps
+in the pool's namespace and nothing else. It is not scoped by `resourceNames`:
+`create` cannot be restricted that way, so a name-scoped rule would be
+documentation rather than a limit. The shared secret reaches the runner as a
+read-only volume mount of the pool's own Secret; an out-of-cluster runner has to
+be given the value out of band.
 
 ## Consequences
 
