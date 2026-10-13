@@ -50,8 +50,14 @@ its statement and gains a pointer to the issue.
   `port + relaysPerNode - 1`, and that span must stay outside
   `spec.relayPortRange`; the webhook rejects a pool where it does not
   (`docs/adr/0009-partitioned-listener-ports.md`).
-* **IPv6 and dual-stack relays are not implemented.** Relays bind IPv4
-  addresses only. Tracked in #13.
+* **IPv6 relay addresses are the node's own.** A pool with
+  `spec.addressing.family` set to `IPv6` or `DualStack` plans relays on a node's
+  IPv6 address, and the operator neither creates nor routes it: the node has to
+  have a globally reachable IPv6 address (or a declared one). A node without one
+  hosts no IPv6 relay, and the pool reports the replicas it could not place
+  instead of falling back to IPv4. Kind nodes cannot provide an IPv6 address, so
+  the IPv6 data path is proven against the pinned coturn image rather than by
+  `make test-e2e` (`docs/capacity-model.md`).
 * **`HostNetwork` needs a node address that clients can actually route to.** It
   binds the node's `ExternalIP`, or the `turnfleet.hzmi.dev/relay-address`
   annotation when the node has no `ExternalIP` or it is not the address clients
