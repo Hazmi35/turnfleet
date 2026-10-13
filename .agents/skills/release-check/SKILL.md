@@ -17,9 +17,10 @@ evidence for each one; "looks fine" is not evidence.
 3. **`make test-e2e`** green: all three addressing modes, saturation, peer
    policy, drain with an active allocation, and `turnfleet-probe` against a real
    relay.
-4. **`docs/versions.md`** matches the tree: every pin in it equals the value in
-   `go.mod`, `tools/go.mod`, the `Makefile`, the Dockerfiles and the workflows.
-   Diff them, do not trust the table.
+4. **Version pins agree**: each pin's copies in `go.mod`, `tools/go.mod`, the
+   `Makefile`, `.custom-gcl.yml`, the Dockerfiles and the workflows hold the same
+   value, and the held modules and vulnerability floors described in
+   `docs/versions.md` still describe what is in the tree. Diff them.
 5. **`docs/api.md` and the CRDs** are regenerated from the tagged commit
    (`make verify` is the check).
 6. **`docs/status.md`** reflects reality: what is done, known limitations,

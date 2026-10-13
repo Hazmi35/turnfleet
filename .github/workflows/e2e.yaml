@@ -4,7 +4,7 @@
 # End-to-end suite: `make test-e2e` creates the kind cluster from
 # hack/kind-config.yaml, installs the CRDs, deploys the controller and runs the
 # e2e tests against it. kind is pinned by version and by checksum here; the node
-# image and every other pin live in docs/versions.md and in the Makefile.
+# image and every other pin live in the Makefile.
 name: E2E
 
 on:
@@ -22,7 +22,7 @@ concurrency:
 
 env:
   # Renovate reads this line (customManager in renovate.json) and keeps it in
-  # step with the Go pin in docs/versions.md.
+  # step with the `go` directive in go.mod.
   GO_VERSION: "1.27.2"
   KIND_VERSION: v0.33.0
   # sha256 of kind-linux-amd64 from the kind v0.33.0 release assets.

@@ -12,8 +12,10 @@
 
 - [ ] `make ci` passes locally.
 - [ ] If the change affects relay behaviour, `make test-e2e` passes.
-- [ ] Any version bump in this pull request also updates `docs/versions.md`
-      (see the pinned-versions table). Every pin has a source URL there.
+- [ ] Any version bump in this pull request moves every copy of that pin
+      (`go.mod`, `tools/go.mod`, the `Makefile`, `.custom-gcl.yml`, the
+      Dockerfiles, the workflows) and updates `docs/versions.md` when the pin
+      was deliberately held.
 - [ ] API changes: `make generate manifests api-docs` was run and the generated
       files are part of this pull request.
 - [ ] New or changed behaviour is covered by a test that would fail without the

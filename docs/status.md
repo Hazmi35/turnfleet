@@ -54,8 +54,10 @@ allocating), the peer policy refusing an in-cluster address, scale-down with an
 active allocation, and `turnfleet-probe` run from the host.
 
 **Tooling.** `make ci` (verify, lint, test, vuln, licenses, dco) and
-`make test-e2e`; every version pinned and recorded in `docs/versions.md`;
-GitHub Actions pinned by SHA with least-privilege permissions; DCO enforced by
+`make test-e2e`; every version pinned — Go tool versions as `tool` directives,
+images by tag plus digest, Actions by commit SHA — with the held pins explained
+in `docs/versions.md`;
+GitHub Actions run with least-privilege permissions; DCO enforced by
 `hack/verify-dco.sh`; harness-agnostic agent skills, subagents and hook policy
 under `.agents/` and `hack/agent/`, wired into Claude Code and omp (ADR 10).
 

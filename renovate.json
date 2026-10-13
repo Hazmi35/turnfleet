@@ -22,7 +22,7 @@
       "matchPackageNames": ["github.com/golangci/golangci-lint/v2"]
     },
     {
-      "description": "Tool directives in the root module: bump them together with the pins in docs/versions.md, which the pull request template enforces.",
+      "description": "Tool directives in the root module: bump them together with the copies in the Makefile and the Dockerfiles, which the pull request template enforces.",
       "groupName": "go tools",
       "matchManagers": ["gomod"],
       "matchPackageNames": [
@@ -38,7 +38,7 @@
       "matchPackageNames": ["kindest/node"]
     },
     {
-      "description": "coturn is the relay data plane; docs/versions.md pins it by tag and digest.",
+      "description": "coturn is the relay data plane; the Makefile pins it by tag and digest, and the webhook enforces the digest.",
       "groupName": "coturn",
       "matchDatasources": ["docker"],
       "matchPackageNames": ["coturn/coturn"]

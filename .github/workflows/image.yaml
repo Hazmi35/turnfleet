@@ -3,8 +3,9 @@
 #
 # Container images. Both images are multi-arch (linux/amd64, linux/arm64) and
 # are pushed to ghcr.io with provenance and an SBOM attached. The builder and
-# runtime images are pinned by tag and digest in docs/versions.md and are passed
-# in as build arguments, so the build inputs are the same as `make docker-buildx`.
+# runtime images are pinned by tag and digest in the Makefile (GO_IMAGE,
+# RUNTIME_IMAGE) and are passed in as build arguments, so the build inputs are
+# the same as `make docker-buildx`.
 name: Image
 
 on:
@@ -21,8 +22,8 @@ permissions:
   packages: write
 
 env:
-  # Container image pins; the digests are copied verbatim from the
-  # "Container images" table in docs/versions.md (and from the Makefile).
+  # Container image pins; the digests are copied verbatim from the Makefile
+  # (GO_IMAGE and RUNTIME_IMAGE), which is what `make docker-buildx` uses.
   GO_IMAGE: golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61
   RUNTIME_IMAGE: gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
   PLATFORMS: linux/amd64,linux/arm64

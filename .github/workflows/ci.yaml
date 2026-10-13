@@ -2,8 +2,8 @@
 # Copyright (C) 2026 Turnfleet Authors
 #
 # Continuous integration. This runs what `make ci` runs, one step per target so
-# a failure names itself instead of hiding behind an earlier one. Every pin used
-# here (the actions below and GO_VERSION) comes from docs/versions.md.
+# a failure names itself instead of hiding behind an earlier one. The actions
+# below are pinned by commit SHA; GO_VERSION tracks the `go` directive in go.mod.
 name: CI
 
 on:
@@ -23,7 +23,7 @@ concurrency:
 
 env:
   # Renovate reads this line (customManager in renovate.json) and keeps it in
-  # step with the Go pin in docs/versions.md.
+  # step with the `go` directive in go.mod.
   GO_VERSION: "1.27.2"
 
 jobs:

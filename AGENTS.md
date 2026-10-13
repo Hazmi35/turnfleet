@@ -116,7 +116,9 @@ by a copy.
 4. Docs and an ADR are updated: `docs/architecture.md`, `docs/capacity-model.md`
    or `docs/status.md` as applicable; a decision that was not obvious gets
    `docs/adr/NNNN-title.md`.
-5. Version bumps also update `docs/versions.md` (pin + source URL).
+5. A version bump that moves a pin `docs/versions.md` records as held (a held
+   module, a vulnerability floor, an image digest) updates that note in the same
+   pull request.
 6. Commits are Conventional Commits with `git commit -s` (DCO).
 
 ## Never
@@ -126,7 +128,8 @@ by a copy.
 * Disable a linter without a `//nolint:<linter> // <reason>` scoped to the
   line, or add a broad exclusion to `.golangci.yml`.
 * Change API types without regenerating and updating `docs/api.md`.
-* Bump a version without updating `docs/versions.md`.
+* Bump a version that `docs/versions.md` records as held (a held module, a
+  vulnerability floor, an image digest) without moving that note with it.
 * Run `kubectl` against any context other than `kind-turnfleet`
   (`hack/agent/guard-kubectl.sh`, wired into every harness, blocks it); `make`
   sets the context for you.
