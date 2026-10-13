@@ -253,7 +253,10 @@ deploy: ## Deploy the controller into the kind cluster.
 
 .PHONY: undeploy
 undeploy: ## Remove the controller from the kind cluster.
-	-$(KUSTOMIZE) build $(KUSTOMIZE_OVERLAY) | $(KUBECTL) delete --ignore-not-found -f -
+	# Bounded: a pool deleted while the controller was down keeps its drain
+	# finalizer, and `kubectl delete` waits on it — a wedged object must end the
+	# command, not hold the cluster lock for tens of minutes.
+	-$(KUSTOMIZE) build $(KUSTOMIZE_OVERLAY) | timeout 60 $(KUBECTL) delete --ignore-not-found -f -
 
 ##@ Quality
 
