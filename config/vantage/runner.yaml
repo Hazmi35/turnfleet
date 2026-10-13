@@ -144,7 +144,10 @@ spec:
           # The pool's own secret. An operator running this outside the cluster
           # has to get the value out of band; there is no path that hands it to
           # a program that is not in the cluster.
+          #
+          # No defaultMode: the container is not root and the volume is not
+          # fsGroup-owned, so the mounted file has to keep the read bit every
+          # pod-local volume gets.
           - name: turn-secret
             secret:
               secretName: turn-shared-secret
-              defaultMode: 0400
