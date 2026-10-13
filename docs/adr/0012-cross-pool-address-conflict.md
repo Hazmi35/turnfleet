@@ -30,9 +30,10 @@ pools is not authoritative enough to reject on.
 
 **What is compared is what pools hold, never what they request.**
 
-* For the pool being reconciled, the identities are the relays this pass
-  planned, which are the ones its status is about to publish. The plan already
-  reflects what the nodes can actually give the pool.
+* For the pool being reconciled, the identities are the ones its own states for
+  this pass carry: the relays it plans plus the ones still draining. They are
+  exactly what its status is about to publish, and the plan already reflects
+  what the nodes can actually give the pool.
 * For every other pool, the identities are `status.relays[]`.
 
 A pool that requests an address but holds no relay on it therefore conflicts
@@ -54,12 +55,16 @@ watches; `AddressConflict` is the specific cause. Status stays derived: nothing
 about another pool is cached, and no spec field carries the answer.
 
 **The other pool has to be woken.** The pool that has to clear its condition is
-the one that did *not* change, so the reconciler watches TURNPools with a map
-function that enqueues every pool holding a relay on an address and a predicate
-that passes only when the set of held identities changed. A status write that
-only reports a probe result or a port count wakes no peer, and the requeue
-interval is unchanged, so a pool without a conflict reconciles exactly as often
-as before. An index over held addresses would narrow the lookup further; it is
+the one that did *not* change, so the reconciler watches TURNPools. The map
+function enqueues every pool holding a relay on one of the changed pool's
+addresses — controller-runtime maps both the old and the new object of an
+update, so the peers a pool just left are enqueued too — and the predicate
+passes for a create or a delete and, on an update, only when the set of held
+identities changed. A status write that only reports a probe result or a port
+count wakes no peer, so a pool does not take on the probe cadence of every pool
+it shares an address with. The requeue interval is unchanged: a peer's identity
+change adds one reconcile to a pool, it does not give the pool a faster
+cadence. An index over held addresses would narrow the lookup further; it is
 not worth maintaining an index over status content for a fan-out bounded by the
 pools that share an address, and the map function reuses the shape the node
 watch already has.

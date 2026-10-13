@@ -37,7 +37,7 @@ say so.
    * `Conditions` is the first status field, uses `metav1.Condition`, and is
      written with `meta.SetStatusCondition`. Condition types are chosen from
      the set in `docs/architecture.md` (`Ready`/`ProbeSucceeded` normal-true;
-     `CapacityPressure`/`Degraded` abnormal-true).
+     `CapacityPressure`/`AddressConflict`/`Degraded` abnormal-true).
    * Enums use `+kubebuilder:validation:Enum` and a Go type; every `switch`
      over the type is exhaustive.
 3. **Capacity honesty.** Does the field distinguish capacity from concurrency?
