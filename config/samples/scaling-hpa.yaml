@@ -1,0 +1,66 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Turnfleet Authors
+#
+# An HPA driving a TURNPool through its /scale subresource: spec.replicas in,
+# status.readyRelays out, status.selector as the pod set.
+#
+# The trigger is the relay port space, never a CPU or pod-level metric. Adding
+# relays behind one address adds processes, not capacity, so the only honest
+# signal is how much of a relay's range is held: a relay is "nearly full" long
+# before its process is busy.
+#
+# This rule needs an external metrics API that exposes the controller's
+# Prometheus gauges. With prometheus-adapter, add an external rule that emits
+# the per-pool aggregate (the HPA divides an external AverageValue by the number
+# of pods in the scale target's selector):
+#
+#   rules:
+#   - seriesQuery: 'turnfleet_relay_ports_in_use{namespace!="",pool!=""}'
+#     resources:
+#       overrides:
+#         namespace: {resource: "namespace"}
+#     name:
+#       matches: "^turnfleet_(.*)"
+#     metricsQuery: 'sum(turnfleet_relay_ports_in_use{<<.LabelMatchers>>,pool="demo"}) by (namespace)'
+#
+# KEDA needs no adapter and reads Prometheus directly: see keda/ in this
+# directory for the same trigger as a ScaledObject.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: demo-ports
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: turnfleet.hzmi.dev/v1alpha1
+    kind: TURNPool
+    name: demo
+  # minReplicas has a floor of 1: spec.replicas itself is validated with a
+  # minimum of 1, because a pool with no relay answers nothing.
+  minReplicas: 1
+  # A relay can only be added where the addressing mode has another address to
+  # place it on (see the README); maxReplicas above the address supply just
+  # parks relays in Pending.
+  maxReplicas: 6
+  metrics:
+  - type: External
+    external:
+      metric:
+        name: turnfleet_relay_ports_in_use
+      target:
+        type: AverageValue
+        # Ports in use per relay. The sample pool's range is 49 ports
+        # (49152-49200), so 40 is where it is nearly full; keep this below the
+        # range's size, because a relay that runs out of ports answers 508
+        # Insufficient Capacity until another address can take a relay.
+        averageValue: "40"
+  behavior:
+    # Drain is not free: a relay on its way out keeps serving its allocations
+    # until they reach zero or drainTimeout expires, so scale down slowly and
+    # let the operator finish one drain before starting the next.
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Pods
+        value: 1
+        periodSeconds: 300

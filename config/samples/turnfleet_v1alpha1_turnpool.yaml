@@ -1,9 +1,39 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Turnfleet Authors
+#
+# A minimal HostNetwork pool: one relay per labelled relay node, on the node's
+# own address. It is the pool the scaling examples in this directory target
+# (config/samples/scaling-hpa.yaml and config/samples/keda/), and it needs the
+# shared secret it points at:
+#
+#   kubectl -n default create secret generic turn-shared-secret \
+#     --from-literal=secret="$(openssl rand -hex 32)"
+#
+# See the README quickstart for the other addressing modes and for checking a
+# relay from outside the cluster with turnfleet-probe.
 apiVersion: turnfleet.hzmi.dev/v1alpha1
 kind: TURNPool
 metadata:
   labels:
     app.kubernetes.io/name: turnfleet
     app.kubernetes.io/managed-by: kustomize
-  name: turnpool-sample
+  name: demo
+  namespace: default
 spec:
-  # TODO(user): Add fields here
+  replicas: 3
+  dataplane:
+    image: coturn/coturn:4.18.0-r0@sha256:bbefd3e1fdfdc0d58770fe01b581fd8b00d9f3a5580d00acb77cf719a6bc78e3
+  addressing:
+    mode: HostNetwork
+  relayPortRange:
+    start: 49152
+    end: 49200
+  listeners:
+  - name: turn
+    protocol: udp
+    port: 3478
+  auth:
+    realm: turnfleet.example.com
+    secretRef:
+      name: turn-shared-secret
+      key: secret

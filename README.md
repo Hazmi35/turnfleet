@@ -56,6 +56,30 @@ deliberately does not do — including the cluster shapes `HostNetwork` cannot
 work on, such as nodes with no public address — is in
 [`docs/limitations.md`](docs/limitations.md).
 
+## Scaling a pool
+
+`TURNPool` exposes the Kubernetes scale subresource — `spec.replicas` in,
+`status.readyRelays` out, `status.selector` as the relay pod set — and the port
+space is published as `turnfleet_relay_ports_in_use` /
+`turnfleet_relay_ports_total`, per relay. `config/samples/scaling-hpa.yaml`
+drives a pool from an HPA on that subresource, and `config/samples/keda/` from a
+KEDA `ScaledObject`; both trigger on ports in use per relay, never on a CPU or
+pod-level metric, because a relay is near its limit long before its process is
+busy. Pick one or the other: KEDA's admission webhook refuses a ScaledObject for
+a workload an HPA already manages.
+
+The caveat is the whole point of the project: **scaling does not add ports to an
+address.** A new relay is only useful where the addressing mode has another
+address to place it on — `HostNetwork` needs another labelled relay node,
+`ExternalIPPool` another already attached address, and `PartitionedIP` gains
+nothing at all, because the slices are still one IP's port space. A scaler on a
+pool with nowhere left to place a relay sits at `maxReplicas` while the pool
+stays at `CapacityPressure`; add addresses, not replicas. Scale-down is bounded
+by draining, which is why both examples slow the scale-down path.
+
+Scaling changes the relay set, so the credential issuer must re-read
+`<pool>-turn-uris` after a scale event instead of caching it.
+
 ## Quickstart on kind
 
 Prerequisites: Docker, Go (the version pinned in `go.mod`), and `make`. `kind`

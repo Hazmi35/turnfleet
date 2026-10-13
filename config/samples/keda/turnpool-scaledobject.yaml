@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Turnfleet Authors
+#
+# A KEDA ScaledObject on the TURNPool scale subresource, with the same trigger
+# as config/samples/scaling-hpa.yaml and without needing prometheus-adapter:
+# KEDA's prometheus scaler queries the controller's metrics endpoint's backend
+# directly.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: demo-ports
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: turnfleet.hzmi.dev/v1alpha1
+    kind: TURNPool
+    name: demo
+  minReplicaCount: 1
+  maxReplicaCount: 6
+  pollingInterval: 30
+  # A draining relay finishes its allocations before it goes away, so react
+  # slowly on the way down.
+  cooldownPeriod: 300
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 300
+  triggers:
+  - type: prometheus
+    metadata:
+      serverAddress: http://prometheus.monitoring.svc:9090
+      # Saturation, as a percentage of the pool's port space. turnfleet_
+      # relay_ports_total is the range size per relay, so the ratio is the
+      # fraction of the pool's capacity held by allocations. Both gauges carry
+      # namespace, pool and relay labels.
+      query: |
+        sum(turnfleet_relay_ports_in_use{namespace="default",pool="demo"})
+        / sum(turnfleet_relay_ports_total{namespace="default",pool="demo"}) * 100
+      threshold: "80"
