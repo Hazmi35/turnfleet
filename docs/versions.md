@@ -50,6 +50,16 @@ that must move together).
   module graph therefore resolves to kustomize `v5.8.2`, which is what the
   `tool` directive pins.
 
+### Transitive floors
+
+Two transitive dependencies are held at or above the versions that fix known
+vulnerabilities, because `make vuln` (govulncheck) fails on a reachable one:
+
+| Module | Floor | Why |
+| --- | --- | --- |
+| `google.golang.org/grpc` | `v1.83.1` | GO-2026-6348, heap exhaustion via HTTP/2 DATA frame fragmentation |
+| `go.opentelemetry.io/otel/*` | `v1.45.0` | GO-2026-6505, fixed in the OTLP trace exporter and SDK |
+
 ## Container images
 
 Images are referenced as `tag@sha256:digest`. The digest is the multi-arch
