@@ -20,11 +20,10 @@ replicaCount: 1
 
 image:
   repository: ghcr.io/hazmi35/turnfleet-controller
-  # Empty means the chart's appVersion, which until the project tags a release is
-  # `dev` — the Makefile's IMAGE_TAG, the tag `make docker-build` builds and
-  # `make load-images` loads into kind. Pass the tag to use in any other cluster;
-  # `make helm-install` passes the Makefile's IMAGE_REGISTRY and IMAGE_TAG, so a
-  # local install runs the image the Makefile just built.
+  # Empty means the chart's appVersion: the release version, which is also the
+  # tag the released images carry (beside the git tag's `v`). `make helm-install`
+  # passes the Makefile's IMAGE_REGISTRY and IMAGE_TAG, so a local install runs
+  # the image the Makefile just built.
   tag: ""
   # The manager image is immutable per release and is loaded into the cluster
   # rather than pulled on kind, so a cached image is the intended one.

@@ -5,8 +5,8 @@ description: What must be true before tagging a Turnfleet release. Use when prep
 
 # Release check
 
-Do not tag until every line below is true. Report the command output as
-evidence for each one; "looks fine" is not evidence.
+Do not create the release until every line below is true. Report the command
+output as evidence for each one; "looks fine" is not evidence.
 
 ## Required
 
@@ -20,9 +20,11 @@ evidence for each one; "looks fine" is not evidence.
    and the controller and probe a relay from that install, which `make
    helm-verify` does not exercise (it lints and compares renders, it installs
    nothing).
-4. **`charts/turnfleet`'s `appVersion` is the image tag being released**, on the
-   commit being tagged, not `dev`. The chart installs that tag by default, so
-   bumping it after the tag leaves the tag carrying the previous one.
+4. **`charts/turnfleet`'s `version` and `appVersion` are the release version**,
+   on the commit being released: `version` is the chart's semver (`0.1.0`) and
+   `appVersion` is the image tag the chart installs by default (`0.1.0`, the
+   number beside the git tag's `v0.1.0`). They are the same number on purpose.
+   Bumping either after the release leaves it carrying the previous one.
 5. **Version pins agree**: each pin's copies in `go.mod`, `tools/go.mod`, the
    `Makefile`, `.custom-gcl.yml`, the Dockerfiles and the workflows hold the same
    value, and the held modules, vulnerability floors and the held cosign pin
@@ -41,15 +43,18 @@ evidence for each one; "looks fine" is not evidence.
 9. **License obligations**: `make licenses` is green; `LICENSE` is the verbatim
    AGPL-3.0 text; the coturn image is still the unmodified upstream image
    (ADR 2).
-10. **`.github/workflows/release.yaml` is on the commit being tagged**: a tag push
-   runs that file as the tag's tree has it, and it is what signs the digests,
-   attaches the SBOM and the provenance and writes the release notes (ADR 16).
-   Release notes may claim the chart: it ships in this tree, and
-   `make test-e2e-chart` proves it installs.
+10. **The release is what starts the pipeline**: create it for the version being
+    released (`gh release create vX.Y.Z --title "Turnfleet vX.Y.Z" --notes …`),
+    which is also what creates the tag. `image.yaml` then builds and pushes both
+    images for that tag, and `release.yaml` waits for their digests, signs them
+    keyless, attaches the SPDX SBOM and the SLSA provenance and writes the
+    release body (ADR 16). A tag push with no release publishes nothing. Release
+    notes may claim the chart: it ships in this tree, and `make test-e2e-chart`
+    proves it installs.
 
-## After tagging
+## After the release
 
-* Record the tag and the digest of both published images in the release notes.
+* Confirm the release body carries the digest of both published images.
 * Watch the Release workflow for the tag. It waits for the Image workflow to
   publish `ghcr.io/hazmi35/turnfleet-{controller,probe}:<tag>`, signs both index
   digests keyless, attaches an SPDX SBOM and SLSA provenance to each, verifies

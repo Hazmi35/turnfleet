@@ -7,13 +7,13 @@
 #
 # Shape, and why:
 #
-# * The trigger is the tag push, the event `image.yaml` builds on, and the
-#   workflow waits for that build to publish the tag (`IMAGE_WAIT_SECONDS`)
-#   before it resolves a digest. Both workflows start on the tag push at once,
-#   and a pipeline that signed whatever the tag happened to point at before the
-#   build finished would sign nothing in particular. The digest is read back
-#   from the registry at the tag, so the images, their signatures and their
-#   attestations come from one build.
+# * The trigger is the published release, the same event `image.yaml` builds on,
+#   and the workflow waits for that build to publish the digests
+#   (`IMAGE_WAIT_SECONDS`) before it resolves one. Both workflows start on the
+#   release at once, and a pipeline that signed whatever the tag happened to
+#   point at before the build finished would sign nothing in particular. The
+#   digest is read back from the registry at the release's tag, so the images,
+#   their signatures and their attestations come from one build.
 # * Signing is keyless (`id-token: write`): the signature carries a short-lived
 #   Fulcio certificate for this workflow, so the repository holds no key to
 #   rotate. docs/adr/0016-release-signature-storage.md records why the pinned
@@ -33,9 +33,11 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - "v*"
+  # The release is the trigger, not the tag: creating the GitHub release for a
+  # version is the one act that publishes anything, and it runs this file with
+  # the release's tag as the ref.
+  release:
+    types: [published]
 
 # Read-only unless a job says otherwise: signing writes to the registry, and
 # only the job that creates the release writes to the repository.
