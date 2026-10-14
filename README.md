@@ -110,6 +110,11 @@ and `make helm-drift` check the chart against `config/` (the drift guard fails
 when the two stop agreeing). Installing from the chart replaces the two steps
 above, so run `make install`/`make deploy` or `make helm-install`, not both.
 
+Upgrading is one step more than installing. Helm installs the files under
+`crds/` on the first install and never updates an existing CRD, so a release
+that changes the schema needs `make helm-crds-apply` before `helm upgrade`; the
+kustomize path gets the same thing from `make install`.
+
 Then create a pool. A minimal `HostNetwork` pool with three relays:
 
 ```yaml

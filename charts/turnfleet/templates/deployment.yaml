@@ -21,6 +21,7 @@ spec:
         {{- end }}
       labels:
         {{- include "turnfleet.labels" . | nindent 8 }}
+        {{- include "turnfleet.checkPodLabels" . }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}

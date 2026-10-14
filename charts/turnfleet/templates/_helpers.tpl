@@ -39,6 +39,19 @@ app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 {{- end -}}
 
+{{/*
+podLabels cannot override the selector labels. spec.selector is fixed, so setting
+either of them on the pods would stop the Deployment's selector from matching its
+own pod template, and the API server rejects the object.
+*/}}
+{{- define "turnfleet.checkPodLabels" -}}
+{{- range $key := list "app.kubernetes.io/name" "control-plane" }}
+{{- if hasKey $.Values.podLabels $key }}
+{{- fail (printf "podLabels must not set %q: the Deployment selects on that label" $key) }}
+{{- end }}
+{{- end }}
+{{- end -}}
+
 {{- define "turnfleet.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create -}}
 {{- printf "%s-controller-manager" (include "turnfleet.name" .) -}}
@@ -78,6 +91,6 @@ then the webhook flags the webhook overlay appends, then anything the user adds.
 - --metrics-secure=false
 {{- end }}
 {{- range .Values.extraArgs }}
-- {{ . }}
+- {{ . | quote }}
 {{- end }}
 {{- end -}}

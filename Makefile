@@ -331,6 +331,13 @@ helm-crds: ## Copy the generated CRDs from config/crd/bases into the chart.
 	rm -f $(HELM_CHART)/crds/*.yaml
 	cp config/crd/bases/*.yaml $(HELM_CHART)/crds/
 
+.PHONY: helm-crds-apply
+helm-crds-apply: helm-crds ## Apply the chart's CRDs to the cluster, which `helm upgrade` does not.
+	# Helm installs the files under crds/ on the first install and leaves an
+	# existing CRD alone afterwards, so a change to the schema needs this apply
+	# before the upgrade. It is what `make install` does for the kustomize path.
+	$(KUBECTL) apply -f $(HELM_CHART)/crds/
+
 .PHONY: helm-drift
 helm-drift: helm kustomize ## Fail when the chart and config/ no longer render the same controller.
 	# The kustomize binary is the one the `kustomize` target installs from

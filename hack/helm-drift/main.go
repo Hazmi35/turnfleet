@@ -33,8 +33,10 @@
 //     object without copying that inconsistency). The labels the cluster acts on
 //     are inside a spec — the Deployment's selector, its pod template and the
 //     Services' selectors — and those are compared in full.
-//   - Empty maps and lists: `volumeMounts: []` and no volumeMounts are the same
-//     deployment, and config/manager/manager.yaml carries those placeholders.
+//   - The empty list placeholders config/ carries (`volumeMounts: []` and
+//     `volumes: []` in config/manager/manager.yaml), which mean the same to the
+//     API server as an absent key. Only those: an empty map can be required, as
+//     the cert-manager Issuer's `spec.selfSigned: {}` is.
 //   - `meta.helm.sh/*` annotations, which Helm adds and kustomize does not.
 //
 // The manager's image is rendered from the same value on both sides: config/
@@ -207,6 +209,10 @@ func objects(stream []byte) (map[string]object, error) {
 			continue
 		}
 
+		if _, exists := found[key]; exists {
+			return nil, fmt.Errorf("%s is rendered twice in one stream: the installer would apply conflicting manifests", key)
+		}
+
 		normalize(raw)
 
 		compact, err := json.Marshal(raw)
@@ -253,7 +259,7 @@ func normalize(raw map[string]any) {
 		delete(metadata, "labels")
 	}
 	dropInstallerMetadata(raw)
-	dropEmpty(raw)
+	dropEmptyPlaceholders(raw)
 }
 
 // dropInstallerMetadata removes the labels and annotations that name the
@@ -279,7 +285,7 @@ func dropInstallerMetadata(value any) {
 			case "annotations":
 				if annotations, ok := nested.(map[string]any); ok {
 					for annotation := range annotations {
-						if strings.HasPrefix(annotation, "meta.helm.sh/") || strings.HasPrefix(annotation, "helm.sh/") {
+						if strings.HasPrefix(annotation, "meta.helm.sh/") {
 							delete(annotations, annotation)
 						}
 					}
@@ -294,30 +300,31 @@ func dropInstallerMetadata(value any) {
 	}
 }
 
-// dropEmpty removes empty maps and lists, which mean the same thing to the API
-// server as an absent key.
-func dropEmpty(value any) {
-	container, ok := value.(map[string]any)
-	if !ok {
-		if list, isList := value.([]any); isList {
-			for _, nested := range list {
-				dropEmpty(nested)
+// emptyListPlaceholders are the keys config/ carries as an empty list, which
+// means the same to the API server as an absent key: config/manager/manager.yaml
+// writes `volumeMounts: []` and `volumes: []` where the chart renders nothing.
+//
+// Only these are dropped. An empty map is not equivalent to an absent one — the
+// cert-manager Issuer requires `spec.selfSigned: {}` — so a blanket rule would
+// let the chart delete a required field and still pass.
+var emptyListPlaceholders = map[string]bool{"volumeMounts": true, "volumes": true}
+
+// dropEmptyPlaceholders removes the empty list placeholders config/ carries.
+func dropEmptyPlaceholders(value any) {
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, nested := range typed {
+			dropEmptyPlaceholders(nested)
+			if !emptyListPlaceholders[key] {
+				continue
+			}
+			if list, ok := nested.([]any); ok && len(list) == 0 {
+				delete(typed, key)
 			}
 		}
-		return
-	}
-
-	for key, nested := range container {
-		dropEmpty(nested)
-		switch typed := nested.(type) {
-		case map[string]any:
-			if len(typed) == 0 {
-				delete(container, key)
-			}
-		case []any:
-			if len(typed) == 0 {
-				delete(container, key)
-			}
+	case []any:
+		for _, nested := range typed {
+			dropEmptyPlaceholders(nested)
 		}
 	}
 }
