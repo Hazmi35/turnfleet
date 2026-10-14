@@ -3,12 +3,19 @@
 **
 
 # Re-include Go source files (but not *_test.go)
-# If you use Podman, re-include your source directories by name,
-# such as !cmd, !api, and !internal.
-# See https://github.com/containers/buildah/issues/6417
 !**/*.go
 **/*_test.go
 
 # Re-include Go module files
 !go.mod
 !go.sum
+
+# Buildah (podman) does not re-include a file whose parent directory is
+# excluded, so the packages the images build are named as directories too; see
+# https://github.com/containers/buildah/issues/6417. The last matching rule
+# wins, which is why the test-file exclusion is repeated after them. Docker
+# produces the same context either way.
+!api
+!cmd
+!internal
+**/*_test.go
