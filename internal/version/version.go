@@ -27,8 +27,14 @@ func Date() string { return date }
 
 // Info returns the version, commit and date, falling back to the module build
 // info when the binary was built without the Makefile (for example `go run`).
-func Info() (version, commit, date string) {
-	v, c, d := version, commit, date
+//
+// Its results must not be named version, commit and date: those are the package
+// variables the linker stamps, and a named result shadows the variable it is
+// named after. Naming them so is why every binary reported
+// "turnfleet-probe  (, )" — the accessors read the stamped variables, and this
+// function read its own empty results.
+func Info() (v, c, d string) {
+	v, c, d = version, commit, date
 	if bi, ok := debug.ReadBuildInfo(); ok && v == "dev" {
 		if bi.Main.Version != "" && bi.Main.Version != "(devel)" {
 			v = bi.Main.Version
