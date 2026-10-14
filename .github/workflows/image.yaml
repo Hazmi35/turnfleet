@@ -6,14 +6,20 @@
 # runtime images are pinned by tag and digest in the Makefile (GO_IMAGE,
 # RUNTIME_IMAGE) and are passed in as build arguments, so the build inputs are
 # the same as `make docker-buildx`.
+#
+# A push to main builds the `main` tag for day-to-day work; a published release
+# builds the release's tag, and that is the only path that publishes a version.
 name: Image
 
 on:
   push:
     branches:
       - main
-    tags:
-      - "v*"
+  # A release is what publishes the images for a tag: creating the GitHub release
+  # runs this workflow for its tag, so one act starts the pipeline and the tag
+  # alone publishes nothing.
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:

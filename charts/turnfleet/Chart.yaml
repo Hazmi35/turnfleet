@@ -11,10 +11,12 @@ name: turnfleet
 description: The Turnfleet controller for TURN relay fleets.
 type: application
 version: 0.1.0
-# The tag a controller image built by this repository carries until the project
-# tags a release (`IMAGE_TAG` in the Makefile, which `make helm-install` passes
-# as the image tag).
-appVersion: "dev"
+# The chart's version tracks the application version: both fields are the release
+# version, so a chart release and an image release carry the same number. A
+# released image has `0.1.0` beside the tag's `v0.1.0`, which is what this
+# resolves to; before the first release, the Makefile's `IMAGE_TAG` (`dev`) is
+# what a local build produces, and `make helm-install` passes it.
+appVersion: "0.1.0"
 home: https://github.com/Hazmi35/turnfleet
 sources:
   - https://github.com/Hazmi35/turnfleet

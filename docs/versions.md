@@ -111,10 +111,10 @@ release's checksum.)
 The chart carries no version of its own for the images: `make helm-install`
 passes the Makefile's `IMAGE_REGISTRY` and `IMAGE_TAG`, the same values
 `make deploy` sets on the cluster. Installed without those flags the chart uses
-its `appVersion`, which until the project tags a release is `dev` — the tag
-`make docker-build` builds and `make docker-buildx` pushes. A release that
-publishes images should bump the chart's `appVersion` with them, so an install
-without flags gets the released image.
+its `appVersion`, which is the release version — the chart's `version` and
+`appVersion` are the same number, `0.1.0` for the tag `v0.1.0`, and the released
+image carries that number beside the tag. A release bumps both before it is
+created, so an install without flags gets the released image.
 
 ## GitHub Actions
 
