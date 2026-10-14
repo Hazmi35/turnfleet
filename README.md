@@ -116,11 +116,11 @@ release's version, so a consumer with no checkout installs the released chart:
 
 ```sh
 helm install turnfleet oci://ghcr.io/hazmi35/turnfleet-chart/turnfleet \
-  --version 0.1.1 --namespace turnfleet-system --create-namespace
+  --version 0.1.2 --namespace turnfleet-system --create-namespace
 ```
 
 Installed without `--set`, that chart runs the released
-`turnfleet-controller:0.1.1`, which is the image the release published. The
+`turnfleet-controller:0.1.2`, which is the image the release published. The
 release notes carry the chart's digest and the commands that verify it.
 
 Upgrading is one step more than installing. Helm installs the files under
