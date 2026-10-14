@@ -104,6 +104,7 @@ func (r *TURNPoolReconciler) renderRelays(
 	plan *relay.Plan,
 	clusterPodCIDRs []string,
 	secret string,
+	tlsSecretHash string,
 	pods []corev1.Pod,
 ) ([]*relayState, error) {
 	denied := relay.MergeCIDRs(policyDeniedCIDRs(pool), r.ClusterCIDRs, clusterPodCIDRs)
@@ -135,7 +136,7 @@ func (r *TURNPoolReconciler) renderRelays(
 			planned: true,
 			config:  config,
 		}
-		hash, err := relayHash(pool, state)
+		hash, err := relayHash(pool, state, tlsSecretHash)
 		if err != nil {
 			return nil, err
 		}

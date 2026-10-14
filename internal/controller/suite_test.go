@@ -352,6 +352,36 @@ func (f *testFixture) rotateSecret(value string) {
 	}
 }
 
+// createTLSSecret creates the serving certificate a TLS listener mounts.
+func (f *testFixture) createTLSSecret(name, certificate string) {
+	f.t.Helper()
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: f.namespace},
+		Data: map[string][]byte{
+			"tls.crt": []byte(certificate),
+			"tls.key": []byte("key-for-" + certificate),
+		},
+	}
+	if err := k8sClient.Create(f.ctx, secret); err != nil {
+		f.t.Fatalf("creating tls secret %s: %v", name, err)
+	}
+}
+
+// rotateTLSSecret replaces the certificate, which must roll the relays.
+func (f *testFixture) rotateTLSSecret(name, certificate string) {
+	f.t.Helper()
+
+	secret := &corev1.Secret{}
+	if err := k8sClient.Get(f.ctx, types.NamespacedName{Namespace: f.namespace, Name: name}, secret); err != nil {
+		f.t.Fatalf("getting tls secret %s: %v", name, err)
+	}
+	secret.Data["tls.crt"] = []byte(certificate)
+	if err := k8sClient.Update(f.ctx, secret); err != nil {
+		f.t.Fatalf("rotating tls secret %s: %v", name, err)
+	}
+}
+
 // createPool creates a valid pool in the fixture's namespace.
 func (f *testFixture) createPool(pool *turnfleetv1alpha1.TURNPool) {
 	f.t.Helper()

@@ -27,22 +27,29 @@ import (
 //
 // It covers everything that decides what the relay process runs and where: the
 // rendered coturn configuration (which already contains the listeners, the port
-// range, the realm, the secret and the peer policy) plus the pod fields the
-// configuration does not carry, so changing the image, the resources or the
-// placement rolls the relay just like changing the config does.
-func relayHash(pool *turnfleetv1alpha1.TURNPool, state *relayState) (string, error) {
+// range, the realm, the secret and the peer policy), the content of the serving
+// certificate the pod mounts (coturn reads it when it starts, so a rotation has
+// to roll the relay — ADR 4), plus the pod fields the configuration does not
+// carry, so changing the image, the resources or the placement rolls the relay
+// just like changing the config does.
+func relayHash(pool *turnfleetv1alpha1.TURNPool, state *relayState, tlsSecretHash string) (string, error) {
 	projection := struct {
 		Config    string
 		Image     string
 		Resources *corev1.ResourceRequirements
 		Placement *turnfleetv1alpha1.PlacementSpec
 		NodeName  string
+		// omitempty matters: a pool without a TLS listener hashes exactly as it
+		// did before this field existed, so upgrading the operator does not roll
+		// a fleet that never had a certificate to rotate.
+		TLSSecret string `json:"TLSSecret,omitempty"`
 	}{
 		Config:    state.config,
 		Image:     pool.Spec.Dataplane.Image,
 		Resources: pool.Spec.Dataplane.Resources,
 		Placement: pool.Spec.Placement,
 		NodeName:  state.relay.NodeName,
+		TLSSecret: tlsSecretHash,
 	}
 	encoded, err := json.Marshal(projection)
 	if err != nil {

@@ -154,10 +154,17 @@ func (r *TURNPoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{RequeueAfter: secretRetryInterval}, nil
 	}
 
+	// The serving certificate is part of what a relay runs, so its content is
+	// hashed into the pod's config-hash like the configuration itself (ADR 4).
+	tlsSecret, err := r.tlsSecretContentHash(ctx, pool)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	plan := relay.ComputePlan(&relay.PlanInput{PoolName: pool.Name, Spec: pool.Spec, Nodes: observed.relays})
 	relay.SortRelays(plan.Relays)
 
-	states, err := r.renderRelays(pool, &plan, observed.podCIDRs, secret, pods)
+	states, err := r.renderRelays(pool, &plan, observed.podCIDRs, secret, tlsSecret, pods)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -368,6 +375,55 @@ func (r *TURNPoolReconciler) sharedSecret(ctx context.Context, pool *turnfleetv1
 		return "", fmt.Errorf("reading secret %s/%s: %w", pool.Namespace, ref.Name, err)
 	}
 	return string(secret.Data[ref.Key]), nil
+}
+
+// tlsSecretContentHash is the content hash of the serving certificate the relay
+// pods mount, or "" when the pool has no TLS listener.
+//
+// It is part of the relay configuration hash, so replacing the certificate rolls
+// the relays the way any other change does (ADR 4). coturn reads its certificate
+// when it starts, so without this a rotation would leave every running relay
+// serving the old one until something else happened to restart it.
+//
+// The Secret hashed is the one the pod mounts: tlsSecretName picks the listener
+// whose Secret becomes the volume, and hashing another would roll the fleet for
+// a change coturn never reads.
+func (r *TURNPoolReconciler) tlsSecretContentHash(ctx context.Context, pool *turnfleetv1alpha1.TURNPool) (string, error) {
+	name := tlsSecretName(pool.Spec.Listeners)
+	if name == "" {
+		return "", nil
+	}
+	secret := &corev1.Secret{}
+	if err := r.Get(ctx, types.NamespacedName{Namespace: pool.Namespace, Name: name}, secret); err != nil {
+		if apierrors.IsNotFound(err) {
+			// The pod cannot start without it either, and the volume mount
+			// reports it: there is nothing to hash yet.
+			return "", nil
+		}
+		return "", fmt.Errorf("reading the tls secret %s/%s: %w", pool.Namespace, name, err)
+	}
+	return relay.ConfigHash(secretContent(secret)), nil
+}
+
+// secretContent renders a Secret's data as one deterministic string. coturn
+// reads the files the keys name, and a map's iteration order is not stable, so
+// the keys are sorted: the hash has to change when the content changes and not
+// when the order does.
+func secretContent(secret *corev1.Secret) string {
+	keys := make([]string, 0, len(secret.Data))
+	for key := range secret.Data {
+		keys = append(keys, key)
+	}
+	slices.Sort(keys)
+
+	var content strings.Builder
+	for _, key := range keys {
+		content.WriteString(key)
+		content.WriteByte(0)
+		content.Write(secret.Data[key])
+		content.WriteByte(0)
+	}
+	return content.String()
 }
 
 func (r *TURNPoolReconciler) now() time.Time {

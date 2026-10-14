@@ -33,10 +33,9 @@ The rendering rules that follow from this:
 * TLS listeners reference a Secret in the pool's namespace
   (`tlsSecretRef`), which is mounted into the relay pod and read by coturn when
   it starts. The pod's `turnfleet.hzmi.dev/config-hash` covers the rendered
-  configuration, the image, the resources and the placement — not the Secret's
-  content — so rotating a serving certificate does not by itself roll the
-  relays; it reaches a relay when that relay is restarted for another reason or
-  is replaced.
+  configuration, the image, the resources, the placement and the content of that
+  Secret, so rotating a serving certificate rolls the relays one at a time with
+  drain, the way any other change to what a relay runs does.
 
 ## Consequences
 

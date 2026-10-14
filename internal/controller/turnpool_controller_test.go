@@ -463,6 +463,60 @@ func TestSecretRotationRollsOneRelayAtATime(t *testing.T) {
 	})
 }
 
+// TestRotatingATLSSecretRollsTheRelays covers the half of ADR 4 that coturn's
+// startup behaviour makes necessary: a relay reads its serving certificate when
+// it starts, so replacing the certificate has to roll the relay. The Secret's
+// content is part of the configuration hash; without that, a rotation would
+// leave every running relay serving the old certificate until something else
+// happened to restart it.
+func TestRotatingATLSSecretRollsTheRelays(t *testing.T) {
+	f := newFixture(t)
+	f.createSecret()
+	f.createNode("tf-worker-1", "203.0.113.41")
+
+	const servingCertName = "tpool-tls-serving-cert"
+	f.createTLSSecret(servingCertName, "first-certificate")
+
+	pool := hostNetworkPool("tpool-tls", 1)
+	pool.Spec.Listeners = []turnfleetv1alpha1.ListenerSpec{
+		{Name: "turn", Protocol: turnfleetv1alpha1.ListenerProtocolUDP, Port: 3478},
+		{
+			Name:         "turns",
+			Protocol:     turnfleetv1alpha1.ListenerProtocolTLS,
+			Port:         5349,
+			TLSSecretRef: &corev1.LocalObjectReference{Name: servingCertName},
+		},
+	}
+	f.createPool(pool)
+
+	f.reconcile("tpool-tls")
+	f.reconcile("tpool-tls")
+	f.markPodsReady("tpool-tls")
+
+	pods := f.pods("tpool-tls")
+	if len(pods) != 1 {
+		t.Fatalf("the pool has %d relay pods, want 1", len(pods))
+	}
+	before := pods[0].Annotations[ConfigHashAnnotation]
+	if before == "" {
+		t.Fatal("the relay pod carries no config hash")
+	}
+
+	f.rotateTLSSecret(servingCertName, "second-certificate")
+
+	// The relay either rolls (its drain had no allocations to wait for) or
+	// starts draining on its way out; what must not happen is that nothing
+	// moved, which is what an unhashed Secret produces.
+	f.reconcileUntil("tpool-tls", "the relay rolled after its certificate rotated", func() bool {
+		for _, pod := range f.pods("tpool-tls") {
+			if pod.Annotations[ConfigHashAnnotation] != before || pod.Annotations[DrainStartedAtAnnotation] != "" {
+				return true
+			}
+		}
+		return false
+	})
+}
+
 // TestNodeLossDrainsTheRelay covers the case the planner is built for: when a
 // relay's node disappears, its relay is drained rather than left behind.
 func TestNodeLossDrainsTheRelay(t *testing.T) {
