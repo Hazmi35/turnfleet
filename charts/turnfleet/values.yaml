@@ -24,7 +24,7 @@ image:
   # tag the released images carry (beside the git tag's `v`). `make helm-install`
   # passes the Makefile's IMAGE_REGISTRY and IMAGE_TAG, so a local install runs
   # the image the Makefile just built.
-  tag: ""
+  tag: "@sha256:add358fcdf49ab8c44a1b871e52f02b8da37e26df64b3e0ba676f869310331d1"
   # The manager image is immutable per release and is loaded into the cluster
   # rather than pulled on kind, so a cached image is the intended one.
   pullPolicy: IfNotPresent
