@@ -10,13 +10,13 @@ apiVersion: v2
 name: turnfleet
 description: The Turnfleet controller for TURN relay fleets.
 type: application
-version: 0.1.1
+version: 0.1.2
 # The chart's version tracks the application version: both fields are the release
 # version, so a chart release and an image release carry the same number. The
 # released images carry that number beside the tag's `v` (ADR 17), which is what
 # these fields resolve to; a local build uses the Makefile's `IMAGE_TAG` (`dev`)
 # and `make helm-install` passes it.
-appVersion: "0.1.1"
+appVersion: "0.1.2"
 home: https://github.com/Hazmi35/turnfleet
 sources:
   - https://github.com/Hazmi35/turnfleet
