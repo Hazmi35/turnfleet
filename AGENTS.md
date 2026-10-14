@@ -21,12 +21,19 @@ nothing. This file is the only instruction file for every agent.
 * **Relay node** — a node labelled `turnfleet.hzmi.dev/relay-node=true`.
 * **Draining** — a relay on its way out: removed from `turnURIs`, readiness
   false, deleted only when allocations reach zero or `drainTimeout` expires.
+* **Vantage point** — the network position a probe runs from. In-cluster for
+  configuration and capacity; outside the cluster's network for reachability,
+  where hairpin NAT and a firewall are visible.
+* **Vantage runner** — the process that probes every listener URI a pool
+  publishes from a vantage point and publishes the result, so the controller
+  reports it as `ReachableFromVantage`.
 
 Conventions that are load-bearing: API group `turnfleet.hzmi.dev`, version
 `v1alpha1`, kind `TURNPool` (plural `turnpools`, short `tpool`); label,
 annotation and finalizer prefix `turnfleet.hzmi.dev/`; metric prefix
 `turnfleet_`; pod names `<pool>-relay-<5-char hash>`; URI ConfigMap
-`<pool>-turn-uris`; kind cluster `turnfleet`, context `kind-turnfleet`.
+`<pool>-turn-uris`; vantage result ConfigMap `<pool>-vantage`; kind cluster
+`turnfleet`, context `kind-turnfleet`.
 
 ## Commands
 
@@ -62,12 +69,13 @@ change affects relay behaviour, rendering, drain, or the probe.
 | `api/v1alpha1/` | `TURNPool` types. Markers only, no logic. Ordering and naming follow the Kubernetes API conventions; `kubeapilinter` enforces them. |
 | `internal/relay/` | `Planner` assigns relay identities (address + disjoint port range) per addressing mode; `Renderer` turns one relay into coturn config. Pure functions: no client, no clock, no I/O. |
 | `internal/probe/` | Real TURN `Allocate` against a relay listener on `pion/turn`; result type shared by controller and CLI. |
+| `internal/vantage/` | The result a vantage runner publishes and where: the `<pool>-vantage` ConfigMap, its labels and its payload. |
 | `internal/metrics/` | `turnfleet_` metric registration and the coturn scrape/parse helpers. |
 | `internal/controller/` | Reconcile: planner + renderer + pods + ConfigMaps + status, drain state machine, config-hash rollout. |
 | `internal/webhook/v1alpha1/` | Defaulting and validating webhooks, immutability, mode-specific validation. |
 | `cmd/turnfleet-controller/`, `cmd/turnfleet-probe/` | Binaries; flag parsing and wiring only. |
 | `test/e2e/` | kind end-to-end suite (build-tagged `e2e`), `test/fixtures/` holds cluster fixtures. |
-| `config/` | kustomize manifests. `config/default` (what `make deploy` applies) runs the controller without admission webhooks; `config/with-webhook` adds them and their cert-manager certificates. |
+| `config/` | kustomize manifests. `config/default` (what `make deploy` applies) runs the controller without admission webhooks; `config/with-webhook` adds them and their cert-manager certificates; `config/vantage` is the per-pool vantage runner the operator does not schedule. |
 | `charts/turnfleet/` | Helm chart for the controller only (never relay pods). Source of truth for the controller stays `config/`: `make helm-drift` renders both and fails on drift. |
 | `docs/` | `architecture.md`, `capacity-model.md`, `api.md` (generated), `adr/`, `versions.md`, `limitations.md`. |
 

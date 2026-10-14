@@ -54,19 +54,21 @@ the relay's slot on its node — because a listening socket binds once per addre
 | `internal/relay.Planner` | Computes the desired relay set: one identity `(relayAddress, portRange)` per relay, disjoint within a pool, stable across restarts and failover. Implements the three addressing modes. |
 | `internal/relay.Renderer` | Renders one relay's coturn configuration from the spec, the relay identity and the node address. Pure; golden-tested. |
 | `internal/probe` | A real TURN `Allocate` (plus optional `CreatePermission`/`Send` round trip) against a relay listener on `pion/turn`, asserting the relayed address and range. |
+| `internal/vantage` | The result a vantage runner publishes and where it publishes it: the `<pool>-vantage` ConfigMap, its labels and its JSON payload. |
 | `internal/metrics` | `turnfleet_` collectors and the coturn scrape/parse helpers. |
 | `internal/controller` | Reconciles a `TURNPool`: planner + renderer + relay pods + config ConfigMap + `<pool>-turn-uris` ConfigMap + status; runs the drain state machine, the rolling config-hash update and the periodic probe. |
 | `internal/webhook/v1alpha1` | Defaulting, validation, immutability, mode-specific rules. |
-| `cmd/turnfleet-probe` | The same probe as a CLI with JSON output, so the check can run from outside the cluster. |
+| `cmd/turnfleet-probe` | The same probe as a CLI with JSON output, so the check can run from outside the cluster. With `--uris-configmap`/`--publish-configmap` it is also the vantage runner: it probes every URI the pool publishes and writes the result where the controller reads it. |
 | `config/` | The kustomize manifests for the controller: `config/default` runs it without admission webhooks, `config/with-webhook` adds them and their cert-manager certificates. Source of truth for what the controller is deployed as. |
 | `charts/turnfleet` | The Helm chart for the same controller — CRDs, RBAC, the manager, the metrics Service and, opt-in, the webhooks — for a consumer who does not want to run kustomize. It never templates relays: relay pods come from the planner, and nothing in the relay data path goes through it. `make helm-drift` renders the chart and `config/` and fails on drift. |
+| `config/vantage` | The runner manifest: a CronJob, its ServiceAccount, its Role and RoleBinding. Not part of `config/default` — a runner is per pool and the operator does not schedule it. |
 
 ## Reconcile flow
 
 ```mermaid
 stateDiagram-v2
   [*] --> Observe
-  Observe: list labelled nodes, relay pods, Secret, ConfigMaps
+  Observe: list labelled nodes, relay pods, Secret, ConfigMaps, the published vantage result
   Observe --> Plan: plan desired relays
   Plan --> Render: per relay: coturn config + config hash
   Render --> Converge: create/update pods, ConfigMap
@@ -92,6 +94,11 @@ stateDiagram-v2
 * **`turnURIs`.** Only ready, non-draining relays, mirrored into the
   `<pool>-turn-uris` ConfigMap so the credential issuer hands out per-relay
   URIs (and never a URI for a relay that is saturated or going away).
+* **Vantage result.** A runner publishes its pass over `<pool>-turn-uris` into
+  the `<pool>-vantage` ConfigMap; the controller watches ConfigMaps by label and
+  reads it every pass. The result is the only input to `ReachableFromVantage`,
+  and the in-cluster probe is not an input to it at all. See
+  `docs/adr/0015-vantage-result-delivery.md`.
 
 ## Status and conditions
 
@@ -100,7 +107,15 @@ stateDiagram-v2
 | `Ready` | normal-true | The desired number of relays exist, are ready and non-draining. |
 | `ProbeSucceeded` | normal-true | Every ready relay last probed successfully. |
 | `CapacityPressure` | abnormal-true | A relay is near or at its port limit (`portsInUse`/`portsTotal`), or a probe observed error 508. |
-| `Degraded` | abnormal-true | Fewer relays than desired, or a relay is failing to converge. |
+| `ReachableFromVantage` | normal-true | Every listener URI the pool publishes answered a TURN `Allocate` where the vantage runner ran. False when one did not; unknown while nothing current has been published — nothing at all, an unreadable payload, or a result older than 15 minutes. |
+| `Degraded` | abnormal-true | Fewer relays than desired, a relay failing to converge, or a vantage point that cannot reach the relays. |
+
+`ReachableFromVantage` is a separate condition on purpose. `Ready` and
+`ProbeSucceeded` describe what the controller sees from inside the cluster, and
+a relay can be perfectly healthy there while no peer can reach it — hairpin NAT,
+a firewall in front of the relay node, a NAT mapping that is not 1:1. The
+vantage condition reports what a runner saw and takes no part in the others, so
+a passing in-cluster probe cannot clear a failing observation.
 
 `status.relays[]` carries per-relay truth: `relayAddress`, `portRange`,
 `ready`, `draining`, `allocations`, `portsInUse`, `portsTotal` and

@@ -1,0 +1,10 @@
+# The vantage runner (docs/adr/0015-vantage-result-delivery.md).
+#
+# It is not part of config/default: a runner is per pool, it needs that pool's
+# shared secret, and the pool has to exist before it means anything. Apply it
+# next to the pool it checks.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- runner.yaml

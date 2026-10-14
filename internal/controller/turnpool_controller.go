@@ -125,6 +125,15 @@ func (r *TURNPoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, fmt.Errorf("listing relay pods: %w", err)
 	}
 
+	// The published vantage result is read before anything is measured, and it
+	// takes no part in what the relays are: an in-cluster probe cannot speak
+	// for the vantage point, and the vantage point cannot speak for the cluster.
+	// It is read this early so the secret-missing path below reports it too.
+	vantageResult, err := r.observeVantage(ctx, pool)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	secret, err := r.sharedSecret(ctx, pool)
 	if err != nil {
 		return ctrl.Result{}, fmt.Errorf("reading the auth secret: %w", err)
@@ -135,7 +144,11 @@ func (r *TURNPoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		message := fmt.Sprintf("secret %s/%s has no key %q: relays cannot authenticate clients",
 			pool.Namespace, pool.Spec.Auth.SecretRef.Name, pool.Spec.Auth.SecretRef.Key)
 		r.Recorder.Eventf(pool, nil, corev1.EventTypeWarning, "AuthSecretMissing", "Validate", "%s", message)
-		if err := r.writeStatus(ctx, pool, &statusInputs{secretMissing: message}); err != nil {
+		if err := r.writeStatus(ctx, pool, &statusInputs{
+			secretMissing: message,
+			vantage:       vantageResult,
+			now:           r.now(),
+		}); err != nil {
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{RequeueAfter: secretRetryInterval}, nil
@@ -164,6 +177,8 @@ func (r *TURNPoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		plan:      &plan,
 		states:    states,
 		truncated: plan.Unplaced > 0,
+		vantage:   vantageResult,
+		now:       r.now(),
 	}); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -322,6 +337,11 @@ func (r *TURNPoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&turnfleetv1alpha1.TURNPool{}).
 		Owns(&corev1.Pod{}).
 		Owns(&corev1.ConfigMap{}).
+		// The vantage result is written by a runner the operator does not own
+		// and does not schedule, so it carries no owner reference and is
+		// matched by its labels instead. A runner's write lands in the pool's
+		// status on the next pass.
+		Watches(&corev1.ConfigMap{}, handler.EnqueueRequestsFromMapFunc(r.poolsForVantageResult)).
 		// A relay node losing its label, or changing its address, changes the
 		// plan, so nodes are watched as well.
 		Watches(&corev1.Node{}, handler.EnqueueRequestsFromMapFunc(r.poolsForNode),
@@ -430,6 +450,13 @@ type statusInputs struct {
 	plan      *relay.Plan
 	states    []*relayState
 	truncated bool
+
+	// vantage is what the pool's published result says, read this pass.
+	vantage vantageObservation
+
+	// now is the clock the pass ran on, which is what makes a published result
+	// stale rather than current.
+	now time.Time
 
 	// secretMissing is set when the pool's auth Secret is unusable, which makes
 	// the whole pool Degraded regardless of what the relays are doing.

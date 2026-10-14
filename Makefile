@@ -168,7 +168,7 @@ test-e2e: kind-up docker-build build install ## Run the end-to-end suite against
 	$(MAKE) load-images
 	$(MAKE) deploy KUSTOMIZE_OVERLAY=config/e2e
 	KUBE_CONTEXT=$(KUBE_CONTEXT) KIND_CLUSTER=$(KIND_CLUSTER) COTURN_IMAGE="$(COTURN_IMAGE)" \
-		PROBE_BIN="$(abspath $(PROBE_BIN))" \
+		PROBE_BIN="$(abspath $(PROBE_BIN))" PROBE_IMG="$(PROBE_IMG)" \
 		$(GO) test -tags=e2e -count=1 -timeout 30m ./test/e2e/
 
 # The chart path through the same cluster: the controller (and the CRDs) come
