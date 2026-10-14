@@ -29,9 +29,10 @@ sources, and the image keeps its own BSD-3-Clause license. The operator only
 writes coturn configuration (mounted as a ConfigMap, see ADR 8) and passes a
 small set of flags verified against that exact image.
 
-`spec.dataplane.image` defaults to the pin above and must be a digest-pinned
-reference; the validating webhook rejects a tag-only image so a pool can never
-silently float to a new relay version.
+`spec.dataplane.image` must be a digest-pinned reference: the field is required
+and has no default, and the validating webhook rejects an empty or tag-only
+image, so a pool always names the image it runs and can never silently float to
+a new relay version.
 
 ## Consequences
 

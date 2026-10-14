@@ -14,10 +14,11 @@ tables was a copy of a number that already existed in `go.mod`,
 "verification log" section whose job was to argue that the copies still agreed.
 
 Nothing kept them in step. `make verify` runs the generated-file diff, the
-header check and the harness-link check; no script compared a table row against
-its source, because none existed (`hack/` holds `verify-dco.sh`,
-`verify-headers.sh`, `verify-harness-links.sh`). The release-check skill could
-only tell a human to "diff them, do not trust the table", which is the tell: a
+header check, the harness-link check, the chart's CRD copy and `go mod tidy`;
+no script compared a table row against its source, because none existed (`hack/`
+holds `verify-dco.sh`, `verify-headers.sh` and `verify-harness-links.sh`, the
+checks it had). The release-check skill could only tell a human to "diff them,
+do not trust the table", which is the tell: a
 document that cannot be trusted is a document that will be wrong, and a stale
 digest or a stale Action SHA in a table is worse than no table, because it
 reads as verified.

@@ -23,8 +23,11 @@ The state machine, applied by the controller and observable in
 2. The relay is removed from `status.turnURIs` and from the
    `<pool>-turn-uris` ConfigMap, so the credential issuer stops handing out
    URIs for it. This happens before any pod change.
-3. The relay pod's readiness probe fails, which keeps traffic off the pod on
-   any path that still checks readiness.
+3. The pod is labelled `turnfleet.hzmi.dev/draining=true` and annotated with
+   the time the drain started. Readiness off the relay is the controller's own
+   `status.readyRelays`, which excludes a draining relay; a pod whose pool has a
+   TCP listener also carries a TCP readiness probe, and the drain does not fail
+   that by itself.
 4. The controller waits for the relay's allocation count (from coturn metrics,
    ADR 5) to reach zero, or for `spec.drainTimeout` to expire, whichever comes
    first. Draining is bounded: a stuck client cannot block a rollout forever.

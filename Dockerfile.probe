@@ -20,6 +20,9 @@ RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
     go build -trimpath -a -ldflags "${LDFLAGS}" -o /out/turnfleet-probe ./cmd/turnfleet-probe
 
 FROM ${RUNTIME_IMAGE}
+# RUNTIME_IMAGE is declared before the first FROM, which puts it out of scope
+# here: without this line the label below expands to an empty string.
+ARG RUNTIME_IMAGE
 ARG TARGETOS
 ARG TARGETARCH
 LABEL org.opencontainers.image.title="turnfleet-probe" \
