@@ -11,7 +11,7 @@ not work, and the reasons are worth recording because the failure mode is
 silent.
 
 **Kubernetes Services have no port ranges.** In the pinned API
-(`k8s.io/api@v0.37.0`, `core/v1/types.go`), `ServicePort` has a single
+(`k8s.io/api@v0.37.1`, `core/v1/types.go`), `ServicePort` has a single
 `int32 port` and an optional `NodePort`; there is no `endPort` field. Port
 ranges exist in Kubernetes only in NetworkPolicy
 (`NetworkPolicyPort.EndPort`, KEP-2079). Expressing a 16k-port relay range as a

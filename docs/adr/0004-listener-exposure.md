@@ -31,9 +31,12 @@ The rendering rules that follow from this:
 * Listener ports are unique within a pool, and the same port is reused on every
   relay (`name` + `protocol` identifies a listener, not an address).
 * TLS listeners reference a Secret in the pool's namespace
-  (`tlsSecretRef`); its content is hashed into the pod's
-  `turnfleet.hzmi.dev/config-hash` annotation so a rotation rolls the relays
-  one at a time with drain.
+  (`tlsSecretRef`), which is mounted into the relay pod and read by coturn when
+  it starts. The pod's `turnfleet.hzmi.dev/config-hash` covers the rendered
+  configuration, the image, the resources and the placement — not the Secret's
+  content — so rotating a serving certificate does not by itself roll the
+  relays; it reaches a relay when that relay is restarted for another reason or
+  is replaced.
 
 ## Consequences
 

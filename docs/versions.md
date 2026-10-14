@@ -52,10 +52,10 @@ floor stays current because the module is pinned here anyway and the fix is an
 upstream backport, not because the code is exploitable.
 
 `k8s.io/kube-openapi` is held at `v0.0.0-20260721132016-d427ff9ee9ad`, the
-version every `k8s.io/*` v0.37.0 library requires. kustomize `v5.8.3`
+version every `k8s.io/*` v0.37.1 library requires. kustomize `v5.8.3`
 (`kyaml v0.21.3`) requires a newer kube-openapi whose schema conversion switched
 to `sigs.k8s.io/structured-merge-diff/v7`, which does not type-check against
-`k8s.io/apimachinery@v0.37.0` (it still uses v6). The module graph therefore
+`k8s.io/apimachinery@v0.37.1` (it still uses v6). The module graph therefore
 resolves to kustomize `v5.8.2`, which is what the `tool` directive pins. Moving
 past that requires the whole `k8s.io/*` set to move, which is a deliberate
 change, not a Renovate bump.
@@ -158,7 +158,7 @@ The pins were verified against the sources below, not from memory:
 
 * `kubectl`/`kind`/`controller-runtime`/`controller-tools`/`envtest` versions
   were cross-checked so that the envtest control plane (1.37.0) matches the
-  `k8s.io/*` libraries (v0.37.0) that controller-runtime requires. The kind node
+  `k8s.io/*` libraries (v0.37.1) that controller-runtime requires. The kind node
   image must stay on that same Kubernetes minor version (`renovate.json` groups
   it).
 * Claude Code 2.1.278 is the floor for `AGENTS.md` support:

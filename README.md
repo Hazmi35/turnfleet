@@ -105,10 +105,11 @@ make helm-install       # chart install: CRDs, RBAC, the controller, metrics
 
 `make helm-install` passes the image the Makefile just built and loaded, so it is
 the same dev image `make deploy` runs. It renders what `config/default` renders;
-`charts/turnfleet/values.yaml` lists what is configurable, and `make helm-lint`
-and `make helm-drift` check the chart against `config/` (the drift guard fails
-when the two stop agreeing). Installing from the chart replaces the two steps
-above, so run `make install`/`make deploy` or `make helm-install`, not both.
+`charts/turnfleet/values.yaml` lists what is configurable, `make helm-lint`
+lints it, and `make helm-drift` is the guard that checks it against `config/`
+(it fails when the two stop agreeing). Installing from the chart replaces the
+two steps above, so run `make install`/`make deploy` or `make helm-install`, not
+both.
 
 A release publishes the same chart as an OCI artifact on ghcr.io, at the
 release's version, so a consumer with no checkout installs the released chart:
@@ -236,5 +237,8 @@ AGPL-3.0-only. See [LICENSE](LICENSE). The TURN data plane is the upstream
 from coturn is vendored into this repository.
 
 The Go module is `github.com/Hazmi35/turnfleet` and the API group is
-`turnfleet.hzmi.dev` (version `v1alpha1`, kind `TURNPool`). Every label,
-annotation and finalizer carries the `turnfleet.hzmi.dev/` prefix.
+`turnfleet.hzmi.dev` (version `v1alpha1`, kind `TURNPool`). The project's own
+labels, annotations and finalizers — the relay-node label, the relay-address and
+config-hash annotations, the drain finalizer — carry the `turnfleet.hzmi.dev/`
+prefix; the objects a pool owns also carry the standard `app.kubernetes.io/*`
+labels.

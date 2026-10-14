@@ -54,7 +54,7 @@ its own port range, delivered without a load balancer.
 | --- | --- | --- | --- | --- |
 | `HostNetwork` | 1 (required anti-affinity) | the node's `ExternalIP` (or the `turnfleet.hzmi.dev/relay-address` annotation) | the whole range | `end - start + 1` |
 | `PartitionedIP` | `addressing.partitionedIP.relaysPerNode` | the node address, shared by all relays on that node | `(end - start + 1) / relaysPerNode`, remainder to the first slices | still `end - start + 1` — **splitting an IP does not create ports** |
-| `ExternalIPPool` | one per declared address | the declared secondary address | the whole range | `addresses on that node × (end - start + 1)` |
+| `ExternalIPPool` | 1 (required anti-affinity, as in `HostNetwork`) | the declared secondary address | the whole range | `end - start + 1` |
 
 Every mode here binds a node address. A fourth mode for routable, stable pod or
 secondary addresses is tracked in #15; its prerequisites are stated in the issue
@@ -64,8 +64,14 @@ Growing capacity:
 
 * `HostNetwork`: add nodes with the relay-node label. Each new node is a new
   public address and a fresh port space.
-* `ExternalIPPool`: attach more secondary addresses to existing nodes (cloud
-  elastic IPs) and add them to `addressing.externalIPPool.addresses`.
+* `ExternalIPPool`: declare an address on another node and add it to
+  `addressing.externalIPPool.addresses`. Every declared address is planned as
+  its own relay, but only one relay of a single-family pool is schedulable per
+  node: the required anti-affinity that keeps one relay per node (the rule
+  `HostNetwork` follows) applies to every mode but `PartitionedIP`, so a second
+  address declared on a node that already runs a relay is planned and never
+  scheduled. Attaching cloud secondary addresses to existing nodes is what this
+  mode exists for, and it is not there yet (#11).
 * `PartitionedIP`: this mode does **not** add capacity on a node. It exists so
   several relays can share an address when the address is a scarce resource —
   more processes, more concurrency and per-process blast-radius isolation, but
@@ -120,12 +126,17 @@ offset per address.
 
 An IPv6 pool binds IPv6 addresses only: a client reaches a relay on the address
 its own path uses, so a v6 relay has v6 peers and a v4 relay has v4 peers. The
-default peer deny list follows the family for the same reason (see ADR 13), and
-a peer range of the other family is rejected rather than kept as decoration.
+default peer deny list follows the family for the same reason (see ADR 13): the
+defaulting webhook picks it from `family`, and a pool that never passed
+admission (see `config/default`) is given the v4 list by the controller, so an
+IPv6 or `DualStack` pool installed without webhooks should declare
+`peerPolicy.deniedCIDRs` itself. A peer range of the other family is rejected
+rather than kept as decoration.
 
 A node without an address in a planned family hosts no relay there. An IPv6 pool
-on IPv4-only nodes places nothing and says so in `status.conditions` and
-`status.unplacedRelays`, rather than quietly falling back to IPv4.
+on IPv4-only nodes places nothing and reports the shortfall on the `Ready` and
+`Degraded` conditions, whose messages carry the planner's notes, rather than
+quietly falling back to IPv4.
 
 The `turnfleet.hzmi.dev/relay-address` annotation overrides the advertised
 address of the family it names — one annotation covers one family, and the other
@@ -172,10 +183,10 @@ Exhaustion is visible in three places:
 * The `CapacityPressure` condition, which becomes true when a relay crosses the
   configured ratio or a probe observed a 508.
 
-Allocation counts come from coturn's own Prometheus endpoint
-(`coturn_turn_total_allocations{type}` is a gauge of current allocations); the
-source and the reason per-code counters are probe-derived are in
-`docs/adr/0005-metrics-source.md`.
+Allocation counts come from coturn's own Prometheus endpoint, whose gauge is
+`turn_total_allocations{type}` — coturn's exposition carries no `coturn_` prefix
+— summed over the socket types; the source and the reason per-code counters are
+probe-derived are in `docs/adr/0005-metrics-source.md`.
 
 **Saturation is per relay, not per pool.** When one relay is full, clients
 handed a URI for it fail while every other relay still serves. That is why

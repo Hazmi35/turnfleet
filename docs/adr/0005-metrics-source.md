@@ -50,8 +50,10 @@ fake capacity pressure.
 * `portsInUse`/`portsTotal` in the status are real numbers from the data plane,
   so consumers can compute a ratio themselves (the API has no floats).
 * `CapacityPressure` is triggered when `portsInUse / portsTotal` crosses the
-  configured threshold *and* a probe observed a 508, which is the only
-  unambiguous proof that the relay is actually refusing allocations.
+  configured threshold *or* a probe observed a 508, which is the only
+  unambiguous proof that the relay is actually refusing allocations. Either is
+  enough: a probe that was refused means the relay is full even if the gauge has
+  not caught up, and a gauge at the threshold means it is about to be.
 * The probe's own allocation briefly occupies a port. The controller releases
   it (`Refresh` with lifetime 0) at the end of every probe, and the threshold
   logic tolerates the transient by using coturn's steady-state gauge rather

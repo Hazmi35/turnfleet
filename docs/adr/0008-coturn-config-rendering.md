@@ -82,13 +82,14 @@ does not model.
 
 ## Consequences
 
-* Configuration is reviewable (`kubectl get cm <pool>-relay-<hash> -o yaml`) and
-  is the first thing `e2e-debug` looks at.
+* Configuration is reviewable (`kubectl get cm <pool>-relay-config -o yaml`,
+  one key per relay) and is the first thing `e2e-debug` looks at.
 * The "consider it a bug if you render a flag that does not exist" rule is
   mechanical, not a review habit.
-* Denied peer ranges are asserted by a unit test that the default deny list
-  covers RFC 1918, RFC 6598, loopback, link-local (including
-  `169.254.169.254`) and the cluster pod/service CIDRs. The IPv6 golden files do
-  the same for loopback, link-local, unique local addresses and the IPv4-mapped
-  space `::ffff:0:0/96`, which is where the metadata address lives for an IPv6
-  peer.
+* Denied peer ranges are asserted by the golden render tests: the IPv4 golden
+  files carry the default list (RFC 1918, RFC 6598, loopback, link-local
+  including `169.254.169.254`, benchmarking, multicast, reserved), and the IPv6
+  ones the family-specific list (loopback, link-local, unique local addresses,
+  multicast and the IPv4-mapped space `::ffff:0:0/96`, which is where the
+  metadata address lives for an IPv6 peer). That a relay denies its own
+  cluster's addresses is an e2e case, not a unit test.

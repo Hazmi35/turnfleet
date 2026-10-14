@@ -23,7 +23,7 @@ flowchart LR
   issuer["credential issuer<br/>(not in this repo)"]
   agent["turnfleet-controller"]
   pool["TURNPool"]
-  cm["ConfigMap<br/>pool-turn-uris"]
+  cm["ConfigMap<br/>&lt;pool&gt;-turn-uris"]
   subgraph node["relay node (label turnfleet.hzmi.dev/relay-node=true)"]
     relay["relay pod (hostNetwork)<br/>coturn: listener + relay range"]
   end
@@ -154,15 +154,21 @@ disappears; the failure counter is cumulative, so read it as a rate.
 A relay must never reach in-cluster or metadata addresses unless a pool
 explicitly allows it. The default deny list (rendered as `--denied-peer-ip`)
 covers RFC 1918, RFC 6598 (CGNAT), loopback, link-local including
-`169.254.169.254`, and the cluster pod and service CIDRs. `allowedCIDRs` emits
-`--allowed-peer-ip` entries. This is what stops a relay from being turned into
-an SSRF pivot into the cluster (see the e2e peer-policy case).
+`169.254.169.254`, benchmarking, multicast and the reserved ranges; it does not
+enumerate cluster networks. On top of it, and on top of whatever
+`peerPolicy.deniedCIDRs` names, the controller always denies the pod CIDRs it
+observes on the relay nodes and every CIDR passed on `--cluster-cidrs`, so a
+cluster whose pod or service network is not RFC 1918 is still denied.
+`allowedCIDRs` emits `--allowed-peer-ip` entries. This is what stops a relay
+from being turned into an SSRF pivot into the cluster (see the e2e peer-policy
+case).
 
 A pool that declares no `peerPolicy`, or an empty `deniedCIDRs` list, gets that
 default: the defaulting webhook applies it, and so does the controller, because
 `config/default` runs without admission webhooks and a spec that arrives from
-there has been defaulted by nobody. A pool that declares its own list gets
-exactly that list, never the default added to it.
+there has been defaulted by nobody. A pool that declares its own list gets that
+list — the default is not added to it — plus the cluster CIDRs above, which the
+controller adds either way.
 
 ## What is deliberately not here
 
