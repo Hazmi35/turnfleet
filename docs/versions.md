@@ -112,7 +112,7 @@ The chart carries no version of its own for the images: `make helm-install`
 passes the Makefile's `IMAGE_REGISTRY` and `IMAGE_TAG`, the same values
 `make deploy` sets on the cluster. Installed without those flags the chart uses
 its `appVersion`, which is the release version — the chart's `version` and
-`appVersion` are the same number, `0.1.0` for the tag `v0.1.0`, and the released
+`appVersion` are the same number, `X.Y.Z` for the tag `vX.Y.Z`, and the released
 image carries that number beside the tag. A release bumps both before it is
 created, so an install without flags gets the released image.
 
