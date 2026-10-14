@@ -72,6 +72,12 @@
       "groupName": "test frameworks",
       "matchUpdateTypes": ["major"],
       "matchPackageNames": ["github.com/onsi/ginkgo/v2", "github.com/onsi/gomega"]
+    },
+    {
+      "description": "The chart's default image tag is its appVersion, the release version (ADR 17), so this file is not a pin any bot should move. `docker:pinDigests` reads `image.repository` plus the empty `tag:` as a docker dependency and writes the digest into the tag — `tag: \"@sha256:…\"` — which renders `ghcr.io/hazmi35/turnfleet-controller:@sha256:…`, an invalid reference that stops the chart installing. That is what pull request #50 did; the chart follows the release, and the release is the maintainer's act.",
+      "matchFileNames": ["charts/turnfleet/values.yaml"],
+      "matchDatasources": ["docker"],
+      "enabled": false
     }
   ],
   "gomod": {

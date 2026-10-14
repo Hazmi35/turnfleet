@@ -21,9 +21,9 @@ output as evidence for each one; "looks fine" is not evidence.
    helm-verify` does not exercise (it lints and compares renders, it installs
    nothing).
 4. **`charts/turnfleet`'s `version` and `appVersion` are the release version**,
-   on the commit being released: `version` is the chart's semver (`0.1.0`) and
-   `appVersion` is the image tag the chart installs by default (`0.1.0`, the
-   number beside the git tag's `v0.1.0`). They are the same number on purpose.
+   on the commit being released: `version` is the chart's semver (`X.Y.Z`) and
+   `appVersion` is the image tag the chart installs by default (`X.Y.Z`, the
+   number beside the git tag's `vX.Y.Z`). They are the same number on purpose.
    Bumping either after the release leaves it carrying the previous one. The
    Release workflow checks both against the release tag before it publishes the
    chart, so a bump missed here fails the release instead of publishing a chart
