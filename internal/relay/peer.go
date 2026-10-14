@@ -18,6 +18,8 @@ import (
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+	turnfleetv1alpha1 "github.com/Hazmi35/turnfleet/api/v1alpha1"
 )
 
 // Defaults applied by the defaulting webhook. They are constants rather than
@@ -80,6 +82,45 @@ func DefaultDeniedCIDRs() []string {
 	}
 }
 
+// DefaultDeniedCIDRsV6 is the IPv6 half of the default peer deny list.
+//
+// It mirrors the IPv4 list where IPv6 has an equivalent: loopback, link-local
+// (fe80::/10), unique local addresses (fc00::/7, the IPv6 RFC 1918) and
+// multicast. ::ffff:0:0/96 matters twice over: it is the whole IPv4-mapped
+// space as an IPv6 prefix, so it denies the metadata address in its mapped form
+// ::ffff:169.254.169.254 as well as the IPv4 list denies it directly.
+//
+// coturn matches a peer address against these ranges whichever family the
+// allocation is in, so an IPv6 relay receives the IPv6 ranges and the IPv4 ones.
+func DefaultDeniedCIDRsV6() []string {
+	return []string{
+		"::/128",        // unspecified ("this host")
+		"::1/128",       // loopback
+		"::ffff:0:0/96", // IPv4-mapped, including ::ffff:169.254.169.254
+		"fc00::/7",      // unique local addresses (RFC 4193)
+		"fe80::/10",     // link-local
+		"ff00::/8",      // multicast
+	}
+}
+
+// DefaultDeniedCIDRsFor returns the default deny list for a pool's address
+// family: the IPv6 list for an IPv6 pool, the IPv4 list for an IPv4 one, and
+// both for a DualStack pool, which has peers of both families.
+//
+// A relay only ever reaches peers in its own address family — a v6 relay socket
+// sends to v6 addresses — so the ranges of the other family would only make the
+// list longer without denying anything.
+func DefaultDeniedCIDRsFor(family turnfleetv1alpha1.AddressingFamily) []string {
+	switch family {
+	case turnfleetv1alpha1.AddressingFamilyIPv6:
+		return DefaultDeniedCIDRsV6()
+	case turnfleetv1alpha1.AddressingFamilyDualStack:
+		return MergeCIDRs(DefaultDeniedCIDRs(), DefaultDeniedCIDRsV6())
+	default:
+		return DefaultDeniedCIDRs()
+	}
+}
+
 // PeerRange converts a CIDR into the value coturn accepts for
 // --denied-peer-ip and --allowed-peer-ip.
 //
@@ -102,6 +143,23 @@ func PeerRange(cidr string) (string, error) {
 		return first.String(), nil
 	}
 	return first.String() + "-" + last.String(), nil
+}
+
+// PeerCIDRFamily reports the address family a peer CIDR names, so a pool can
+// be told that a range it declares can never match its relays' peers.
+//
+// The family is the one the notation belongs to, and a prefix is not unmapped
+// the way a bare address is: ::ffff:0:0/96 is an IPv6 prefix that covers the
+// whole IPv4-mapped space, while ::ffff:203.0.113.9 is an IPv4 address.
+func PeerCIDRFamily(cidr string) (turnfleetv1alpha1.AddressingFamily, error) {
+	prefix, err := netip.ParsePrefix(strings.TrimSpace(cidr))
+	if err != nil {
+		return "", fmt.Errorf("parsing peer CIDR %q: %w", cidr, err)
+	}
+	if prefix.Addr().Is4() {
+		return turnfleetv1alpha1.AddressingFamilyIPv4, nil
+	}
+	return turnfleetv1alpha1.AddressingFamilyIPv6, nil
 }
 
 // lastAddr returns the last address covered by prefix.

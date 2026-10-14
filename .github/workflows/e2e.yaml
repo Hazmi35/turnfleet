@@ -32,7 +32,9 @@ jobs:
   e2e:
     name: e2e
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    # The suite's 60 minutes plus the chart install's 30: this job installs the
+    # controller twice, once from kustomize and once from the chart.
+    timeout-minutes: 90
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -60,3 +62,12 @@ jobs:
       - name: Run the end-to-end suite
         timeout-minutes: 60
         run: make test-e2e
+
+      # The chart is an installer for the same controller the suite just ran:
+      # this removes what kustomize deployed, installs the CRDs and the
+      # controller from charts/turnfleet, and probes a relay from a pool created
+      # against that install. `make helm-drift` already proved the chart renders
+      # what config/ renders; this proves the install works on a real cluster.
+      - name: Install the controller from the chart and probe a relay
+        timeout-minutes: 30
+        run: make test-e2e-chart

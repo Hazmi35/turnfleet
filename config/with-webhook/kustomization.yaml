@@ -4,8 +4,22 @@
 #   make deploy KUSTOMIZE_OVERLAY=config/with-webhook
 #
 # Everything else (CRDs, RBAC, the manager, metrics) comes from ../default.
+#
+# The namespace is repeated here because kustomize's transformers only reach the
+# resources of the kustomization that declares them: ../default applies
+# `namespace: turnfleet-system` and `namePrefix: turnfleet-` to its own
+# resources, so the webhook Service, the cert-manager Issuer/Certificates and
+# the two webhook configurations — added here, not inside ../default — are
+# outside that scope. Without this line they land in a namespace called
+# `system`, their references follow, and the manager (in turnfleet-system)
+# mounts a serving-certificate Secret that cert-manager created in the wrong
+# namespace. Only the namespace is repeated: repeating `namePrefix` here would
+# prefix ../default's resources a second time
+# (`turnfleet-turnfleet-controller-manager`).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
+
+namespace: turnfleet-system
 
 resources:
 - ../default
@@ -36,65 +50,49 @@ patches:
               value: "true"
 
 replacements:
-# - source: # Uncomment the following block to enable certificates for metrics
-#     kind: Service
-#     version: v1
-#     name: controller-manager-metrics-service
-#     fieldPath: metadata.name
-#   targets:
-#     - select:
-#         kind: Certificate
-#         group: cert-manager.io
-#         version: v1
-#         name: metrics-certs
-#       fieldPaths:
-#         - spec.dnsNames.0
-#         - spec.dnsNames.1
-#       options:
-#         delimiter: '.'
-#         index: 0
-#         create: true
-#     - select: # Uncomment the following to set the Service name for TLS config in Prometheus ServiceMonitor
-#         kind: ServiceMonitor
-#         group: monitoring.coreos.com
-#         version: v1
-#         name: controller-manager-metrics-monitor
-#       fieldPaths:
-#         - spec.endpoints.0.tlsConfig.serverName
-#       options:
-#         delimiter: '.'
-#         index: 0
-#         create: true
+# The metrics Certificate is part of this overlay (../certmanager), so its
+# dnsNames are filled in here. The source is the metrics Service as ../default
+# names it: the prefix is applied inside ../default, so the name to match is the
+# rendered one. The matching upstream targets for a Prometheus ServiceMonitor
+# are left out because this overlay installs no ServiceMonitor (../prometheus is
+# not in its resources).
+ - source:
+     kind: Service
+     version: v1
+     name: turnfleet-controller-manager-metrics-service
+     fieldPath: metadata.name
+   targets:
+     - select:
+         kind: Certificate
+         group: cert-manager.io
+         version: v1
+         name: metrics-certs
+       fieldPaths:
+         - spec.dnsNames.0
+         - spec.dnsNames.1
+       options:
+         delimiter: '.'
+         index: 0
+         create: true
 
-# - source:
-#     kind: Service
-#     version: v1
-#     name: controller-manager-metrics-service
-#     fieldPath: metadata.namespace
-#   targets:
-#     - select:
-#         kind: Certificate
-#         group: cert-manager.io
-#         version: v1
-#         name: metrics-certs
-#       fieldPaths:
-#         - spec.dnsNames.0
-#         - spec.dnsNames.1
-#       options:
-#         delimiter: '.'
-#         index: 1
-#         create: true
-#     - select: # Uncomment the following to set the Service namespace for TLS in Prometheus ServiceMonitor
-#         kind: ServiceMonitor
-#         group: monitoring.coreos.com
-#         version: v1
-#         name: controller-manager-metrics-monitor
-#       fieldPaths:
-#         - spec.endpoints.0.tlsConfig.serverName
-#       options:
-#         delimiter: '.'
-#         index: 1
-#         create: true
+ - source:
+     kind: Service
+     version: v1
+     name: turnfleet-controller-manager-metrics-service
+     fieldPath: metadata.namespace
+   targets:
+     - select:
+         kind: Certificate
+         group: cert-manager.io
+         version: v1
+         name: metrics-certs
+       fieldPaths:
+         - spec.dnsNames.0
+         - spec.dnsNames.1
+       options:
+         delimiter: '.'
+         index: 1
+         create: true
 
  - source: # Uncomment the following block if you have any webhook
      kind: Service

@@ -67,6 +67,12 @@ jobs:
       - name: Verify generated files
         run: make verify
 
+      # helm is downloaded by the target's own prerequisite (`make helm`), from
+      # the pinned HELM_VERSION in the Makefile, so no runner-side setup is
+      # needed here.
+      - name: Lint the chart and hold it against config/
+        run: make helm-verify
+
       - name: Lint
         run: make lint
 

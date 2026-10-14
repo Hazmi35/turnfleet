@@ -36,7 +36,14 @@ its statement and gains a pointer to the issue.
 * **An in-cluster probe can pass while external reachability fails.** Hairpin
   NAT and firewalls in front of a node are invisible from inside; the external
   `turnfleet-probe` run is the authoritative check
-  (`docs/adr/0007-probe-vantage-point.md`).
+  (`docs/adr/0007-probe-vantage-point.md`). A runner can now publish its result
+  for the controller to report (`ReachableFromVantage`,
+  `docs/adr/0015-vantage-result-delivery.md`), but **nothing shipped here puts
+  the vantage point outside the cluster**: `config/vantage/runner.yaml` runs in
+  a pod, and the controller cannot tell where a runner ran. Making the check
+  authoritative needs relay addresses that route from outside and ingress rules
+  per address, which the operator builds. Until then the condition reports what
+  a runner saw, not that a peer can connect.
 * **Webhooks need certificates in-cluster, so they live in their own overlay.**
   `config/default` (what `make deploy` applies) runs the controller without
   admission webhooks; `config/with-webhook` adds the webhook configurations, the
@@ -54,8 +61,14 @@ its statement and gains a pointer to the issue.
   `port + relaysPerNode - 1`, and that span must stay outside
   `spec.relayPortRange`; the webhook rejects a pool where it does not
   (`docs/adr/0009-partitioned-listener-ports.md`).
-* **IPv6 and dual-stack relays are not implemented.** Relays bind IPv4
-  addresses only. Tracked in #13.
+* **IPv6 relay addresses are the node's own.** A pool with
+  `spec.addressing.family` set to `IPv6` or `DualStack` plans relays on a node's
+  IPv6 address, and the operator neither creates nor routes it: the node has to
+  have a globally reachable IPv6 address (or a declared one). A node without one
+  hosts no IPv6 relay, and the pool reports the replicas it could not place
+  instead of falling back to IPv4. Kind nodes cannot provide an IPv6 address, so
+  the IPv6 data path is proven against the pinned coturn image rather than by
+  `make test-e2e` (`docs/capacity-model.md`).
 * **`HostNetwork` needs a node address that clients can actually route to.** It
   binds the node's `ExternalIP`, or the `turnfleet.hzmi.dev/relay-address`
   annotation when the node has no `ExternalIP` or it is not the address clients

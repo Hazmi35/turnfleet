@@ -83,6 +83,82 @@ Growing capacity:
 `PartitionedIP` split is misconfigured shows the real number instead of the
 declared range.
 
+## Address families
+
+`spec.addressing.family` picks the address family of a pool's relay addresses:
+`IPv4` (the default), `IPv6`, or `DualStack`.
+
+A family is part of an address, not a separate pool of ports. Two relay
+addresses on one node are two port spaces; the same address never gains ports
+from a family:
+
+```
+ports per node = distinct relay addresses on that node × ports per address
+capacity       = Σ over relays of that relay's port range
+```
+
+So `DualStack` on a dual-stack node plans the mode's relay set once per family:
+
+| Mode | `IPv4` | `IPv6` | `DualStack` on a dual-stack node |
+| --- | --- | --- | --- |
+| `HostNetwork` | one relay on the node's IPv4 address | one relay on its IPv6 address | two relays, one per family, each with the whole range |
+| `PartitionedIP` | `relaysPerNode` slices of the IPv4 address | `relaysPerNode` slices of the IPv6 address | `relaysPerNode` slices of each address: the split is per address, and each split still sums to one port space |
+| `ExternalIPPool` | one relay per declared IPv4 address | one relay per declared IPv6 address | one relay per declared address of either family |
+
+`DualStack` therefore doubles a dual-stack node's port space, because it doubles
+its relay addresses, and adds nothing to a node that has only one. Ports per
+address are the same in both families: an IPv6 address has the same 65536-port
+space, minus what the node needs for listeners, ephemeral traffic and everything
+else bound on it.
+
+Relays of both families on one node need distinct metrics ports, because
+coturn's prometheus exporter binds every address on the node rather than the
+relay's own address (`prometheus exporter server will listen on [::]:9641`), and
+distinct listener ports only when they share an address. That is why a relay's
+`prometheus-port` is `9641 + its index on the node` while its listener port is
+offset per address.
+
+An IPv6 pool binds IPv6 addresses only: a client reaches a relay on the address
+its own path uses, so a v6 relay has v6 peers and a v4 relay has v4 peers. The
+default peer deny list follows the family for the same reason (see ADR 13), and
+a peer range of the other family is rejected rather than kept as decoration.
+
+A node without an address in a planned family hosts no relay there. An IPv6 pool
+on IPv4-only nodes places nothing and says so in `status.conditions` and
+`status.unplacedRelays`, rather than quietly falling back to IPv4.
+
+The `turnfleet.hzmi.dev/relay-address` annotation overrides the advertised
+address of the family it names — one annotation covers one family, and the other
+keeps the node's own address — and it has to be an IP address. A value that is
+not one, or that names a family the node has no address in, is reported as a
+reconcile error rather than advertising an address no peer can reach.
+
+### Checking IPv6 against a real relay
+
+The kind node image cannot give a relay node an IPv6 address, so the IPv6 path
+is not covered by `make test-e2e`. It is checked against the pinned coturn image
+instead, in a throwaway container that shares no network with the cluster:
+
+```sh
+# Render a v6 configuration, point it at IPv6 loopback, and let coturn parse it.
+sed -e 's/^listening-ip=.*/listening-ip=::1/' -e 's/^relay-ip=.*/relay-ip=::1/' \
+  -e '/^external-ip=/d' internal/relay/testdata/hostnetwork-v6.conf > /tmp/turnserver-v6.conf
+docker run -d --name tf-v6 -v /tmp/turnserver-v6.conf:/etc/turnserver.conf:ro \
+  coturn/coturn:4.18.0-r0 -c /etc/turnserver.conf
+
+# Probe it with the real probe, from the same network namespace.
+docker run --rm --network container:tf-v6 -v "$PWD/bin/turnfleet-probe:/turnfleet-probe:ro" \
+  coturn/coturn:4.18.0-r0 /turnfleet-probe \
+  --uri 'turn:[::1]:3478?transport=udp' --secret "$SECRET" \
+  --expect-address ::1 --expect-port-range 49152-49199 --json
+```
+
+The container's `/proc/net/tcp6` shows the listeners, and coturn's own log lines
+(`relay ::1 initialization`, `prometheus exporter server will listen on
+[::]:9641`) show what it bound. The same probe with `--peer-echo '[::1]:0'`
+proves the deny list bites: coturn answers `403` to the permission, because
+`::1/128` is in the default IPv6 deny list.
+
 ## Running out
 
 Exhaustion is visible in three places:
@@ -138,6 +214,25 @@ bin/turnfleet-probe --uri "turn:<relayAddress>:<listener-port>?transport=udp" \
   --expect-port-range <start>-<end> --json
 ```
 
+A runner can put that answer where the operator can see it, instead of leaving
+it in a terminal. `--uris-configmap` probes every URI the pool publishes and
+`--publish-configmap` writes the pass into the pool's `<pool>-vantage`
+ConfigMap; the controller reads that object into the pool's
+`ReachableFromVantage` condition, and a failing result also raises `Degraded`:
+
+```sh
+bin/turnfleet-probe --uris-configmap <pool>-turn-uris \
+  --publish-configmap <pool>-vantage --pool <pool> \
+  --namespace <pool-namespace> --secret-file ./turn-secret
+```
+
+`config/vantage/runner.yaml` is that command as a CronJob, with the role that
+lets it write its result and nothing else. **Running it in a pod proves the
+delivery path, not the vantage point**: a pod is on the cluster's network, so it
+sees exactly what the controller sees. Publish from a machine outside, and per
+pool, for the answer to be authoritative
+(`docs/adr/0015-vantage-result-delivery.md`).
+
 ## Firewall and network prerequisites
 
 On every relay node, allow:
@@ -149,9 +244,14 @@ On every relay node, allow:
 * outbound to the peers' networks (the resolved relay addresses), subject to
   `spec.peerPolicy`.
 
+The rules are per address: a `DualStack` node needs them on its IPv4 and its
+IPv6 address, and a client that reaches the node over IPv6 is only served by the
+relay bound to the IPv6 address.
+
 Turnfleet deliberately does not create a Service or security-group rule for the
 relay range: it cannot know how the node's address is exposed. When a relay
 advertises a public address that differs from the address it binds, the
 annotation `turnfleet.hzmi.dev/relay-address` or an `ExternalIPPool` entry
 declares the advertised address, and the renderer emits `-X public/private` so
-coturn advertises the public one.
+coturn advertises the public one. coturn maps one address to another within one
+family, so an IPv6 relay renders an IPv6 pair.

@@ -7,6 +7,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"net"
+	"net/netip"
 	"slices"
 	"strconv"
 	"strings"
@@ -85,6 +87,16 @@ type Relay struct {
 	// partitioned relay but the first would fail to bind and the mode would
 	// serve a fraction of the capacity it claims.
 	ListenerPortOffset int32
+
+	// MetricsPortOffset is added to the metrics port.
+	//
+	// coturn's prometheus exporter does not bind the relay's own address: it
+	// binds every address on the node ("prometheus exporter server will listen
+	// on [::]:9641", verified against the pinned image). Relays that share a
+	// node therefore need distinct metrics ports even when they own different
+	// addresses, which is exactly what a DualStack pool does — one relay per
+	// address family on the node.
+	MetricsPortOffset int32
 }
 
 // Capacity is the number of concurrent allocations this relay can hold.
@@ -95,18 +107,36 @@ type Node struct {
 	// Name is the node's name.
 	Name string
 
-	// Address is the address a HostNetwork or PartitionedIP relay on this node
-	// advertises: the node's ExternalIP, or the
-	// turnfleet.hzmi.dev/relay-address override.
-	Address string
-
-	// BindAddress is the local address to bind, usually equal to Address. It
-	// differs when Address is a NATed public address.
-	BindAddress string
+	// Addresses are the node's own addresses for HostNetwork and PartitionedIP
+	// relays: at most one per address family. They are sorted by family (IPv4
+	// first), which is what makes a DualStack pool deterministic.
+	Addresses []NodeAddress
 
 	// SecondaryAddresses are the addresses declared for this node in the pool's
 	// externalIPPool, sorted. They are only used by the ExternalIPPool mode.
 	SecondaryAddresses []string
+}
+
+// NodeAddress is one address a relay on a node could advertise, with the local
+// address it would bind.
+type NodeAddress struct {
+	// Address is the address the relay advertises in XOR-RELAYED-ADDRESS.
+	Address string
+
+	// BindAddress is the local address the relay binds. It differs from Address
+	// when the advertised address is not local (a NAT public address, or the
+	// turnfleet.hzmi.dev/relay-address override).
+	BindAddress string
+}
+
+// addressOf returns the node's address in one family.
+func (n Node) addressOf(family turnfleetv1alpha1.AddressingFamily) (NodeAddress, bool) {
+	for _, address := range n.Addresses {
+		if AddressFamilyOf(address.Address) == family {
+			return address, true
+		}
+	}
+	return NodeAddress{}, false
 }
 
 // PlanInput is everything the planner needs. It never reads from the cluster
@@ -165,22 +195,65 @@ func ConfigHash(config string) string {
 	return hex.EncodeToString(sum[:])
 }
 
+// AddressFamilyOf reports the address family an address belongs to, or the
+// empty family when the string is not an IP address. An IPv4-mapped IPv6
+// address is IPv4: it reaches an IPv4 peer.
+func AddressFamilyOf(address string) turnfleetv1alpha1.AddressingFamily {
+	addr, err := netip.ParseAddr(strings.TrimSpace(address))
+	if err != nil {
+		return ""
+	}
+	if addr.Unmap().Is4() {
+		return turnfleetv1alpha1.AddressingFamilyIPv4
+	}
+	return turnfleetv1alpha1.AddressingFamilyIPv6
+}
+
+// AddressFamilies returns the families a pool plans relays in, IPv4 first so
+// the plan is deterministic.
+//
+// An unset family is the default, IPv4. So is a value the CRD enum rejects:
+// like the API default, the planner reads it as IPv4 rather than dropping every
+// relay, and the webhook is what tells an author their value is not supported.
+func AddressFamilies(family turnfleetv1alpha1.AddressingFamily) []turnfleetv1alpha1.AddressingFamily {
+	switch family {
+	case turnfleetv1alpha1.AddressingFamilyIPv6:
+		return []turnfleetv1alpha1.AddressingFamily{turnfleetv1alpha1.AddressingFamilyIPv6}
+	case turnfleetv1alpha1.AddressingFamilyDualStack:
+		return []turnfleetv1alpha1.AddressingFamily{
+			turnfleetv1alpha1.AddressingFamilyIPv4,
+			turnfleetv1alpha1.AddressingFamilyIPv6,
+		}
+	default:
+		return []turnfleetv1alpha1.AddressingFamily{turnfleetv1alpha1.AddressingFamilyIPv4}
+	}
+}
+
+// PlansFamily reports whether a pool's family selection includes one family.
+func PlansFamily(selected, family turnfleetv1alpha1.AddressingFamily) bool {
+	return slices.Contains(AddressFamilies(selected), family)
+}
+
 // ListenerURIs builds the TURN URIs clients can use to allocate on a relay.
 //
 // They are per relay and per listener: the credential issuer hands out the URI
 // of a relay that has capacity, so a client never wastes a gathering cycle on a
 // relay that is full or draining.
+//
+// The authority is wrapped the way RFC 7065 requires, so an IPv6 relay address
+// reads turn:[2001:db8::1]:3478 rather than an unparseable turn:2001:db8::1:3478.
 func ListenerURIs(r *Relay, listeners []turnfleetv1alpha1.ListenerSpec) []string {
 	uris := make([]string, 0, len(listeners))
 	for _, listener := range listeners {
 		port := listener.Port + r.ListenerPortOffset
+		hostPort := net.JoinHostPort(r.Address, strconv.Itoa(int(port)))
 		switch listener.Protocol {
 		case turnfleetv1alpha1.ListenerProtocolUDP:
-			uris = append(uris, fmt.Sprintf("turn:%s:%d?transport=udp", r.Address, port))
+			uris = append(uris, fmt.Sprintf("turn:%s?transport=udp", hostPort))
 		case turnfleetv1alpha1.ListenerProtocolTCP:
-			uris = append(uris, fmt.Sprintf("turn:%s:%d?transport=tcp", r.Address, port))
+			uris = append(uris, fmt.Sprintf("turn:%s?transport=tcp", hostPort))
 		case turnfleetv1alpha1.ListenerProtocolTLS:
-			uris = append(uris, fmt.Sprintf("turns:%s:%d?transport=tcp", r.Address, port))
+			uris = append(uris, fmt.Sprintf("turns:%s?transport=tcp", hostPort))
 		}
 	}
 	slices.Sort(uris)
@@ -194,13 +267,11 @@ func (r *Relay) ListenerPort(listener *turnfleetv1alpha1.ListenerSpec) int32 {
 
 // MetricsPort is the port coturn serves its metrics endpoint on.
 //
-// It is offset for the same reason the listener ports are: relays that share a
-// node address cannot both bind one port, and the scheduler treats the ports a
-// hostNetwork pod declares as host ports, so an un-offset metrics port would
-// both fail to bind and stop a second relay on the node from being scheduled at
-// all.
+// It is offset for the same reason the listener ports are: relays on one node
+// cannot both bind one port, and coturn's metrics endpoint binds every address
+// on the node rather than the relay's own address.
 func (r *Relay) MetricsPort() int32 {
-	return DefaultPrometheusPort + r.ListenerPortOffset
+	return DefaultPrometheusPort + r.MetricsPortOffset
 }
 
 // HighestListenerPort is the largest listener port this relay serves.

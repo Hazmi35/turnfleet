@@ -47,9 +47,22 @@ const (
 	// ports. Disjoint ranges on a shared address are legal.
 	ConditionAddressConflict = "AddressConflict"
 
+	// ConditionReachableFromVantage is true when the latest result published by
+	// a vantage runner says every listener URI the pool publishes answered a
+	// TURN Allocate where the runner ran, false when one of them did not, and
+	// unknown while no current result has been published.
+	//
+	// It is computed from the published result alone: an in-cluster probe
+	// passing cannot clear a failing observation, and a runner is expected to
+	// run outside the cluster's network, where hairpin NAT and a firewall in
+	// front of a relay node are visible (docs/adr/0007-probe-vantage-point.md,
+	// docs/adr/0015-vantage-result-delivery.md).
+	ConditionReachableFromVantage = "ReachableFromVantage"
+
 	// ConditionDegraded is true when the pool is not what it should be: relays
-	// that could not be placed, a missing pod, an unusable auth Secret, or a
-	// relay identity that overlaps another pool's.
+	// that could not be placed, a missing pod, an unusable auth Secret, a
+	// relay identity that overlaps another pool's, or a vantage point that
+	// cannot reach the relays.
 	ConditionDegraded = "Degraded"
 )
 
@@ -92,6 +105,9 @@ func buildStatus(pool *turnfleetv1alpha1.TURNPool, inputs *statusInputs) *turnfl
 		setCondition(status, ConditionProbeSucceeded, metav1.ConditionFalse, "AuthSecretMissing", inputs.secretMissing)
 		setCondition(status, ConditionCapacityPressure, metav1.ConditionFalse, "NoRelays", "no relay can be measured without the auth secret")
 		setCondition(status, ConditionDegraded, metav1.ConditionTrue, "AuthSecretMissing", inputs.secretMissing)
+		// A published result is still readable without the secret, and its
+		// failures are already covered by the Degraded reason above.
+		_ = writeVantageCondition(status, inputs)
 		return status
 	}
 
@@ -152,8 +168,8 @@ func countRelays(status *turnfleetv1alpha1.TURNPoolStatus, inputs *statusInputs,
 	return counts
 }
 
-// writeConditions sets the condition types from the counted state and from the
-// relay identities other pools hold.
+// writeConditions sets the condition types from the counted state, the relay
+// identities other pools hold, and the published vantage result.
 func writeConditions(status *turnfleetv1alpha1.TURNPoolStatus, pool *turnfleetv1alpha1.TURNPool, counts relayCounts, inputs *statusInputs) {
 	desired := pool.Spec.Replicas
 
@@ -189,20 +205,35 @@ func writeConditions(status *turnfleetv1alpha1.TURNPoolStatus, pool *turnfleetv1
 			fmt.Sprintf("%d of %d ports in use across %d relay(s)", counts.portsInUse, counts.portsTotal, len(status.Relays)))
 	}
 
-	// A conflict with another pool is reported on both conditions: it is its
-	// own fact about the pool's identity, and it degrades the pool, because a
-	// relay that shares its ports with another process serves less than it
-	// reports.
-	switch {
-	case len(inputs.conflicts) > 0:
-		message := describeConflicts(inputs.conflicts)
-		setCondition(status, ConditionAddressConflict, metav1.ConditionTrue, "RelayIdentityOverlap", message)
-		setCondition(status, ConditionDegraded, metav1.ConditionTrue, "RelayIdentityOverlap", message)
-	default:
+	// A conflict with another pool is reported on its own condition and on
+	// Degraded: it is a fact about the pool's identity, and it degrades the
+	// pool, because a relay that shares its ports with another process serves
+	// less than it reports.
+	conflictMessage := describeConflicts(inputs.conflicts)
+	if len(inputs.conflicts) > 0 {
+		setCondition(status, ConditionAddressConflict, metav1.ConditionTrue, "RelayIdentityOverlap", conflictMessage)
+	} else {
 		setCondition(status, ConditionAddressConflict, metav1.ConditionFalse, "NoOverlap",
 			"no other pool holds a relay on this pool's addresses with overlapping ports")
-		if len(counts.degraded) > 0 {
-			setCondition(status, ConditionDegraded, metav1.ConditionTrue, "RelaysUnavailable", strings.Join(firstN(counts.degraded), "; "))
+	}
+
+	unreachable := writeVantageCondition(status, inputs)
+
+	switch {
+	case len(inputs.conflicts) > 0:
+		setCondition(status, ConditionDegraded, metav1.ConditionTrue, "RelayIdentityOverlap", conflictMessage)
+	default:
+		degraded := append(slices.Clone(counts.degraded), unreachable...)
+		if len(degraded) > 0 {
+			reason := "RelaysUnavailable"
+			if len(counts.degraded) == 0 {
+				// The vantage point is the only thing wrong, so it names the
+				// reason; otherwise the relay-level failure is the one to act on
+				// first and the vantage failure stays in the message and in its own
+				// condition.
+				reason = reasonUnreachableFromVantage
+			}
+			setCondition(status, ConditionDegraded, metav1.ConditionTrue, reason, strings.Join(firstN(degraded), "; "))
 		} else {
 			setCondition(status, ConditionDegraded, metav1.ConditionFalse, "AsExpected", "every planned relay exists and is placeable")
 		}
@@ -286,8 +317,19 @@ func (r *TURNPoolReconciler) reconcileDeletion(ctx context.Context, pool *turnfl
 		return ctrl.Result{}, fmt.Errorf("listing relay pods during deletion: %w", err)
 	}
 
+	// The published result is still read while the pool drains: relays that
+	// cannot be reached from the vantage point are worth saying so about until
+	// the pool is gone.
+	vantageResult, err := r.observeVantage(ctx, pool)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	if len(pods) == 0 {
 		metrics.ForgetPool(pool.Namespace, pool.Name)
+		if err := r.deleteVantageResult(ctx, pool); err != nil {
+			return ctrl.Result{}, err
+		}
 		original := pool.DeepCopy()
 		controllerutil.RemoveFinalizer(pool, FinalizerName)
 		if err := r.Patch(ctx, pool, client.MergeFrom(original)); err != nil {
@@ -324,7 +366,12 @@ func (r *TURNPoolReconciler) reconcileDeletion(ctx context.Context, pool *turnfl
 		return ctrl.Result{}, err
 	}
 
-	if err := r.writeStatus(ctx, pool, &statusInputs{states: states, conflicts: conflicts}); err != nil {
+	if err := r.writeStatus(ctx, pool, &statusInputs{
+		states:    states,
+		vantage:   vantageResult,
+		now:       r.now(),
+		conflicts: conflicts,
+	}); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -375,7 +422,8 @@ func observedGeneration(status *turnfleetv1alpha1.TURNPoolStatus) int64 {
 }
 
 // firstNShown caps how many of a pool's problems a condition message names, so
-// a message stays readable when many relays or peers are involved.
+// a message stays readable when many relays, peers or listener URIs are
+// involved.
 const firstNShown = 3
 
 func firstN(values []string) []string {

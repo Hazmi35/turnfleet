@@ -89,6 +89,38 @@ func TestDefaulter(t *testing.T) {
 	if got := pool.Spec.Addressing.PartitionedIP.RelaysPerNode; got != relay.DefaultRelaysPerNode {
 		t.Errorf("relaysPerNode = %d, want %d", got, relay.DefaultRelaysPerNode)
 	}
+	if got := pool.Spec.Addressing.Family; got != turnfleetv1alpha1.AddressingFamilyIPv4 {
+		t.Errorf("family = %q, want %q: a pool that does not name one is an IPv4 pool", got, turnfleetv1alpha1.AddressingFamilyIPv4)
+	}
+}
+
+// TestDefaulterDenyListFollowsTheFamily pins the pairing that keeps an IPv6 pool
+// from starting with a deny list that can never match: the ranges come from the
+// family the relays use.
+func TestDefaulterDenyListFollowsTheFamily(t *testing.T) {
+	t.Parallel()
+
+	defaulter := &TURNPoolDefaulter{}
+	for _, tc := range []turnfleetv1alpha1.AddressingFamily{
+		turnfleetv1alpha1.AddressingFamilyIPv4,
+		turnfleetv1alpha1.AddressingFamilyIPv6,
+		turnfleetv1alpha1.AddressingFamilyDualStack,
+	} {
+		pool := validPool()
+		pool.Spec.Addressing.Family = tc
+		if err := defaulter.Default(context.Background(), pool); err != nil {
+			t.Fatalf("Default() returned an error for family %s: %v", tc, err)
+		}
+		want := relay.DefaultDeniedCIDRsFor(tc)
+		if got := pool.Spec.PeerPolicy.DeniedCIDRs; !slices.Equal(got, want) {
+			t.Errorf("deniedCIDRs for family %s = %v, want %v", tc, got, want)
+		}
+		// Whatever the family, the defaults must be ranges the pool can use,
+		// which is what the validating webhook checks next.
+		if errs := validatePeerPolicy(&pool.Spec, field.NewPath("spec").Child("peerPolicy")); len(errs) > 0 {
+			t.Errorf("the default deny list for family %s is rejected by the validator: %v", tc, errs)
+		}
+	}
 }
 
 // TestDefaulterKeepsExplicitValues makes sure defaulting never overwrites what
@@ -156,6 +188,87 @@ func TestValidateCreate(t *testing.T) {
 					PartitionedIP: &turnfleetv1alpha1.PartitionedIPSpec{RelaysPerNode: 4},
 				}
 			},
+		},
+		{
+			name: "valid IPv6 pool",
+			mutate: func(p *turnfleetv1alpha1.TURNPool) {
+				p.Spec.Addressing = turnfleetv1alpha1.AddressingSpec{
+					Mode:   turnfleetv1alpha1.AddressingModeHostNetwork,
+					Family: turnfleetv1alpha1.AddressingFamilyIPv6,
+				}
+				p.Spec.PeerPolicy = &turnfleetv1alpha1.PeerPolicySpec{
+					DeniedCIDRs: relay.DefaultDeniedCIDRsV6(),
+				}
+			},
+		},
+		{
+			name: "valid DualStack ExternalIPPool pool",
+			mutate: func(p *turnfleetv1alpha1.TURNPool) {
+				p.Spec.Addressing = turnfleetv1alpha1.AddressingSpec{
+					Mode:   turnfleetv1alpha1.AddressingModeExternalIPPool,
+					Family: turnfleetv1alpha1.AddressingFamilyDualStack,
+					ExternalIPPool: &turnfleetv1alpha1.ExternalIPPoolSpec{
+						Addresses: []turnfleetv1alpha1.ExternalAddress{
+							{NodeName: "worker-1", Address: "203.0.113.10"},
+							{NodeName: "worker-2", Address: "2001:db8::10"},
+						},
+					},
+				}
+				p.Spec.PeerPolicy = &turnfleetv1alpha1.PeerPolicySpec{
+					DeniedCIDRs: relay.DefaultDeniedCIDRsFor(turnfleetv1alpha1.AddressingFamilyDualStack),
+				}
+			},
+		},
+		{
+			name: "IPv6 pool with an IPv4 declared address",
+			mutate: func(p *turnfleetv1alpha1.TURNPool) {
+				p.Spec.Addressing = turnfleetv1alpha1.AddressingSpec{
+					Mode:   turnfleetv1alpha1.AddressingModeExternalIPPool,
+					Family: turnfleetv1alpha1.AddressingFamilyIPv6,
+					ExternalIPPool: &turnfleetv1alpha1.ExternalIPPoolSpec{
+						Addresses: []turnfleetv1alpha1.ExternalAddress{
+							{NodeName: "worker-1", Address: "203.0.113.10"},
+							{NodeName: "worker-2", Address: "2001:db8::10"},
+						},
+					},
+				}
+			},
+			wantErr:   true,
+			wantField: "spec.addressing.externalIPPool.addresses[0].address",
+		},
+		{
+			name: "DualStack pool declaring one family only",
+			mutate: func(p *turnfleetv1alpha1.TURNPool) {
+				p.Spec.Addressing = turnfleetv1alpha1.AddressingSpec{
+					Mode:   turnfleetv1alpha1.AddressingModeExternalIPPool,
+					Family: turnfleetv1alpha1.AddressingFamilyDualStack,
+					ExternalIPPool: &turnfleetv1alpha1.ExternalIPPoolSpec{
+						Addresses: []turnfleetv1alpha1.ExternalAddress{
+							{NodeName: "worker-1", Address: "203.0.113.10"},
+							{NodeName: "worker-2", Address: "203.0.113.11"},
+						},
+					},
+				}
+			},
+			wantErr:   true,
+			wantField: "spec.addressing.externalIPPool.addresses",
+		},
+		{
+			name: "IPv4 pool with an IPv6 peer range",
+			mutate: func(p *turnfleetv1alpha1.TURNPool) {
+				p.Spec.PeerPolicy = &turnfleetv1alpha1.PeerPolicySpec{DeniedCIDRs: []string{"fc00::/7"}}
+			},
+			wantErr:   true,
+			wantField: "spec.peerPolicy.deniedCIDRs[0]",
+		},
+		{
+			name: "IPv6 pool with an IPv4 allowed range",
+			mutate: func(p *turnfleetv1alpha1.TURNPool) {
+				p.Spec.Addressing.Family = turnfleetv1alpha1.AddressingFamilyIPv6
+				p.Spec.PeerPolicy = &turnfleetv1alpha1.PeerPolicySpec{AllowedCIDRs: []string{"203.0.113.0/24"}}
+			},
+			wantErr:   true,
+			wantField: "spec.peerPolicy.allowedCIDRs[0]",
 		},
 		{
 			name: "port range end before start",
@@ -476,6 +589,21 @@ func TestValidateUpdateImmutability(t *testing.T) {
 			},
 			wantErr:   true,
 			wantField: "spec.addressing.mode",
+		},
+		{
+			name: "the address family is immutable",
+			mutate: func(p *turnfleetv1alpha1.TURNPool) {
+				p.Spec.Addressing.Family = turnfleetv1alpha1.AddressingFamilyDualStack
+			},
+			wantErr:   true,
+			wantField: "spec.addressing.family",
+		},
+		{
+			name: "unset and IPv4 are the same family",
+			mutate: func(p *turnfleetv1alpha1.TURNPool) {
+				p.Spec.Addressing.Family = turnfleetv1alpha1.AddressingFamilyIPv4
+			},
+			wantErr: false,
 		},
 		{
 			name: "the relay port range is immutable",

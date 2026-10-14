@@ -36,6 +36,12 @@ their addresses come from:
 | `PartitionedIP` | `addressing.partitionedIP.relaysPerNode` | the node address, shared | still one IP's port space: the configured range is split into disjoint slices, so **adding relays per node does not add ports on that node** |
 | `ExternalIPPool` | one per address in `addressing.externalIPPool.addresses` | the declared secondary address, one per relay | addresses × the whole range |
 
+`spec.addressing.family` decides which address family the addresses above are
+taken from: `IPv4` (the default), `IPv6`, or `DualStack`. `DualStack` plans each
+row once per family, so a dual-stack node runs two relays, one per family, and
+offers two port spaces — a family is part of an address, not extra ports on one
+address. See ADR 13 and `docs/capacity-model.md`.
+
 `PartitionedIP` exists because several processes may share one IP as long as
 each owns a disjoint range and receives that range's traffic. It raises
 *concurrency* (more processes, more CPU) but not capacity, and the operator says

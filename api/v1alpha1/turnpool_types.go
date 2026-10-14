@@ -36,6 +36,30 @@ const (
 	AddressingModePartitionedIP AddressingMode = "PartitionedIP"
 )
 
+// AddressingFamily selects the address family of a pool's relay addresses.
+//
+// A family is part of an address, not an extra port space: a node's IPv4 and
+// IPv6 addresses are two relay addresses with two port spaces each, and a
+// second family never adds ports to one address. See docs/capacity-model.md.
+//
+// +kubebuilder:validation:Enum=IPv4;IPv6;DualStack
+type AddressingFamily string
+
+const (
+	// AddressingFamilyIPv4 places relays on IPv4 addresses only. It is the
+	// default, and what every pool planned before this field existed does.
+	AddressingFamilyIPv4 AddressingFamily = "IPv4"
+
+	// AddressingFamilyIPv6 places relays on IPv6 addresses only.
+	AddressingFamilyIPv6 AddressingFamily = "IPv6"
+
+	// AddressingFamilyDualStack plans the mode's relay set once per family. On
+	// a node that has both addresses that is one relay identity per family,
+	// and each of them owns the whole port range: two addresses, two port
+	// spaces.
+	AddressingFamilyDualStack AddressingFamily = "DualStack"
+)
+
 // ListenerProtocol is the transport a relay listener accepts.
 //
 // coturn serves UDP and TCP on the same "plain" listening port and TLS/DTLS on
@@ -145,6 +169,18 @@ type AddressingSpec struct {
 	// relay's advertised address and invalidates live allocations.
 	// +required
 	Mode AddressingMode `json:"mode,omitempty"`
+
+	// family is the address family the pool's relay addresses belong to. It is
+	// immutable for the same reason mode is: changing it changes the address,
+	// or half the addresses, of every relay and strands live allocations.
+	//
+	// IPv4 keeps the pool on the node's IPv4 addresses. IPv6 plans on IPv6
+	// addresses only. DualStack plans the mode's relay set once per family,
+	// so a node with both addresses runs two relays and offers two port
+	// spaces.
+	// +default="IPv4"
+	// +optional
+	Family AddressingFamily `json:"family,omitempty"`
 
 	// externalIPPool configures AddressingModeExternalIPPool and must be set
 	// (with at least one address) when mode is ExternalIPPool. Forbidden for the

@@ -1,0 +1,153 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Turnfleet Authors
+#
+# The vantage runner: it probes every listener URI a pool publishes and writes
+# the result where the controller reads it (docs/adr/0015-vantage-result-delivery.md).
+#
+# The operator does not schedule this Job and does not own these objects. Apply
+# them yourself, next to the pool they check:
+#
+#   kubectl apply -f config/vantage/runner.yaml     # the CronJob runs every 5m
+#   kubectl create job --from=cronjob/vantage-runner vantage-runner-once
+#
+# They are written for the pool `demo` in the `default` namespace, which is what
+# config/samples/turnfleet_v1alpha1_turnpool.yaml creates. For another pool,
+# replace `demo` in the ConfigMap names, the pool name argument and the labels,
+# and replace every `default` namespace field below with that pool's namespace.
+#
+# A runner is the authoritative check only when it runs outside the cluster's
+# network: from a pod, hairpin NAT and a firewall in front of the relay node are
+# as invisible as they are to the controller. To run it outside, point the same
+# binary at the same ConfigMaps from a machine that can reach the API server
+# (KUBECONFIG) and pass --publish-configmap; nothing else has to change.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: vantage-runner
+  namespace: default
+  labels:
+    app.kubernetes.io/name: turnfleet
+    app.kubernetes.io/component: vantage
+    app.kubernetes.io/instance: demo
+    app.kubernetes.io/managed-by: kustomize
+---
+# Publishing needs to read the pool's URI list and write one ConfigMap. The
+# grant is namespace-scoped, not name-scoped: `create` cannot be restricted by
+# resourceNames, so a rule that named the ConfigMap would still let the runner
+# create any ConfigMap in the namespace. Nothing else is granted: no access to
+# pods, nodes, the pool's status, or the shared secret beyond the read-only
+# volume mount below (a volume mount is authorized by the node, not by RBAC).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: vantage-runner
+  namespace: default
+  labels:
+    app.kubernetes.io/name: turnfleet
+    app.kubernetes.io/component: vantage
+    app.kubernetes.io/instance: demo
+    app.kubernetes.io/managed-by: kustomize
+rules:
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: vantage-runner
+  namespace: default
+  labels:
+    app.kubernetes.io/name: turnfleet
+    app.kubernetes.io/component: vantage
+    app.kubernetes.io/instance: demo
+    app.kubernetes.io/managed-by: kustomize
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: vantage-runner
+subjects:
+- kind: ServiceAccount
+  name: vantage-runner
+  namespace: default
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: vantage-runner
+  namespace: default
+  labels:
+    app.kubernetes.io/name: turnfleet
+    app.kubernetes.io/component: vantage
+    app.kubernetes.io/instance: demo
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  # 15 minutes is how long the controller keeps a published result current
+  # (controller.VantageResultMaxAge), so this is three missed passes. Change one
+  # and you have to change the other.
+  schedule: "*/5 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # A failed probe is a published result, not a transient error: retrying
+      # would only republish the same verdict, and the CronJob's own reports
+      # are what an operator should see.
+      backoffLimit: 0
+      ttlSecondsAfterFinished: 600
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: turnfleet
+            app.kubernetes.io/component: vantage
+            app.kubernetes.io/instance: demo
+        spec:
+          serviceAccountName: vantage-runner
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+          - name: probe
+            # The same binary the controller probes with, and the same image
+            # `make load-images` puts on a kind node. A real deployment pins a
+            # release tag.
+            image: ghcr.io/hazmi35/turnfleet-probe:dev
+            imagePullPolicy: IfNotPresent
+            args:
+            # Every URI in the pool's list, which is what a client is handed.
+            - --uris-configmap=demo-turn-uris
+            - --publish-configmap=demo-vantage
+            - --pool=demo
+            - --secret-file=/etc/turnfleet/secret/secret
+            - --json
+            securityContext:
+              readOnlyRootFilesystem: true
+              allowPrivilegeEscalation: false
+              capabilities:
+                drop:
+                - "ALL"
+            resources:
+              limits:
+                cpu: 200m
+                memory: 128Mi
+              requests:
+                cpu: 10m
+                memory: 32Mi
+            volumeMounts:
+            - name: turn-secret
+              mountPath: /etc/turnfleet/secret
+              readOnly: true
+          volumes:
+          # The pool's own secret. An operator running this outside the cluster
+          # has to get the value out of band; there is no path that hands it to
+          # a program that is not in the cluster.
+          #
+          # No defaultMode: the container is not root and the volume is not
+          # fsGroup-owned, so the mounted file has to keep the read bit every
+          # pod-local volume gets.
+          - name: turn-secret
+            secret:
+              secretName: turn-shared-secret

@@ -11,9 +11,7 @@ package v1alpha1
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"net/netip"
 	"regexp"
 	"strings"
 
@@ -65,11 +63,19 @@ func (d *TURNPoolDefaulter) Default(_ context.Context, obj *turnfleetv1alpha1.TU
 	if obj.Spec.PeerPolicy == nil {
 		obj.Spec.PeerPolicy = &turnfleetv1alpha1.PeerPolicySpec{}
 	}
+	// The CRD default covers the field, but a defaulting webhook also runs for
+	// objects created from an older schema or through a path that skipped
+	// defaulting, so keep the two in step.
+	if obj.Spec.Addressing.Family == "" {
+		obj.Spec.Addressing.Family = turnfleetv1alpha1.AddressingFamilyIPv4
+	}
 	// The deny list is materialised into the spec rather than kept in the
 	// controller so that what a relay will actually be allowed to reach is
-	// visible in the object, and so an operator can edit it.
+	// visible in the object, and so an operator can edit it. Which ranges are
+	// dangerous depends on the family the relays use: an IPv6 relay has IPv6
+	// peers.
 	if len(obj.Spec.PeerPolicy.DeniedCIDRs) == 0 {
-		obj.Spec.PeerPolicy.DeniedCIDRs = relay.DefaultDeniedCIDRs()
+		obj.Spec.PeerPolicy.DeniedCIDRs = relay.DefaultDeniedCIDRsFor(obj.Spec.Addressing.Family)
 	}
 
 	if obj.Spec.DrainTimeout == nil {
@@ -290,10 +296,30 @@ func validateAddressing(spec *turnfleetv1alpha1.TURNPoolSpec, path *field.Path) 
 				fmt.Sprintf("only %d addresses are declared, so replicas cannot be %d: one relay per address",
 					len(addressing.ExternalIPPool.Addresses), spec.Replicas)))
 		}
+		declaredPerFamily := map[turnfleetv1alpha1.AddressingFamily]int{}
 		for i, addr := range addressing.ExternalIPPool.Addresses {
-			if _, err := netip.ParseAddr(strings.TrimSpace(addr.Address)); err != nil {
-				errs = append(errs, field.Invalid(path.Child("externalIPPool", "addresses").Index(i).Child("address"),
-					addr.Address, "must be an IP address"))
+			item := path.Child("externalIPPool", "addresses").Index(i).Child("address")
+			family := relay.AddressFamilyOf(addr.Address)
+			if family == "" {
+				errs = append(errs, field.Invalid(item, addr.Address, "must be an IP address"))
+				continue
+			}
+			declaredPerFamily[family]++
+			if !relay.PlansFamily(addressing.Family, family) {
+				errs = append(errs, field.Invalid(item, addr.Address,
+					fmt.Sprintf("is an %s address, but the pool's family is %s: no relay would ever bind it",
+						family, relay.FamilyOrDefault(addressing.Family))))
+			}
+		}
+		// A DualStack pool that declares addresses of one family only would
+		// plan half of what it says it plans, so require both.
+		if families := relay.AddressFamilies(addressing.Family); len(families) > 1 {
+			for _, family := range families {
+				if declaredPerFamily[family] == 0 {
+					errs = append(errs, field.Required(path.Child("externalIPPool", "addresses"),
+						fmt.Sprintf("family %s declares no address: a %s pool needs at least one address per family",
+							family, relay.FamilyOrDefault(addressing.Family))))
+				}
 			}
 		}
 
@@ -353,9 +379,9 @@ func validateAuth(spec *turnfleetv1alpha1.TURNPoolSpec, path *field.Path) field.
 	return errs
 }
 
-// validatePeerPolicy rejects unparseable CIDRs. coturn itself takes IP ranges,
-// not prefixes, so a typo here would otherwise become a relay that silently
-// denies nothing.
+// validatePeerPolicy rejects unparseable CIDRs and CIDRs of a family the pool's
+// relays cannot reach. coturn itself takes IP ranges, not prefixes, so a typo
+// here would otherwise become a relay that silently denies nothing.
 func validatePeerPolicy(spec *turnfleetv1alpha1.TURNPoolSpec, path *field.Path) field.ErrorList {
 	var errs field.ErrorList
 
@@ -363,25 +389,31 @@ func validatePeerPolicy(spec *turnfleetv1alpha1.TURNPoolSpec, path *field.Path) 
 		return errs
 	}
 	for i, cidr := range spec.PeerPolicy.DeniedCIDRs {
-		if err := peerRangeErr(cidr); err != nil {
-			errs = append(errs, field.Invalid(path.Child("deniedCIDRs").Index(i), cidr, err.Error()))
-		}
+		errs = append(errs, peerRangeErrs(cidr, spec.Addressing.Family, path.Child("deniedCIDRs").Index(i))...)
 	}
 	for i, cidr := range spec.PeerPolicy.AllowedCIDRs {
-		if err := peerRangeErr(cidr); err != nil {
-			errs = append(errs, field.Invalid(path.Child("allowedCIDRs").Index(i), cidr, err.Error()))
-		}
+		errs = append(errs, peerRangeErrs(cidr, spec.Addressing.Family, path.Child("allowedCIDRs").Index(i))...)
 	}
 	return errs
 }
 
-// peerRangeErr reports whether a CIDR can be rendered as a coturn peer range.
-func peerRangeErr(cidr string) error {
+// peerRangeErrs reports every reason a declared peer range is unusable.
+func peerRangeErrs(cidr string, poolFamily turnfleetv1alpha1.AddressingFamily, path *field.Path) field.ErrorList {
 	if strings.TrimSpace(cidr) == "" {
-		return errors.New("empty CIDR")
+		return field.ErrorList{field.Invalid(path, cidr, "empty CIDR")}
 	}
-	if _, err := relay.PeerRange(cidr); err != nil {
-		return fmt.Errorf("must be a CIDR such as 10.0.0.0/8: %w", err)
+	family, err := relay.PeerCIDRFamily(cidr)
+	if err != nil {
+		return field.ErrorList{field.Invalid(path, cidr,
+			fmt.Sprintf("must be a CIDR such as 10.0.0.0/8: %v", err))}
+	}
+	// A relay only reaches peers in the families it serves, so a range of
+	// another family would never match anything. Rejecting it keeps a peer
+	// policy that looks like a deny list from being one that denies nothing.
+	if !relay.PlansFamily(poolFamily, family) {
+		return field.ErrorList{field.Invalid(path, cidr,
+			fmt.Sprintf("is an %s range, but the pool's family is %s: its relays have no %s peers to deny",
+				family, relay.FamilyOrDefault(poolFamily), family))}
 	}
 	return nil
 }
@@ -427,6 +459,11 @@ func validateImmutability(oldSpec, newSpec *turnfleetv1alpha1.TURNPoolSpec, path
 		errs = append(errs, field.Forbidden(path.Child("addressing", "mode"),
 			fmt.Sprintf("is immutable (%s -> %s): every relay's advertised address would change and live allocations would be stranded",
 				oldSpec.Addressing.Mode, newSpec.Addressing.Mode)))
+	}
+	if relay.FamilyOrDefault(oldSpec.Addressing.Family) != relay.FamilyOrDefault(newSpec.Addressing.Family) {
+		errs = append(errs, field.Forbidden(path.Child("addressing", "family"),
+			fmt.Sprintf("is immutable (%s -> %s): it changes the address, or half the addresses, of every relay and would strand live allocations",
+				relay.FamilyOrDefault(oldSpec.Addressing.Family), relay.FamilyOrDefault(newSpec.Addressing.Family))))
 	}
 	if oldSpec.RelayPortRange != newSpec.RelayPortRange {
 		errs = append(errs, field.Forbidden(path.Child("relayPortRange"),

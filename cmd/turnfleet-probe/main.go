@@ -14,8 +14,18 @@
 //	  --secret-file ./turn-secret --expect-address 203.0.113.10 \
 //	  --expect-port-range 49152-49199 --json
 //
-// Exit status is 0 when the relay allocated and advertised the expected relayed
-// address, 1 when the check failed, and 2 when the arguments are wrong.
+// It is also the runner the operator's control loop reads: with
+// --uris-configmap it probes every listener URI the pool publishes, and with
+// --publish-configmap it writes the result into the pool's vantage ConfigMap,
+// which the controller turns into the pool's ReachableFromVantage condition
+// (docs/adr/0015-vantage-result-delivery.md). That is how a runner runs on a
+// schedule, in the cluster or outside it:
+//
+//	turnfleet-probe --uris-configmap demo-turn-uris --publish-configmap demo-vantage \
+//	  --pool demo --secret-file /etc/turnfleet/secret/secret
+//
+// Exit status is 0 when every relay allocated and advertised the expected
+// relayed address, 1 when the check failed, and 2 when the arguments are wrong.
 package main
 
 import (
@@ -25,6 +35,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/signal"
 	"strconv"
@@ -56,6 +67,12 @@ type options struct {
 	peerEcho        string
 	jsonOutput      bool
 	showVersion     bool
+
+	// The runner half: probe the pool's whole URI list and publish the result.
+	urisConfigmap    string
+	publishConfigmap string
+	pool             string
+	namespace        string
 }
 
 func main() {
@@ -78,6 +95,12 @@ func run(args []string, stdout, stderr io.Writer) int {
 	flags.StringVar(&opts.peerEcho, "peer-echo", "", "local address to run an echo peer on, making the round trip self-contained")
 	flags.BoolVar(&opts.jsonOutput, "json", false, "print the result as JSON")
 	flags.BoolVar(&opts.showVersion, "version", false, "print the version and exit")
+	// The runner half: the same probe, run for a whole pool and published where
+	// the controller reads it.
+	flags.StringVar(&opts.urisConfigmap, "uris-configmap", "", "ConfigMap holding the pool's listener URIs in its \"uris\" key; probes every URI in it instead of a single --uri")
+	flags.StringVar(&opts.publishConfigmap, "publish-configmap", "", "ConfigMap to publish the result in, for the controller to read as the pool's ReachableFromVantage condition")
+	flags.StringVar(&opts.pool, "pool", "", "pool the published result is about (required with --publish-configmap)")
+	flags.StringVar(&opts.namespace, "namespace", "", "namespace of the ConfigMaps (default: this pod's namespace, then the kubeconfig's)")
 
 	flags.Usage = func() {
 		_, _ = fmt.Fprintf(stderr, "turnfleet-probe probes a Turnfleet relay with a real TURN Allocate.\n\n")
@@ -96,6 +119,17 @@ func run(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stderr, "unexpected argument %q\n", flags.Arg(0))
 		return exitUsage
 	}
+
+	if opts.urisConfigmap != "" || opts.publishConfigmap != "" {
+		if err := validateVantageOptions(&opts); err != nil {
+			_, _ = fmt.Fprintf(stderr, "invalid arguments: %v\n", err)
+			return exitUsage
+		}
+		ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+		defer stop()
+		return runVantage(ctx, &opts, stdout, stderr)
+	}
+
 	if opts.uri == "" {
 		_, _ = fmt.Fprintln(stderr, "--uri is required")
 		return exitUsage
@@ -216,7 +250,10 @@ func writeHumanResult(stdout io.Writer, result *probe.Result) {
 	}
 	_, _ = fmt.Fprintf(stdout, "%s %s\n", status, result.URI)
 	if result.Succeeded {
-		_, _ = fmt.Fprintf(stdout, "  relayed address: %s:%d\n", result.RelayedAddress, result.RelayedPort)
+		// JoinHostPort brackets an IPv6 address, so the line is unambiguous
+		// whichever family the relay answered in.
+		_, _ = fmt.Fprintf(stdout, "  relayed address: %s\n",
+			net.JoinHostPort(result.RelayedAddress, strconv.Itoa(int(result.RelayedPort))))
 	}
 	if result.ErrorCode != 0 {
 		_, _ = fmt.Fprintf(stdout, "  turn error code: %d\n", result.ErrorCode)

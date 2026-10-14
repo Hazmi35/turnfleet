@@ -66,10 +66,19 @@ func ComputePlan(in *PlanInput) Plan {
 	plan.Unplaced = replicas - unplacedFrom(int64(len(plan.Relays)))
 	if plan.Unplaced > 0 {
 		plan.Notes = append(plan.Notes, fmt.Sprintf(
-			"%d of %d relays could not be placed: the %s mode makes %d relay addresses available",
-			plan.Unplaced, replicas, in.Spec.Addressing.Mode, len(candidates)))
+			"%d of %d relays could not be placed: the %s mode with family %s makes %d relay addresses available",
+			plan.Unplaced, replicas, in.Spec.Addressing.Mode, FamilyOrDefault(in.Spec.Addressing.Family), len(candidates)))
 	}
 	return plan
+}
+
+// FamilyOrDefault reads an unset family as the API default, so a note, a
+// validation message or a log line never reports an empty family.
+func FamilyOrDefault(family turnfleetv1alpha1.AddressingFamily) turnfleetv1alpha1.AddressingFamily {
+	if family == "" {
+		return turnfleetv1alpha1.AddressingFamilyIPv4
+	}
+	return family
 }
 
 // unplacedFrom converts a relay count (which the cluster bounds far below
@@ -86,6 +95,7 @@ type candidate struct {
 	bindAddress        string
 	portRange          PortRange
 	listenerPortOffset int32
+	metricsPortOffset  int32
 }
 
 func (c candidate) relay(poolName string) Relay {
@@ -98,35 +108,57 @@ func (c candidate) relay(poolName string) Relay {
 		BindAddress:        c.bindAddress,
 		PortRange:          c.portRange,
 		ListenerPortOffset: c.listenerPortOffset,
+		MetricsPortOffset:  c.metricsPortOffset,
 	}
 }
 
 // candidatesFor lists every relay the addressing mode could place, in a stable
-// order: nodes are visited in name order and, within a node, port slices are
-// visited in ascending order. Relays are therefore filled node by node, which
-// means a scale-up appends relays to the last node in use and a scale-down
-// removes them from it: existing relays keep their identity.
+// order: nodes are visited in name order, each node's address families in the
+// pool's family order, and within an address the port slices in ascending
+// order. Relays are therefore filled node by node, which means a scale-up
+// appends relays to the last node in use and a scale-down removes them from it:
+// existing relays keep their identity.
+//
+// One node may carry several relays for two reasons: a DualStack pool plans one
+// relay per family, and PartitionedIP splits one address between several. Both
+// need their metrics port offset per node, because coturn's metrics endpoint
+// binds every address on the node.
 func candidatesFor(spec *turnfleetv1alpha1.TURNPoolSpec, nodes []Node) []candidate {
 	portRange := PortRange{Start: spec.RelayPortRange.Start, End: spec.RelayPortRange.End}
+	families := AddressFamilies(spec.Addressing.Family)
 
+	out := make([]candidate, 0, len(nodes)*len(families))
+	for _, node := range nodes {
+		onNode := int32(0)
+		for _, family := range families {
+			for _, c := range candidatesForFamily(spec, node, family, portRange) {
+				c.metricsPortOffset = onNode
+				onNode++
+				out = append(out, c)
+			}
+		}
+	}
+	return out
+}
+
+// candidatesForFamily lists the relays one addressing mode could place on one
+// node's address of one family.
+func candidatesForFamily(spec *turnfleetv1alpha1.TURNPoolSpec, node Node, family turnfleetv1alpha1.AddressingFamily, portRange PortRange) []candidate {
 	switch spec.Addressing.Mode {
 	case turnfleetv1alpha1.AddressingModeHostNetwork:
-		out := make([]candidate, 0, len(nodes))
-		for _, node := range nodes {
-			if node.Address == "" {
-				continue
-			}
-			out = append(out, candidate{
-				nodeName:    node.Name,
-				address:     node.Address,
-				bindAddress: bindAddressFor(node),
-				portRange:   portRange,
-			})
+		address, ok := node.addressOf(family)
+		if !ok {
+			return nil
 		}
-		return out
+		return []candidate{{
+			nodeName:    node.Name,
+			address:     address.Address,
+			bindAddress: address.BindAddress,
+			portRange:   portRange,
+		}}
 
 	case turnfleetv1alpha1.AddressingModeExternalIPPool:
-		addresses := declaredAddresses(spec, nodes)
+		addresses := declaredAddresses(spec, node, family)
 		out := make([]candidate, 0, len(addresses))
 		for _, addr := range addresses {
 			out = append(out, candidate{
@@ -139,25 +171,24 @@ func candidatesFor(spec *turnfleetv1alpha1.TURNPoolSpec, nodes []Node) []candida
 		return out
 
 	case turnfleetv1alpha1.AddressingModePartitionedIP:
+		address, ok := node.addressOf(family)
+		if !ok {
+			return nil
+		}
 		perNode := spec.Addressing.PartitionedIP.RelaysPerNode
 		portSlices := PartitionPortRange(portRange, perNode)
-		out := make([]candidate, 0, len(nodes)*len(portSlices))
-		for _, node := range nodes {
-			if node.Address == "" {
-				continue
-			}
-			for slot, slice := range portSlices {
-				out = append(out, candidate{
-					nodeName:    node.Name,
-					address:     node.Address,
-					bindAddress: bindAddressFor(node),
-					portRange:   slice,
-					// Every relay on this address needs its own listening
-					// port: a listening socket can only be bound once per
-					// address.
-					listenerPortOffset: int32(slot),
-				})
-			}
+		out := make([]candidate, 0, len(portSlices))
+		for slot, slice := range portSlices {
+			out = append(out, candidate{
+				nodeName:    node.Name,
+				address:     address.Address,
+				bindAddress: address.BindAddress,
+				portRange:   slice,
+				// Every relay on this address needs its own listening
+				// port: a listening socket can only be bound once per
+				// address.
+				listenerPortOffset: int32(slot),
+			})
 		}
 		return out
 
@@ -210,29 +241,21 @@ func normalizeNodes(nodes []Node) []Node {
 	return out
 }
 
-// bindAddressFor is the address a relay binds. It is the node's own address
-// unless the plan overrides the advertised one.
-func bindAddressFor(node Node) string {
-	if node.BindAddress != "" {
-		return node.BindAddress
-	}
-	return node.Address
-}
-
-// declaredAddresses returns the pool's external addresses, sorted by node name
-// and then by address, keeping only the entries whose node is a relay node.
-func declaredAddresses(spec *turnfleetv1alpha1.TURNPoolSpec, nodes []Node) []turnfleetv1alpha1.ExternalAddress {
+// declaredAddresses returns the pool's declared addresses for one node in one
+// address family, sorted by address. The family comes from the address itself:
+// a declared address is whatever is attached to the node, and a duplicated
+// family field could only disagree with it.
+func declaredAddresses(spec *turnfleetv1alpha1.TURNPoolSpec, node Node, family turnfleetv1alpha1.AddressingFamily) []turnfleetv1alpha1.ExternalAddress {
 	if spec.Addressing.ExternalIPPool == nil {
 		return nil
-	}
-	known := make(map[string]struct{}, len(nodes))
-	for _, node := range nodes {
-		known[node.Name] = struct{}{}
 	}
 
 	out := make([]turnfleetv1alpha1.ExternalAddress, 0, len(spec.Addressing.ExternalIPPool.Addresses))
 	for _, addr := range spec.Addressing.ExternalIPPool.Addresses {
-		if _, ok := known[addr.NodeName]; !ok {
+		if addr.NodeName != node.Name {
+			continue
+		}
+		if AddressFamilyOf(addr.Address) != family {
 			continue
 		}
 		out = append(out, addr)

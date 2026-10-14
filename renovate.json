@@ -134,6 +134,14 @@
       "autoReplaceStringTemplate": "RUNTIME_IMAGE ?= gcr.io/distroless/static-debian12:{{{newValue}}}@{{{newDigest}}}",
       "datasourceTemplate": "docker",
       "depNameTemplate": "gcr.io/distroless/static-debian12"
+    },
+    {
+      "description": "Helm, the chart's renderer and linter, as the Makefile pins it. Helm is not a Go tool, so the version is a Makefile line and the release is downloaded from get.helm.sh by the `helm` target; the `v?` in the match leaves the tag prefix in place when the value is replaced.",
+      "customType": "regex",
+      "managerFilePatterns": ["/^Makefile$/"],
+      "matchStrings": ["HELM_VERSION \\?= v?(?<currentValue>[\\d.]+)"],
+      "datasourceTemplate": "github-releases",
+      "depNameTemplate": "helm/helm"
     }
   ]
 }

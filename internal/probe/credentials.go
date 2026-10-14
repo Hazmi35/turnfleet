@@ -93,7 +93,9 @@ func (e Endpoint) String() string {
 //
 // Accepted forms are `turn:host:port?transport=udp`, `turn:host:port` (udp by
 // default), `turn://host:port?transport=tcp` and `turns:host:port?transport=tcp`
-// (port defaults to 5349 for turns:).
+// (port defaults to 5349 for turns:). An IPv6 authority is bracketed the way
+// RFC 7065 requires, because the address itself is full of colons:
+// `turn:[2001:db8::1]:3478?transport=udp`.
 func ParseURI(raw string) (Endpoint, error) {
 	parsed, err := url.Parse(raw)
 	if err != nil {
@@ -109,28 +111,44 @@ func ParseURI(raw string) (Endpoint, error) {
 		endpoint.Port = DefaultTLSPort
 	}
 
-	hostPort := parsed.Opaque
-	if hostPort == "" {
-		hostPort = parsed.Host
+	authority := parsed.Opaque
+	if authority == "" {
+		authority = parsed.Host
 	}
-	if hostPort == "" {
+	if authority == "" {
 		return Endpoint{}, fmt.Errorf("parsing TURN URI %q: no host", raw)
 	}
 
-	host, port, err := net.SplitHostPort(hostPort)
-	if err != nil {
-		// No port in the URI: keep the scheme default.
-		endpoint.Host = hostPort
+	var host, port string
+	if strings.HasPrefix(authority, "[") {
+		end := strings.LastIndex(authority, "]")
+		if end < 0 {
+			return Endpoint{}, fmt.Errorf("parsing TURN URI %q: unbalanced IPv6 authority", raw)
+		}
+		host, port = authority[1:end], strings.TrimPrefix(authority[end+1:], ":")
 	} else {
+		parsedHost, parsedPort, err := net.SplitHostPort(authority)
+		switch {
+		case err == nil:
+			host, port = parsedHost, parsedPort
+		case strings.Count(authority, ":") > 1:
+			return Endpoint{}, fmt.Errorf(
+				"parsing TURN URI %q: an IPv6 authority must be bracketed, as in turn:[2001:db8::1]:3478", raw)
+		default:
+			// No port in the URI: keep the scheme default.
+			host = authority
+		}
+	}
+	if host == "" {
+		return Endpoint{}, fmt.Errorf("parsing TURN URI %q: no host", raw)
+	}
+	endpoint.Host = host
+	if port != "" {
 		parsedPort, convErr := strconv.ParseInt(port, 10, 32)
 		if convErr != nil {
 			return Endpoint{}, fmt.Errorf("parsing TURN URI %q: invalid port %q: %w", raw, port, convErr)
 		}
-		endpoint.Host = host
 		endpoint.Port = int32(parsedPort)
-	}
-	if endpoint.Host == "" {
-		return Endpoint{}, fmt.Errorf("parsing TURN URI %q: no host", raw)
 	}
 
 	endpoint.Transport = strings.ToLower(parsed.Query().Get("transport"))
