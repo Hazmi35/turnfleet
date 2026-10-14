@@ -124,6 +124,23 @@ change what runs. The DCO check runs `hack/verify-dco.sh` from this repository
 instead of a third-party action, which keeps the workflow free of extra pins and
 tokens.
 
+## Release tooling
+
+`.github/workflows/release.yaml` installs the two tools that sign, scan and
+attest a release, and pins both in its own `env`. syft (`SYFT_VERSION`) is
+pinned the way `e2e.yaml` pins the kind binary: the release tarball and its
+sha256, checked before the binary runs. Neither pin is tracked by Renovate: a
+bot bump of the signing tool is a change to a trust anchor, and the checksum
+that belongs to a download pin is not something a bot can compute.
+
+cosign is **held on the v2 line** (`v2.6.5`, released 2026-08-06) although v3
+exists. cosign v3 writes signatures and attestations as OCI 1.1 referrer
+artifacts, and ghcr.io does not serve the Referrers API, so a v3-signed release
+is not discoverable there; the v2 line writes the `sha256-<digest>.sig` and
+`.att` tags ghcr.io has served since 2021, which both cosign v2 and v3 verify.
+Moving to v3 starts with ghcr.io serving that API (ADR 16), not with a version
+bump.
+
 ## Agent tooling
 
 Claude Code needs 2.1.278 or newer to read `AGENTS.md` instead of its own
