@@ -1,0 +1,703 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.22.0
+  name: turnpools.turnfleet.hzmi.dev
+spec:
+  group: turnfleet.hzmi.dev
+  names:
+    categories:
+    - turnfleet
+    kind: TURNPool
+    listKind: TURNPoolList
+    plural: turnpools
+    shortNames:
+    - tpool
+    singular: turnpool
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.addressing.mode
+      name: Mode
+      type: string
+    - jsonPath: .status.readyRelays
+      name: Relays
+      type: integer
+    - jsonPath: .status.portsInUse
+      name: Ports In Use
+      type: integer
+    - jsonPath: .status.portsTotal
+      name: Ports Total
+      type: integer
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: TURNPool is the Schema for the turnpools API.
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: spec defines the desired state of TURNPool.
+            properties:
+              addressing:
+                description: addressing selects how relays are placed and addressed.
+                  Immutable.
+                properties:
+                  externalIPPool:
+                    description: |-
+                      externalIPPool configures AddressingModeExternalIPPool and must be set
+                      (with at least one address) when mode is ExternalIPPool. Forbidden for the
+                      other modes.
+                    properties:
+                      addresses:
+                        description: |-
+                          addresses are the secondary addresses available to the pool, one relay per
+                          address. Each entry must be attached to the named node; the operator does
+                          not attach addresses. The webhook requires at least one address when the
+                          pool's mode is ExternalIPPool.
+                        items:
+                          description: ExternalAddress is one secondary address already
+                            attached to a node.
+                          properties:
+                            address:
+                              description: |-
+                                address is the address itself. It is both the address a relay binds and
+                                the address it advertises in XOR-RELAYED-ADDRESS.
+                              minLength: 1
+                              type: string
+                            nodeName:
+                              description: nodeName is the node the address is attached
+                                to.
+                              minLength: 1
+                              type: string
+                          required:
+                          - address
+                          - nodeName
+                          type: object
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - address
+                        x-kubernetes-list-type: map
+                    type: object
+                  mode:
+                    description: |-
+                      mode is the addressing mode. It is immutable: changing it changes every
+                      relay's advertised address and invalidates live allocations.
+                    enum:
+                    - HostNetwork
+                    - ExternalIPPool
+                    - PartitionedIP
+                    type: string
+                  partitionedIP:
+                    description: |-
+                      partitionedIP configures AddressingModePartitionedIP and must be set when
+                      mode is PartitionedIP. Forbidden for the other modes.
+                    properties:
+                      relaysPerNode:
+                        default: 2
+                        description: |-
+                          relaysPerNode is how many relays share one node address. The pool's relay
+                          port range is split into that many disjoint slices; their sum is still one
+                          IP's port space, so this setting adds concurrency, not capacity.
+                        format: int32
+                        maximum: 64
+                        minimum: 1
+                        type: integer
+                    type: object
+                required:
+                - mode
+                type: object
+              auth:
+                description: auth is the shared authentication material. realm is
+                  immutable.
+                properties:
+                  realm:
+                    description: |-
+                      realm is the TURN realm relays advertise and authenticate against. It is
+                      immutable: changing it invalidates every credential the issuer signed for
+                      this pool.
+                    minLength: 1
+                    type: string
+                  secretRef:
+                    description: |-
+                      secretRef selects the shared HMAC secret used for TURN REST API
+                      credentials (and therefore by the credential issuer, which is not part of
+                      this operator). Rotating the selected value rolls every relay one at a
+                      time.
+                    properties:
+                      key:
+                        description: The key of the secret to select from.  Must be
+                          a valid secret key.
+                        type: string
+                      name:
+                        default: ""
+                        description: |-
+                          Name of the referent.
+                          This field is effectively required, but due to backwards compatibility is
+                          allowed to be empty. Instances of this type with an empty value here are
+                          almost certainly wrong.
+                          More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                        type: string
+                      optional:
+                        description: Specify whether the Secret or its key must be
+                          defined
+                        type: boolean
+                    required:
+                    - key
+                    type: object
+                    x-kubernetes-map-type: atomic
+                required:
+                - realm
+                - secretRef
+                type: object
+              dataplane:
+                description: dataplane configures the relay processes.
+                properties:
+                  extraArgs:
+                    description: |-
+                      extraArgs are appended verbatim to the rendered coturn configuration.
+                      They are hashed into the relay's config-hash like any other change, but
+                      they are not validated against the pinned image: use them for flags the
+                      API does not model.
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  image:
+                    description: |-
+                      image is the coturn image every relay runs, pinned by digest
+                      (`repo/name:tag@sha256:...`). A tag without a digest is rejected so a
+                      pool cannot silently float to a new relay version.
+                    minLength: 1
+                    type: string
+                  resources:
+                    description: |-
+                      resources is the resource request and limit for each relay container.
+                      Relay capacity is bounded by ports, not CPU, so this is about keeping the
+                      process responsive under allocation churn.
+                    properties:
+                      claims:
+                        description: |-
+                          Claims lists the names of resources, defined in spec.resourceClaims,
+                          that are used by this container.
+
+                          This field depends on the
+                          DynamicResourceAllocation feature gate.
+
+                          This field is immutable. It can only be set for containers.
+                        items:
+                          description: ResourceClaim references one entry in PodSpec.ResourceClaims.
+                          properties:
+                            name:
+                              description: |-
+                                Name must match the name of one entry in pod.spec.resourceClaims of
+                                the Pod where this field is used. It makes that resource available
+                                inside a container.
+                              type: string
+                            request:
+                              description: |-
+                                Request is the name chosen for a request in the referenced claim.
+                                If empty, everything from the claim is made available, otherwise
+                                only the result of this request.
+                              type: string
+                          required:
+                          - name
+                          type: object
+                        type: array
+                        x-kubernetes-list-map-keys:
+                        - name
+                        x-kubernetes-list-type: map
+                      limits:
+                        additionalProperties:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        description: |-
+                          Limits describes the maximum amount of compute resources allowed.
+                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                        type: object
+                      requests:
+                        additionalProperties:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        description: |-
+                          Requests describes the minimum amount of compute resources required.
+                          If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
+                          otherwise to an implementation-defined value. Requests cannot exceed Limits.
+                          More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                        type: object
+                    type: object
+                required:
+                - image
+                type: object
+              drainTimeout:
+                description: |-
+                  drainTimeout is how long a draining relay may keep its allocations before
+                  it is deleted anyway. It bounds rollouts and scale-downs; it does not
+                  extend a relay's life when its node is already gone.
+                type: string
+              listeners:
+                description: listeners are the TURN listeners every relay serves.
+                items:
+                  description: ListenerSpec is one TURN listener every relay serves.
+                  properties:
+                    name:
+                      description: |-
+                        name identifies the listener within the pool, for example "turn" or
+                        "turns". It must be unique within spec.listeners.
+                      maxLength: 63
+                      minLength: 1
+                      type: string
+                    port:
+                      description: |-
+                        port is the base listener port. Relays that own their address serve
+                        exactly this port; in PartitionedIP mode, where several relays share one
+                        address, each relay serves port + its slot index, because a listening
+                        socket can only be bound once per address. The ports a pool uses must not
+                        overlap spec.relayPortRange: a listener and an allocation cannot share a
+                        port.
+                      format: int32
+                      maximum: 65535
+                      minimum: 1
+                      type: integer
+                    protocol:
+                      description: protocol is the transport the listener accepts.
+                      enum:
+                      - udp
+                      - tcp
+                      - tls
+                      type: string
+                    tlsSecretRef:
+                      description: |-
+                        tlsSecretRef is the Secret holding the listener's certificate, with the
+                        usual tls.crt and tls.key keys. Required for protocol tls, forbidden
+                        otherwise. Rotating it changes every relay's config hash and rolls the
+                        pool one relay at a time.
+                      properties:
+                        name:
+                          default: ""
+                          description: |-
+                            Name of the referent.
+                            This field is effectively required, but due to backwards compatibility is
+                            allowed to be empty. Instances of this type with an empty value here are
+                            almost certainly wrong.
+                            More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          type: string
+                      type: object
+                      x-kubernetes-map-type: atomic
+                  required:
+                  - name
+                  - port
+                  - protocol
+                  type: object
+                maxItems: 3
+                minItems: 1
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
+              peerPolicy:
+                description: peerPolicy restricts which peers relays may send to.
+                properties:
+                  allowedCIDRs:
+                    description: |-
+                      allowedCIDRs are rendered as coturn --allowed-peer-ip entries and take
+                      precedence over deniedCIDRs for the addresses they name.
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: atomic
+                  deniedCIDRs:
+                    description: |-
+                      deniedCIDRs are rendered as coturn --denied-peer-ip entries. When empty
+                      the webhook defaults them to RFC 1918, RFC 6598, loopback and link-local
+                      (including 169.254.169.254), which also covers the cluster pod and service
+                      CIDRs in the common case. The controller always appends the pod CIDRs it
+                      observes on the relay nodes.
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: atomic
+                type: object
+              placement:
+                description: placement controls where relay pods may run.
+                properties:
+                  nodeSelector:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      nodeSelector is merged with the mandatory relay-node label selector, so it
+                      can narrow the relay nodes used by this pool but never widen them.
+                    type: object
+                  tolerations:
+                    description: |-
+                      tolerations are added to the relay pods' tolerations, for clusters whose
+                      relay nodes carry taints.
+                    items:
+                      description: |-
+                        The pod this Toleration is attached to tolerates any taint that matches
+                        the triple <key,value,effect> using the matching operator <operator>.
+                      properties:
+                        effect:
+                          description: |-
+                            Effect indicates the taint effect to match. Empty means match all taint effects.
+                            When specified, allowed values are NoSchedule, PreferNoSchedule and NoExecute.
+                          type: string
+                        key:
+                          description: |-
+                            Key is the taint key that the toleration applies to. Empty means match all taint keys.
+                            If the key is empty, operator must be Exists; this combination means to match all values and all keys.
+                          type: string
+                        operator:
+                          description: |-
+                            Operator represents a key's relationship to the value.
+                            Valid operators are Exists, Equal, Lt, and Gt. Defaults to Equal.
+                            Exists is equivalent to wildcard for value, so that a pod can
+                            tolerate all taints of a particular category.
+                            Lt and Gt perform numeric comparisons (requires feature gate TaintTolerationComparisonOperators).
+                          type: string
+                        tolerationSeconds:
+                          description: |-
+                            TolerationSeconds represents the period of time the toleration (which must be
+                            of effect NoExecute, otherwise this field is ignored) tolerates the taint. By default,
+                            it is not set, which means tolerate the taint forever (do not evict). Zero and
+                            negative values will be treated as 0 (evict immediately) by the system.
+                          format: int64
+                          type: integer
+                        value:
+                          description: |-
+                            Value is the taint value the toleration matches to.
+                            If the operator is Exists, the value should be empty, otherwise just a regular string.
+                          type: string
+                      type: object
+                    type: array
+                    x-kubernetes-list-type: atomic
+                type: object
+              probe:
+                description: probe configures the per-relay TURN Allocate probe.
+                properties:
+                  interval:
+                    description: |-
+                      interval is how often each ready relay is probed. The probe performs a
+                      real allocation and releases it again, so it holds a port only for the
+                      duration of the check.
+                    type: string
+                  timeout:
+                    description: |-
+                      timeout bounds a single probe, including the allocation and the optional
+                      round trip.
+                    type: string
+                type: object
+              relayPortRange:
+                description: |-
+                  relayPortRange is the pool's UDP port space. Each relay owns a disjoint
+                  slice of it; for HostNetwork and ExternalIPPool that slice is the whole
+                  range. Immutable: changing it invalidates live allocations.
+                properties:
+                  end:
+                    description: |-
+                      end is the last port of the range, inclusive. It must be greater than or
+                      equal to start.
+                    format: int32
+                    maximum: 65535
+                    minimum: 1
+                    type: integer
+                  start:
+                    description: start is the first port of the range, inclusive.
+                    format: int32
+                    maximum: 65535
+                    minimum: 1
+                    type: integer
+                required:
+                - end
+                - start
+                type: object
+              replicas:
+                description: |-
+                  replicas is the desired number of relays. It is explicit rather than
+                  optional because the number of relays is the capacity decision: the value
+                  is capped by the addresses the addressing mode makes available, and the
+                  Ready condition says when it cannot be reached. The upper bound reflects
+                  where the rendered relay configurations stop fitting in one ConfigMap;
+                  pools that need more relays than that need more than one pool.
+                format: int32
+                maximum: 256
+                minimum: 1
+                type: integer
+            required:
+            - addressing
+            - auth
+            - dataplane
+            - listeners
+            - relayPortRange
+            - replicas
+            type: object
+          status:
+            description: status defines the observed state of TURNPool.
+            properties:
+              conditions:
+                description: |-
+                  conditions represent the current state of the TURNPool resource.
+
+                  The condition types are:
+                    - Ready: the desired number of relays exist, are ready and are not
+                      draining.
+                    - ProbeSucceeded: every ready relay last probed successfully.
+                    - CapacityPressure: a relay is near or at its port limit, or a probe
+                      observed TURN error 508.
+                    - Degraded: fewer relays than desired, or a relay is failing to converge.
+
+                  Ready and ProbeSucceeded are normal-true; CapacityPressure and Degraded are
+                  abnormal-true.
+                items:
+                  description: Condition contains details for one aspect of the current
+                    state of this API Resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        lastTransitionTime is the last time the condition transitioned from one status to another.
+                        This should be when the underlying condition changed.  If that is not known, then using the time when the API field changed is acceptable.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        message is a human readable message indicating details about the transition.
+                        This may be an empty string.
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        observedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: |-
+                        reason contains a programmatic identifier indicating the reason for the condition's last transition.
+                        Producers of specific condition types may define expected values and meanings for this field,
+                        and whether the values are considered a guaranteed API.
+                        The value should be a CamelCase string.
+                        This field may not be empty.
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown.
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase or in foo.example.com/CamelCase.
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              observedGeneration:
+                description: |-
+                  observedGeneration is the generation of the spec this status was computed
+                  from.
+                format: int64
+                type: integer
+              portsInUse:
+                description: |-
+                  portsInUse is the total number of relay ports held by allocations across
+                  the pool.
+                format: int32
+                type: integer
+              portsTotal:
+                description: |-
+                  portsTotal is the total number of relay ports the pool owns. Capacity is
+                  bounded by distinct relay addresses times ports per address, not by the
+                  number of relays.
+                format: int32
+                type: integer
+              readyRelays:
+                description: |-
+                  readyRelays is the number of relays that are ready and not draining. It is
+                  the status field the scale subresource reports.
+                format: int32
+                type: integer
+              relays:
+                description: relays is the per-relay observed state, keyed by relay
+                  name.
+                items:
+                  description: RelayStatus is the observed state of one relay.
+                  properties:
+                    allocations:
+                      description: |-
+                        allocations is the number of live allocations on the relay, read from
+                        coturn's metrics endpoint.
+                      format: int32
+                      type: integer
+                    draining:
+                      description: |-
+                        draining reports whether the relay is on its way out. A draining relay is
+                        removed from turnURIs before its pod is deleted.
+                      type: boolean
+                    lastProbe:
+                      description: lastProbe is the most recent probe result, successful
+                        or not.
+                      properties:
+                        latencyMillis:
+                          description: |-
+                            latencyMillis is the probe duration in milliseconds. Milliseconds rather
+                            than seconds so short probes stay readable, and an integer because the API
+                            has no floats.
+                          format: int64
+                          type: integer
+                        message:
+                          description: |-
+                            message explains a failed probe, including the TURN error code when the
+                            relay rejected the allocation.
+                          type: string
+                        succeeded:
+                          description: |-
+                            succeeded reports whether the relay answered the probe with the expected
+                            relayed address and range.
+                          type: boolean
+                        time:
+                          description: time is when the probe finished.
+                          format: date-time
+                          type: string
+                      type: object
+                    name:
+                      description: |-
+                        name is the relay identity: stable across restarts and controller
+                        failover, derived from the relay's address and port range.
+                      minLength: 1
+                      type: string
+                    nodeName:
+                      description: nodeName is the node the relay runs on.
+                      type: string
+                    podName:
+                      description: podName is the pod running this relay.
+                      type: string
+                    portRange:
+                      description: |-
+                        portRange is the slice of the pool's port space this relay owns. Every
+                        relay owns one, so it is always present.
+                      properties:
+                        end:
+                          description: |-
+                            end is the last port of the range, inclusive. It must be greater than or
+                            equal to start.
+                          format: int32
+                          maximum: 65535
+                          minimum: 1
+                          type: integer
+                        start:
+                          description: start is the first port of the range, inclusive.
+                          format: int32
+                          maximum: 65535
+                          minimum: 1
+                          type: integer
+                      required:
+                      - end
+                      - start
+                      type: object
+                    portsInUse:
+                      description: |-
+                        portsInUse is the number of relay ports currently held by allocations. One
+                        allocation occupies one port, so this equals allocations; it is reported
+                        separately because consumers reason about ports.
+                      format: int32
+                      type: integer
+                    portsTotal:
+                      description: |-
+                        portsTotal is the number of ports this relay owns. Capacity is portsTotal;
+                        the ratio consumers compute is portsInUse/portsTotal.
+                      format: int32
+                      type: integer
+                    ready:
+                      description: |-
+                        ready reports whether the relay is serving: pod ready and last probe
+                        successful.
+                      type: boolean
+                    relayAddress:
+                      description: relayAddress is the address the relay advertises
+                        in XOR-RELAYED-ADDRESS.
+                      type: string
+                    turnURIs:
+                      description: |-
+                        turnURIs are the per-relay listener URIs clients can allocate on. A relay
+                        that is not ready or is draining has none.
+                      items:
+                        type: string
+                      type: array
+                      x-kubernetes-list-type: atomic
+                  required:
+                  - name
+                  - portRange
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
+              selector:
+                description: |-
+                  selector is the label selector matching the pool's relay pods, in string
+                  form, exposed through the scale subresource for HPA and KEDA.
+                type: string
+              turnURIs:
+                description: |-
+                  turnURIs lists the listener URIs of ready, non-draining relays. It is
+                  mirrored into the <pool>-turn-uris ConfigMap for the credential issuer.
+                items:
+                  type: string
+                type: array
+                x-kubernetes-list-type: atomic
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      scale:
+        labelSelectorPath: .status.selector
+        specReplicasPath: .spec.replicas
+        statusReplicasPath: .status.readyRelays
+      status: {}

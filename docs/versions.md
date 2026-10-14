@@ -8,7 +8,7 @@ what they pin, so there is one copy of each number and no second table to drift:
   tools) and `tools/go.mod` (the lint toolchain); the `GO_VERSION` env in the
   workflows tracks the `go` directive.
 * Build, test and cluster tooling: `Makefile` (`CONTROLLER_TOOLS_VERSION`,
-  `ENVTEST_K8S_VERSION`, `KUSTOMIZE_VERSION`, `KIND_IMAGE`).
+  `ENVTEST_K8S_VERSION`, `KUSTOMIZE_VERSION`, `KIND_IMAGE`, `HELM_VERSION`).
 * golangci-lint: the `tool` directive in `tools/go.mod`, matched by
   `.custom-gcl.yml`; its plugin modules are pinned in `.custom-gcl.yml` alone.
 * Container images: the `Makefile` (`GO_IMAGE`, `RUNTIME_IMAGE`, `KIND_IMAGE`,
@@ -94,6 +94,27 @@ version, so that dependency is digest upkeep.
 
 The coturn image is the upstream, unmodified BSD-3-Clause data plane. It is
 never vendored into this repository (see `docs/adr/0002-coturn-data-plane.md`).
+
+## Helm
+
+Helm, which lints and renders `charts/turnfleet`, is the one pinned tool that is
+not a Go module and not an image: `HELM_VERSION` in the Makefile is the pin, and
+the `helm` target downloads the release archive from `get.helm.sh` into
+`$(LOCALBIN)` unless that version is already there, checking it against the
+`.sha256sum` the same release publishes next to it. The checksum is not a second
+pin — it comes from the version being installed — so a Renovate bump moves the
+version and the checksum together. `renovate.json` reads the line with a
+`github-releases` custom manager on `helm/helm`, which is where the tag comes
+from. (`kind` is pinned the same way in the e2e workflow: version plus the
+release's checksum.)
+
+The chart carries no version of its own for the images: `make helm-install`
+passes the Makefile's `IMAGE_REGISTRY` and `IMAGE_TAG`, the same values
+`make deploy` sets on the cluster. Installed without those flags the chart uses
+its `appVersion`, which until the project tags a release is `dev` — the tag
+`make docker-build` builds and `make docker-buildx` pushes. A release that
+publishes images should bump the chart's `appVersion` with them, so an install
+without flags gets the released image.
 
 ## GitHub Actions
 

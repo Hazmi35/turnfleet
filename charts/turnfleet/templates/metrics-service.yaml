@@ -1,0 +1,28 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Turnfleet Authors
+#
+# The metrics Service. It is the only Service this chart creates besides the
+# webhook's, and it is not in the relay data path: relay traffic goes to the
+# relay pods' own node addresses, never through a Service.
+{{- if .Values.metrics.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "turnfleet.name" . }}-controller-manager-metrics-service
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "turnfleet.labels" . | nindent 4 }}
+spec:
+  ports:
+    # The port is named https even when the endpoint is plain HTTP
+    # (metrics.secure=false): config/ names it the same way in both
+    # configurations, and a ServiceMonitor selects metrics by that name
+    # (config/prometheus/monitor.yaml), so flipping the scheme must not rename
+    # the port out from under it.
+    - name: https
+      port: {{ include "turnfleet.bindPort" .Values.metrics.bindAddress }}
+      protocol: TCP
+      targetPort: {{ include "turnfleet.bindPort" .Values.metrics.bindAddress }}
+  selector:
+    {{- include "turnfleet.selectorLabels" . | nindent 4 }}
+{{- end }}

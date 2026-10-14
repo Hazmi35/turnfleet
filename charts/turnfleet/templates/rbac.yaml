@@ -1,0 +1,189 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Turnfleet Authors
+#
+# What the controller itself needs: the manager role (relay pods, the rendered
+# ConfigMaps, the shared secret, the TURNPool and its status), the leader
+# election lease and the RBAC that protects the metrics endpoint.
+{{- if .Values.rbac.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "turnfleet.name" . }}-leader-election-role
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "turnfleet.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - coordination.k8s.io
+    resources:
+      - leases
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "turnfleet.name" . }}-leader-election-rolebinding
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "turnfleet.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "turnfleet.name" . }}-leader-election-role
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "turnfleet.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "turnfleet.name" . }}-manager-role
+  labels:
+    {{- include "turnfleet.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+      - pods
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - events
+    verbs:
+      - create
+      - patch
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+      - secrets
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - turnfleet.hzmi.dev
+    resources:
+      - turnpools
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - turnfleet.hzmi.dev
+    resources:
+      - turnpools/finalizers
+    verbs:
+      - update
+  - apiGroups:
+      - turnfleet.hzmi.dev
+    resources:
+      - turnpools/status
+    verbs:
+      - get
+      - patch
+      - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "turnfleet.name" . }}-manager-rolebinding
+  labels:
+    {{- include "turnfleet.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "turnfleet.name" . }}-manager-role
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "turnfleet.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "turnfleet.name" . }}-metrics-auth-role
+  labels:
+    {{- include "turnfleet.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - authentication.k8s.io
+    resources:
+      - tokenreviews
+    verbs:
+      - create
+  - apiGroups:
+      - authorization.k8s.io
+    resources:
+      - subjectaccessreviews
+    verbs:
+      - create
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "turnfleet.name" . }}-metrics-auth-rolebinding
+  labels:
+    {{- include "turnfleet.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "turnfleet.name" . }}-metrics-auth-role
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "turnfleet.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+---
+# A role for a scraper: it may read /metrics and nothing else.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "turnfleet.name" . }}-metrics-reader
+  labels:
+    {{- include "turnfleet.labels" . | nindent 4 }}
+rules:
+  - nonResourceURLs:
+      - /metrics
+    verbs:
+      - get
+{{- end }}

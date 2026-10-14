@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Turnfleet Authors
+#
+# The admission webhook Service, which the API server calls to reach the
+# webhooks.
+{{- if .Values.webhook.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  # Unprefixed on purpose: config/webhook/manifests.yaml, which controller-gen
+  # owns, names `webhook-service` and `system` in the webhook configurations'
+  # clientConfig. The chart keeps that name so its render matches the overlay's,
+  # and the namespace below is the one the API server is told to call.
+  name: webhook-service
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "turnfleet.labels" . | nindent 4 }}
+spec:
+  ports:
+    - port: 443
+      protocol: TCP
+      targetPort: {{ .Values.webhook.port }}
+  selector:
+    {{- include "turnfleet.selectorLabels" . | nindent 4 }}
+{{- end }}

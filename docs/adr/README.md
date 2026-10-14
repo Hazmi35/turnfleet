@@ -18,6 +18,7 @@ decision gets a new ADR that says so.
 | [0010](0010-harness-agnostic-agent-config.md) | The agent harness is harness-agnostic: canonical content under `.agents/`/`hack/agent/`, thin per-harness wiring. |
 | [0011](0011-pin-provenance-in-place.md) | Version pins live next to what they pin; `docs/versions.md` records only the pins that are held, and why. |
 | [0016](0016-release-signature-storage.md) | Release signatures and attestations live in the registry on cosign's tag-based storage, so the cosign pin is held on the v2 line. |
+| [0014](0014-helm-chart-delivery.md) | The chart installs the controller; `config/` stays the source of truth, held together by `make helm-drift`. |
 
 Related documents that are not ADRs: [`../architecture.md`](../architecture.md),
 [`../capacity-model.md`](../capacity-model.md),
