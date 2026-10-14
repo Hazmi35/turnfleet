@@ -8,7 +8,7 @@ what they pin, so there is one copy of each number and no second table to drift:
   tools) and `tools/go.mod` (the lint toolchain); the `GO_VERSION` env in the
   workflows tracks the `go` directive.
 * Build, test and cluster tooling: `Makefile` (`CONTROLLER_TOOLS_VERSION`,
-  `ENVTEST_K8S_VERSION`, `KUSTOMIZE_VERSION`, `KIND_IMAGE`).
+  `ENVTEST_K8S_VERSION`, `KUSTOMIZE_VERSION`, `KIND_IMAGE`, `HELM_VERSION`).
 * golangci-lint: the `tool` directive in `tools/go.mod`, matched by
   `.custom-gcl.yml`; its plugin modules are pinned in `.custom-gcl.yml` alone.
 * Container images: the `Makefile` (`GO_IMAGE`, `RUNTIME_IMAGE`, `KIND_IMAGE`,
@@ -95,6 +95,27 @@ version, so that dependency is digest upkeep.
 The coturn image is the upstream, unmodified BSD-3-Clause data plane. It is
 never vendored into this repository (see `docs/adr/0002-coturn-data-plane.md`).
 
+## Helm
+
+Helm, which lints and renders `charts/turnfleet`, is the one pinned tool that is
+not a Go module and not an image: `HELM_VERSION` in the Makefile is the pin, and
+the `helm` target downloads the release archive from `get.helm.sh` into
+`$(LOCALBIN)` unless that version is already there, checking it against the
+`.sha256sum` the same release publishes next to it. The checksum is not a second
+pin — it comes from the version being installed — so a Renovate bump moves the
+version and the checksum together. `renovate.json` reads the line with a
+`github-releases` custom manager on `helm/helm`, which is where the tag comes
+from. (`kind` is pinned the same way in the e2e workflow: version plus the
+release's checksum.)
+
+The chart carries no version of its own for the images: `make helm-install`
+passes the Makefile's `IMAGE_REGISTRY` and `IMAGE_TAG`, the same values
+`make deploy` sets on the cluster. Installed without those flags the chart uses
+its `appVersion`, which until the project tags a release is `dev` — the tag
+`make docker-build` builds and `make docker-buildx` pushes. A release that
+publishes images should bump the chart's `appVersion` with them, so an install
+without flags gets the released image.
+
 ## GitHub Actions
 
 Actions are pinned by commit SHA, and the comment after each pin is the tag the
@@ -102,6 +123,23 @@ SHA came from, so an upgrade is a deliberate edit and a re-pointed tag cannot
 change what runs. The DCO check runs `hack/verify-dco.sh` from this repository
 instead of a third-party action, which keeps the workflow free of extra pins and
 tokens.
+
+## Release tooling
+
+`.github/workflows/release.yaml` installs the two tools that sign, scan and
+attest a release, and pins both in its own `env`. syft (`SYFT_VERSION`) is
+pinned the way `e2e.yaml` pins the kind binary: the release tarball and its
+sha256, checked before the binary runs. Neither pin is tracked by Renovate: a
+bot bump of the signing tool is a change to a trust anchor, and the checksum
+that belongs to a download pin is not something a bot can compute.
+
+cosign is **held on the v2 line** (`v2.6.5`, released 2026-08-06) although v3
+exists. cosign v3 writes signatures and attestations as OCI 1.1 referrer
+artifacts, and ghcr.io does not serve the Referrers API, so a v3-signed release
+is not discoverable there; the v2 line writes the `sha256-<digest>.sig` and
+`.att` tags ghcr.io has served since 2021, which both cosign v2 and v3 verify.
+Moving to v3 starts with ghcr.io serving that API (ADR 16), not with a version
+bump.
 
 ## Agent tooling
 

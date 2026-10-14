@@ -1,0 +1,4 @@
+# Files that are not part of the chart.
+.git
+.gitignore
+*.tgz

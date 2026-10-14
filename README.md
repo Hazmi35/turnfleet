@@ -94,6 +94,27 @@ make install            # install the CRDs
 make deploy             # deploy the controller (config/default: no admission webhooks)
 ```
 
+Or install the controller from the chart, which is the same controller with the
+kustomize step done for you — CRDs, RBAC, the manager, the metrics Service and,
+with `--set webhook.enabled=true` on a cluster that has cert-manager, the
+admission webhooks:
+
+```sh
+make helm-install       # chart install: CRDs, RBAC, the controller, metrics
+```
+
+`make helm-install` passes the image the Makefile just built and loaded, so it is
+the same dev image `make deploy` runs. It renders what `config/default` renders;
+`charts/turnfleet/values.yaml` lists what is configurable, and `make helm-lint`
+and `make helm-drift` check the chart against `config/` (the drift guard fails
+when the two stop agreeing). Installing from the chart replaces the two steps
+above, so run `make install`/`make deploy` or `make helm-install`, not both.
+
+Upgrading is one step more than installing. Helm installs the files under
+`crds/` on the first install and never updates an existing CRD, so a release
+that changes the schema needs `make helm-crds-apply` before `helm upgrade`; the
+kustomize path gets the same thing from `make install`.
+
 Then create a pool. A minimal `HostNetwork` pool with three relays:
 
 ```yaml
@@ -152,6 +173,8 @@ saturation and peer-policy cases.
 | `internal/probe` | The TURN `Allocate` probe, shared by the controller and the CLI. |
 | `internal/controller`, `internal/webhook` | Reconciliation and admission. |
 | `cmd/` | `turnfleet-controller` and `turnfleet-probe`. |
+| `charts/turnfleet` | The Helm chart: the same controller `config/` deploys, with the webhooks optional. Held against `config/` by `make helm-drift`. |
+| `config/` | The kustomize manifests the chart mirrors: `config/default` (no admission webhooks) and `config/with-webhook` (cert-manager certificates). |
 | `docs/` | Architecture, capacity model, ADRs, pinned versions, known limitations, generated API reference. |
 | `test/e2e` | The kind end-to-end suite. |
 | `.agents/` | The skills and subagent definitions every agent harness shares; `.claude/` and `.omp/` hold the per-harness wiring and symlinks, `hack/agent/` the hook policy. |
@@ -168,8 +191,10 @@ an alias instead of the canonical file fails `make verify`.
 
 ```sh
 make help        # every target
-make ci          # what CI runs: verify, lint, test, vuln, licenses, dco
+make ci          # what CI runs: verify, helm-verify, lint, test, vuln, licenses, dco
 make test-e2e    # the kind suite
+make test-e2e-chart  # install the controller from the chart, then probe a relay
+make helm-verify # lint the chart and check it against config/
 ```
 
 Commits are Conventional Commits and must be signed off (`git commit -s`).
