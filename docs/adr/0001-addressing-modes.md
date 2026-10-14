@@ -67,5 +67,7 @@ hash of the identity for the pod name).
 * Two relays in one pool can only share a relay address in `PartitionedIP`
   mode, where the port slices are disjoint by construction. Overlap between
   *different* pools cannot be validated by an admission webhook (it cannot see
-  other TURNPools' addresses atomically); it is recorded as a known limitation
-  in `docs/limitations.md` and tracked in #10.
+  other TURNPools' addresses atomically), so the reconciler compares the
+  identities pools hold and reports every overlap as a condition on the pools
+  involved: see `docs/adr/0012-cross-pool-address-conflict.md`. Admission
+  itself is unchanged.

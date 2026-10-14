@@ -94,6 +94,13 @@ stateDiagram-v2
 * **`turnURIs`.** Only ready, non-draining relays, mirrored into the
   `<pool>-turn-uris` ConfigMap so the credential issuer hands out per-relay
   URIs (and never a URI for a relay that is saturated or going away).
+* **Cross-pool identity check.** The pass compares the relays it planned with
+  the identities every other pool reports in `status.relays[]`. An address held
+  by both with overlapping ports is reported on each pool as `AddressConflict`
+  and `Degraded`; disjoint ranges on one address stay legal. A pool whose held
+  identities change wakes the pools sharing its addresses, so the pool that did
+  not change clears its condition. See
+  `docs/adr/0012-cross-pool-address-conflict.md`.
 * **Vantage result.** A runner publishes its pass over `<pool>-turn-uris` into
   the `<pool>-vantage` ConfigMap; the controller watches ConfigMaps by label and
   reads it every pass. The result is the only input to `ReachableFromVantage`,
@@ -107,8 +114,9 @@ stateDiagram-v2
 | `Ready` | normal-true | The desired number of relays exist, are ready and non-draining. |
 | `ProbeSucceeded` | normal-true | Every ready relay last probed successfully. |
 | `CapacityPressure` | abnormal-true | A relay is near or at its port limit (`portsInUse`/`portsTotal`), or a probe observed error 508. |
+| `AddressConflict` | abnormal-true | A relay this pool holds shares its address and ports with a relay of another pool. Disjoint ranges on a shared address are legal. |
 | `ReachableFromVantage` | normal-true | Every listener URI the pool publishes answered a TURN `Allocate` where the vantage runner ran. False when one did not; unknown while nothing current has been published — nothing at all, an unreadable payload, or a result older than 15 minutes. |
-| `Degraded` | abnormal-true | Fewer relays than desired, a relay failing to converge, or a vantage point that cannot reach the relays. |
+| `Degraded` | abnormal-true | Fewer relays than desired, a relay failing to converge, a relay identity that overlaps another pool's, or a vantage point that cannot reach the relays. |
 
 `ReachableFromVantage` is a separate condition on purpose. `Ready` and
 `ProbeSucceeded` describe what the controller sees from inside the cluster, and

@@ -173,12 +173,20 @@ func (r *TURNPoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	r.measureRelays(ctx, pool, states)
 
+	// Relay identities are unique cluster-wide, so the pass that computes
+	// them also compares them with the identities the other pools hold.
+	conflicts, err := r.addressConflicts(ctx, pool, states)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	if err := r.writeStatus(ctx, pool, &statusInputs{
 		plan:      &plan,
 		states:    states,
 		truncated: plan.Unplaced > 0,
 		vantage:   vantageResult,
 		now:       r.now(),
+		conflicts: conflicts,
 	}); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -390,8 +398,25 @@ func (r *TURNPoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		// plan, so nodes are watched as well.
 		Watches(&corev1.Node{}, handler.EnqueueRequestsFromMapFunc(r.poolsForNode),
 			builder.WithPredicates(nodeChanged())).
+		// Relay identities must be unique across pools, and the pool that has
+		// to react to another pool's identity is not the one that changed it,
+		// so a change in what a pool holds wakes the pools sharing its
+		// addresses.
+		Watches(&turnfleetv1alpha1.TURNPool{}, handler.EnqueueRequestsFromMapFunc(r.poolsForHeldAddresses),
+			builder.WithPredicates(heldIdentitiesChanged())).
 		Named(ControllerName).
 		Complete(r)
+}
+
+// listPools lists every TURNPool in the cluster. Relay identities are unique
+// across the cluster, so a caller that needs the other pools' identities cannot
+// scope the list to one namespace or label.
+func (r *TURNPoolReconciler) listPools(ctx context.Context) ([]turnfleetv1alpha1.TURNPool, error) {
+	pools := &turnfleetv1alpha1.TURNPoolList{}
+	if err := r.List(ctx, pools); err != nil {
+		return nil, err
+	}
+	return pools.Items, nil
 }
 
 // poolsForNode maps a relay node to the pools that could place a relay on it.
@@ -403,16 +428,16 @@ func (r *TURNPoolReconciler) poolsForNode(ctx context.Context, obj client.Object
 	if _, isRelayNode := node.Labels[RelayNodeLabel]; !isRelayNode {
 		return nil
 	}
-	pools := &turnfleetv1alpha1.TURNPoolList{}
-	if err := r.List(ctx, pools); err != nil {
+	pools, err := r.listPools(ctx)
+	if err != nil {
 		logf.FromContext(ctx).Error(err, "listing pools for a relay node change", "node", node.Name)
 		return nil
 	}
-	requests := make([]ctrl.Request, 0, len(pools.Items))
-	for i := range pools.Items {
+	requests := make([]ctrl.Request, 0, len(pools))
+	for i := range pools {
 		requests = append(requests, ctrl.Request{NamespacedName: types.NamespacedName{
-			Namespace: pools.Items[i].Namespace,
-			Name:      pools.Items[i].Name,
+			Namespace: pools[i].Namespace,
+			Name:      pools[i].Name,
 		}})
 	}
 	return requests
@@ -522,4 +547,8 @@ type statusInputs struct {
 	// secretMissing is set when the pool's auth Secret is unusable, which makes
 	// the whole pool Degraded regardless of what the relays are doing.
 	secretMissing string
+
+	// conflicts are the relay identities this pool holds that another pool
+	// holds too, with overlapping ports.
+	conflicts []addressConflict
 }

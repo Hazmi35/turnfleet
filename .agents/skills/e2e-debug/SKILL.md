@@ -21,7 +21,7 @@ Read `status.relays[]`: `ready`, `draining`, `relayAddress`, `portRange`,
 `ready: false` with a probe message is a *data plane* problem; a relay that is
 missing from `status.relays` is a *planner* problem. `kubectl --context
 kind-turnfleet describe turnpool <pool>` shows the conditions:
-`Ready`, `ProbeSucceeded`, `CapacityPressure`, `Degraded`.
+`Ready`, `ProbeSucceeded`, `CapacityPressure`, `AddressConflict`, `Degraded`.
 
 ## 2. Rendered config
 

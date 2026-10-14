@@ -9,11 +9,15 @@ issue tracker (`gh issue list --label roadmap`; see
 `docs/agents/triage-labels.md`); an entry here that becomes planned work keeps
 its statement and gains a pointer to the issue.
 
-* **Cross-pool overlap is not validated.** The webhook rejects overlapping relay
-  port ranges within a pool, but two `TURNPool`s claiming the same address and
-  range cannot be checked atomically by a single-object webhook. Use distinct
-  addresses or disjoint ranges, and treat the planner's disjointness invariant
-  as intra-pool only. Tracked in #10.
+* **Cross-pool overlap is reported, not resolved.** Two pools holding the same
+  relay address with overlapping ports are detected and flagged on both pools
+  (`AddressConflict` and `Degraded`; see
+  `docs/adr/0012-cross-pool-address-conflict.md`), but nothing moves a relay to
+  make room: which pool gives way is a capacity decision. `relayPortRange` and
+  addressing mode are immutable, so clearing the condition means removing a
+  declared address (`ExternalIPPool`) or creating a new pool. Such a pool is
+  still admitted, because a single-object webhook cannot see the other pool's
+  addresses atomically.
 * **Secondary addresses must be attached already.** `ExternalIPPool` never
   attaches addresses to nodes; it binds to what is there. Attaching cloud
   elastic IPs stays the operator's job. Tracked in #11.
