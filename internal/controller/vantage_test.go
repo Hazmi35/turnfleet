@@ -59,14 +59,16 @@ func (f *testFixture) publishResult(poolName string, payload *vantage.Payload) {
 }
 
 // unpublishedVantage is a pool whose relay is ready and probed from inside the
-// cluster, with nothing published for the vantage point yet.
-func unpublishedVantage(t *testing.T, name string) *testFixture {
+// cluster, with nothing published for the vantage point yet. portStart is the
+// pool's relay port range and must be one no other test uses; see
+// hostNetworkPoolOn.
+func unpublishedVantage(t *testing.T, name string, portStart int32) *testFixture {
 	t.Helper()
 
 	f := newFixture(t)
 	f.createSecret()
 	f.createNode("tf-worker-1", "203.0.113.21")
-	f.createPool(hostNetworkPool(name, 1))
+	f.createPool(hostNetworkPoolOn(name, 1, portStart))
 	f.reconcileUntil(name, "the relay to be ready", func() bool {
 		return conditionStatus(f.pool(name), ConditionReady) == string(metav1.ConditionTrue)
 	})
@@ -79,7 +81,7 @@ func unpublishedVantage(t *testing.T, name string) *testFixture {
 func TestVantageResultCannotBeMaskedByTheInClusterProbe(t *testing.T) {
 	const name = "tpool-vantage"
 
-	f := unpublishedVantage(t, name)
+	f := unpublishedVantage(t, name, 52000)
 
 	pool := f.pool(name)
 	if got := conditionStatus(pool, ConditionProbeSucceeded); got != string(metav1.ConditionTrue) {
@@ -159,7 +161,7 @@ func TestVantageResultCannotBeMaskedByTheInClusterProbe(t *testing.T) {
 func TestVantageResultStaleness(t *testing.T) {
 	const name = "tpool-vantage-stale"
 
-	f := unpublishedVantage(t, name)
+	f := unpublishedVantage(t, name, 52100)
 	uri := f.pool(name).Status.TurnURIs[0]
 
 	f.publishVantage(name, f.clock.Now(), probe.Result{URI: uri, Succeeded: true, Message: "ok"})
@@ -197,7 +199,7 @@ func TestVantageResultStaleness(t *testing.T) {
 func TestVantageResultItCannotUse(t *testing.T) {
 	const name = "tpool-vantage-invalid"
 
-	f := unpublishedVantage(t, name)
+	f := unpublishedVantage(t, name, 52200)
 	uri := f.pool(name).Status.TurnURIs[0]
 
 	f.publishResult(name, &vantage.Payload{

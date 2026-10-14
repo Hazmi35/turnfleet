@@ -161,7 +161,7 @@ func vantageCondition(observation vantageObservation, now time.Time) (conditionS
 		return metav1.ConditionFalse, reasonUnreachableFromVantage,
 			fmt.Sprintf("%d of %d listener URIs did not answer from the vantage point at %s: %s",
 				len(failed), len(payload.Results), payload.ObservedAt.UTC().Format(time.RFC3339),
-				strings.Join(firstN(uris, 3), "; "))
+				strings.Join(firstN(uris), "; "))
 	}
 
 	return metav1.ConditionTrue, reasonReachableFromVantage,
