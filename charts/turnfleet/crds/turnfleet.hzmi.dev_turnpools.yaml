@@ -126,6 +126,7 @@ spec:
                     - HostNetwork
                     - ExternalIPPool
                     - PartitionedIP
+                    - PodIP
                     type: string
                   partitionedIP:
                     description: |-
@@ -142,6 +143,25 @@ spec:
                         maximum: 64
                         minimum: 1
                         type: integer
+                    type: object
+                  podIP:
+                    description: |-
+                      podIP configures AddressingModePodIP and is forbidden for the other
+                      modes. It may be omitted for PodIP: without an attachment the relay binds
+                      the pod's own address on the default network.
+                    properties:
+                      attachmentRef:
+                        description: |-
+                          attachmentRef names the Multus NetworkAttachmentDefinition the relay pods
+                          attach, in the pool's namespace ("name") or in another one
+                          ("namespace/name"). The attachment is where the declared address reaches
+                          the pod. It is immutable, like mode and family: a different attachment
+                          changes which address a relay holds.
+
+                          When it is empty the relay has no secondary interface and binds its own
+                          pod address on the cluster's default network, which must likewise be
+                          reserved and individually routable.
+                        type: string
                     type: object
                 required:
                 - mode
@@ -493,11 +513,15 @@ spec:
                       holds, on the same address and with overlapping ports. Two relays
                       cannot own the same ports on one address, so the affected pools serve
                       less than they report. Disjoint ranges on a shared address are legal.
+                    - PodAddressUnusable: a relay node declares a PodIP relay address the
+                      pool cannot advertise (a private, carrier-grade NAT, link-local,
+                      loopback, multicast or unspecified address). The address is dropped
+                      from the plan.
                     - Degraded: fewer relays than desired, a relay is failing to converge,
                       or a relay identity overlaps another pool's.
 
                   Ready and ProbeSucceeded are normal-true; CapacityPressure,
-                  AddressConflict and Degraded are abnormal-true.
+                  AddressConflict, PodAddressUnusable and Degraded are abnormal-true.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.

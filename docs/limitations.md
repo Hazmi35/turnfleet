@@ -77,7 +77,21 @@ its statement and gains a pointer to the issue.
   traffic arrives only through a load balancer and outbound goes through a NAT
   gateway — this mode is unusable: the relay would advertise the node's
   `InternalIP`, an RFC 1918 address no peer can reach, while the allocation and
-  the in-cluster probe both look healthy. `PodIP`/`SecondaryNetwork` addressing
-  (#15) is what closes that gap.
+  the in-cluster probe both look healthy. `PodIP` addressing is what closes that
+  gap (`docs/adr/0018-addressing-mode-podip.md`).
+* **`PodIP` needs the operator to reserve the addresses.** The relay advertises
+  the address its own pod holds, on the default network or on a Multus
+  attachment (`spec.addressing.podIP.attachmentRef`), and the operator declares
+  the reserved addresses per relay node in `turnfleet.hzmi.dev/relay-pod-addresses`.
+  Per-address ingress rules (NSG or security group), a routable pod network and
+  stable IPAM are prerequisites the operator owns: without stable IPAM the pod
+  comes up on another address and the relay drains in a loop
+  (`RelayAddressChanged` events and the `PodAddressUnusable` condition say so).
+  Admission cannot prove routability, so the mode is gated on the external
+  vantage point like every other one; a network whose inbound traffic arrives
+  only through a load balancer is a hard blocker unless the pod addresses are
+  themselves public and permitted. Kind cannot provide this data path, so the
+  mode is proven by unit, envtest and golden-file tests rather than by
+  `make test-e2e`.
 * **The e2e suite runs on amd64.** The kind node image and the loaded coturn
   image are amd64; arm64 is built in CI but not exercised end to end.

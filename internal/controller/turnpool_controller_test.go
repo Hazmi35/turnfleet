@@ -291,6 +291,98 @@ func TestReconcileExternalIPPool(t *testing.T) {
 	}
 }
 
+// TestReconcilePodIP covers the mode end to end in the reconcile loop: one
+// relay per address a node declares, each in a pod with its own network
+// namespace, attached to the pool's attachment.
+func TestReconcilePodIP(t *testing.T) {
+	f := newFixture(t)
+	f.createSecret()
+	// One node declares two addresses, because capacity in this mode is
+	// addresses and not nodes: both relays must be able to live on that node.
+	f.createPodIPNode("tf-podip-worker-1", "203.0.113.21/24", "203.0.113.22/24")
+
+	pool := hostNetworkPool("tpool-podip", 2)
+	pool.Spec.Addressing = turnfleetv1alpha1.AddressingSpec{
+		Mode:  turnfleetv1alpha1.AddressingModePodIP,
+		PodIP: &turnfleetv1alpha1.PodIPSpec{AttachmentRef: "relay-pods"},
+	}
+	f.createPool(pool)
+
+	f.reconcile("tpool-podip")
+	f.reconcile("tpool-podip")
+	f.markPodsReady("tpool-podip")
+	f.reconcileUntil("tpool-podip", "two ready relays", func() bool {
+		pool := f.pool("tpool-podip")
+		return pool.Status != nil && pool.Status.ReadyRelays != nil && *pool.Status.ReadyRelays == 2
+	})
+
+	addresses := map[string]bool{}
+	for _, relayStatus := range f.pool("tpool-podip").Status.Relays {
+		if relayStatus.RelayAddress != nil {
+			addresses[*relayStatus.RelayAddress] = true
+		}
+	}
+	for _, want := range []string{"203.0.113.21", "203.0.113.22"} {
+		if !addresses[want] {
+			t.Errorf("no relay advertises the declared address %s: addresses are %v", want, addresses)
+		}
+	}
+
+	pods := f.pods("tpool-podip")
+	if len(pods) != 2 {
+		t.Fatalf("created %d relay pods, want 2", len(pods))
+	}
+	for _, pod := range pods {
+		if pod.Spec.HostNetwork {
+			t.Errorf("relay pod %s shares the node's network namespace, so it cannot hold the address it advertises", pod.Name)
+		}
+		if pod.Annotations[NetworksAnnotation] == "" {
+			t.Errorf("relay pod %s is not attached to the pool's attachment", pod.Name)
+		}
+		if affinity := pod.Spec.Affinity; affinity != nil && affinity.PodAntiAffinity != nil &&
+			len(affinity.PodAntiAffinity.RequiredDuringSchedulingIgnoredDuringExecution) > 0 {
+			t.Errorf("relay pod %s has required anti-affinity: the second relay on its node could never schedule", pod.Name)
+		}
+	}
+
+	if got := f.pool("tpool-podip").Status.PortsTotal; got == nil || *got != 96 {
+		t.Errorf("portsTotal = %v, want 96 (two addresses of 48 ports)", got)
+	}
+}
+
+// TestReconcilePodIPDrainsARelayOnAnotherAddress is the stability contract
+// across the read-back: a pod that came up on another address than the one its
+// relay was planned with serves an address no client was given, so it is
+// drained rather than announced.
+func TestReconcilePodIPDrainsARelayOnAnotherAddress(t *testing.T) {
+	f := newFixture(t)
+	f.createSecret()
+	f.createPodIPNode("tf-podip-drift-1", "203.0.113.31/24")
+
+	// No attachment: the relay binds the pod's own address, which is exactly
+	// the case where a CNI with unstable IPAM shows up.
+	pool := hostNetworkPool("tpool-podip-drift", 1)
+	pool.Spec.Addressing = turnfleetv1alpha1.AddressingSpec{Mode: turnfleetv1alpha1.AddressingModePodIP}
+	f.createPool(pool)
+
+	f.reconcile("tpool-podip-drift")
+	// envtest runs no kubelet, so the pod is given an address the pool did not
+	// declare: the CNI handed out something else.
+	f.markPodsReady("tpool-podip-drift")
+	f.reconcile("tpool-podip-drift")
+
+	status := f.pool("tpool-podip-drift").Status
+	if status.ReadyRelays == nil || *status.ReadyRelays != 0 {
+		t.Errorf("readyRelays = %v, want 0: a relay on another address must not be announced", status.ReadyRelays)
+	}
+	if len(status.TurnURIs) != 0 {
+		t.Errorf("turnURIs = %v, want none for a relay that holds another address", status.TurnURIs)
+	}
+	if len(status.Relays) != 1 || status.Relays[0].Draining == nil || !*status.Relays[0].Draining {
+		t.Errorf("relays = %+v, want the one relay draining on an address mismatch", status.Relays)
+	}
+}
+
 // TestDrainOnScaleDown is the drain state machine: a relay that is going away
 // disappears from turnURIs while its pod still exists, and its pod is deleted
 // only once its allocations are gone.

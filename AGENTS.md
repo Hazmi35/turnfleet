@@ -18,6 +18,15 @@ nothing. This file is the only instruction file for every agent.
 * **Allocation** — a TURN allocation held on a relay; it occupies one port.
 * **Relay address** — the public IP a relay advertises in
   `XOR-RELAYED-ADDRESS`.
+* **Declared address** — one of the addresses an operator reserves for a
+  `PodIP` relay on a relay node, in the node annotation
+  `turnfleet.hzmi.dev/relay-pod-addresses`. The operator owns the IPAM and
+  attaches the address; the relay binds and advertises it. A declaration may
+  carry the prefix length the pod's attachment should request.
+* **Attachment** — the Multus `NetworkAttachmentDefinition` a `PodIP` relay pod
+  is attached to (`spec.addressing.podIP.attachmentRef`). It is where a
+  declared address reaches the pod; without one the pod uses its own address on
+  the default network.
 * **Relay node** — a node labelled `turnfleet.hzmi.dev/relay-node=true`.
 * **Draining** — a relay on its way out: removed from `turnURIs`, readiness
   false, deleted only when allocations reach zero or `drainTimeout` expires.

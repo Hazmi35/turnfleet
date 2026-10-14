@@ -4,11 +4,16 @@
 package v1alpha1
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 
 	turnfleetv1alpha1 "github.com/Hazmi35/turnfleet/api/v1alpha1"
@@ -124,6 +129,140 @@ var _ = Describe("TURNPool admission through the API server", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(apierrors.IsInvalid(err)).To(BeTrue(), "error was %v", err)
 			Expect(err.Error()).To(ContainSubstring("partitionedIP"))
+		})
+	})
+
+	Context("when a PodIP pool is validated against the cluster", func() {
+		newPodIPPool := func(name, attachment string) *turnfleetv1alpha1.TURNPool {
+			pool := newPool(name)
+			pool.Spec.Addressing = turnfleetv1alpha1.AddressingSpec{
+				Mode: turnfleetv1alpha1.AddressingModePodIP,
+			}
+			if attachment != "" {
+				pool.Spec.Addressing.PodIP = &turnfleetv1alpha1.PodIPSpec{AttachmentRef: attachment}
+			}
+			return pool
+		}
+
+		// createAttachment creates the NetworkAttachmentDefinition a pool names,
+		// the way a cluster that runs Multus has one.
+		createAttachment := func(name string) {
+			attachment := &unstructured.Unstructured{}
+			attachment.SetGroupVersionKind(schema.GroupVersionKind{
+				Group: "k8s.cni.cncf.io", Version: "v1", Kind: "NetworkAttachmentDefinition",
+			})
+			attachment.SetName(name)
+			attachment.SetNamespace(namespace)
+			Expect(k8sClient.Create(ctx, attachment)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(context.Background(), attachment)
+			})
+		}
+
+		// createDeclaringNode creates a relay node that declares the addresses a
+		// PodIP pool plans on, and removes it again before the next spec so one
+		// spec's bad declaration cannot reject another's pool.
+		createDeclaringNode := func(name, declared string) {
+			node := &corev1.Node{ObjectMeta: metav1.ObjectMeta{
+				Name:        name,
+				Labels:      map[string]string{"turnfleet.hzmi.dev/relay-node": "true"},
+				Annotations: map[string]string{relay.PodAddressesAnnotation: declared},
+			}}
+			Expect(k8sClient.Create(ctx, node)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(context.Background(), node)
+				Eventually(func() bool {
+					return apierrors.IsNotFound(k8sClient.Get(context.Background(),
+						types.NamespacedName{Name: name}, &corev1.Node{}))
+				}).Should(BeTrue())
+			})
+		}
+
+		It("admits a pool whose declared attachment exists", func() {
+			createAttachment("podip-relay-pods")
+			pool := newPodIPPool("admission-podip-attached", "podip-relay-pods")
+			Expect(k8sClient.Create(ctx, pool)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(context.Background(), pool)
+			})
+		})
+
+		It("admits a pool without an attachment", func() {
+			// The relay binds the pod's own address on the default network; the
+			// addresses themselves are declared on the relay nodes, and a node
+			// may be labelled and annotated after the pool is admitted.
+			pool := newPodIPPool("admission-podip-default-net", "")
+			Expect(k8sClient.Create(ctx, pool)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(context.Background(), pool)
+			})
+		})
+
+		It("rejects a declared attachment that does not exist", func() {
+			err := k8sClient.Create(ctx, newPodIPPool("admission-podip-missing", "podip-not-created"))
+			Expect(err).To(HaveOccurred())
+			Expect(apierrors.IsInvalid(err)).To(BeTrue(), "error was %v", err)
+			Expect(err.Error()).To(ContainSubstring("does not exist"))
+		})
+
+		It("admits a pool whose nodes declare routable addresses", func() {
+			createDeclaringNode("podip-node-routable", "203.0.113.21/24,203.0.113.22/24")
+			pool := newPodIPPool("admission-podip-routable", "")
+			Expect(k8sClient.Create(ctx, pool)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(context.Background(), pool)
+			})
+		})
+
+		for _, rejected := range []struct {
+			name     string
+			declared string
+			reason   string
+		}{
+			{"a private address", "10.0.0.5/24", "RFC 1918"},
+			{"a carrier-grade NAT address", "100.64.0.5/10", "RFC 6598"},
+			{"a link-local address", "169.254.10.10/16", "link-local"},
+			{"a loopback address", "127.0.0.5", "loopback"},
+		} {
+			It("rejects a node that declares "+rejected.name, func() {
+				createDeclaringNode("podip-node-unusable", rejected.declared)
+				err := k8sClient.Create(ctx, newPodIPPool("admission-podip-unusable", ""))
+				Expect(err).To(HaveOccurred())
+				Expect(apierrors.IsInvalid(err)).To(BeTrue(), "error was %v", err)
+				Expect(err.Error()).To(ContainSubstring(rejected.reason))
+			})
+		}
+
+		It("rejects a malformed declaration", func() {
+			createDeclaringNode("podip-node-malformed", "203.0.113.21,rubbish")
+			err := k8sClient.Create(ctx, newPodIPPool("admission-podip-malformed", ""))
+			Expect(err).To(HaveOccurred())
+			Expect(apierrors.IsInvalid(err)).To(BeTrue(), "error was %v", err)
+			Expect(err.Error()).To(ContainSubstring("not an IP address"))
+		})
+
+		It("keeps the attachment immutable", func() {
+			createAttachment("podip-relay-pods")
+			createAttachment("podip-relay-pods-v2")
+			pool := newPodIPPool("admission-podip-immutable", "podip-relay-pods")
+			Expect(k8sClient.Create(ctx, pool)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(context.Background(), pool)
+			})
+
+			stored := &turnfleetv1alpha1.TURNPool{}
+			Expect(k8sClient.Get(ctx, key("admission-podip-immutable"), stored)).To(Succeed())
+			stored.Spec.Addressing.PodIP.AttachmentRef = "podip-relay-pods-v2"
+			err := k8sClient.Update(ctx, stored)
+			Expect(err).To(HaveOccurred())
+			Expect(apierrors.IsInvalid(err)).To(BeTrue(), "error was %v", err)
+			Expect(err.Error()).To(ContainSubstring("immutable"))
+
+			// Scaling the same pool stays allowed: the read-free check must not
+			// make an ordinary update fail.
+			Expect(k8sClient.Get(ctx, key("admission-podip-immutable"), stored)).To(Succeed())
+			stored.Spec.Replicas = 5
+			Expect(k8sClient.Update(ctx, stored)).To(Succeed())
 		})
 	})
 

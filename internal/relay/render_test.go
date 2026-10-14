@@ -42,6 +42,8 @@ func renderSpec(mode turnfleetv1alpha1.AddressingMode) turnfleetv1alpha1.TURNPoo
 				{NodeName: "worker-1", Address: "198.51.100.11"},
 			},
 		}
+	case turnfleetv1alpha1.AddressingModePodIP:
+		spec.Addressing.PodIP = &turnfleetv1alpha1.PodIPSpec{AttachmentRef: "relay-pods"}
 	case turnfleetv1alpha1.AddressingModeHostNetwork:
 	}
 	return spec
@@ -72,6 +74,7 @@ func goldenInputs(t *testing.T) map[string]RenderInput {
 	hostnetwork := renderSpec(turnfleetv1alpha1.AddressingModeHostNetwork)
 	partitioned := renderSpec(turnfleetv1alpha1.AddressingModePartitionedIP)
 	external := renderSpec(turnfleetv1alpha1.AddressingModeExternalIPPool)
+	podip := renderSpec(turnfleetv1alpha1.AddressingModePodIP)
 
 	tlsSpec := renderSpec(turnfleetv1alpha1.AddressingModeHostNetwork)
 	tlsSpec.Listeners = []turnfleetv1alpha1.ListenerSpec{
@@ -133,6 +136,39 @@ func goldenInputs(t *testing.T) map[string]RenderInput {
 			PoolName:      "demo",
 			Spec:          external,
 			DeniedCIDRs:   denied,
+			AuthSecret:    testSecret,
+		},
+		"podip": {
+			// A PodIP relay binds the address the pod holds and advertises it:
+			// there is no public/private mapping, because the address is the
+			// pod's own.
+			Relay: Relay{
+				Name:        "demo-relay-5e6f7",
+				Identity:    "203.0.113.21|49152-49199",
+				NodeName:    "worker-1",
+				Address:     "203.0.113.21",
+				BindAddress: "203.0.113.21",
+				PortRange:   PortRange{Start: 49152, End: 49199},
+			},
+			PoolNamespace: "default",
+			PoolName:      "demo",
+			Spec:          podip,
+			DeniedCIDRs:   denied,
+			AuthSecret:    testSecret,
+		},
+		"podip-v6": {
+			Relay: Relay{
+				Name:        "demo-relay-6f7a8",
+				Identity:    "2001:db8:100::21|49152-49199",
+				NodeName:    "worker-1",
+				Address:     "2001:db8:100::21",
+				BindAddress: "2001:db8:100::21",
+				PortRange:   PortRange{Start: 49152, End: 49199},
+			},
+			PoolNamespace: "default",
+			PoolName:      "demo",
+			Spec:          v6Spec(turnfleetv1alpha1.AddressingModePodIP),
+			DeniedCIDRs:   deniedV6,
 			AuthSecret:    testSecret,
 		},
 		"hostnetwork-nat": {
@@ -381,6 +417,60 @@ func TestRenderRejectsUnusableInput(t *testing.T) {
 				t.Fatal("Render() accepted input that cannot produce a working relay")
 			}
 		})
+	}
+}
+
+// TestRenderPodIPBindsTheAddressThePodHolds pins the mode's data plane: the
+// relay listens on and advertises the address the pod holds, and coturn's
+// public/private mapping is not emitted, because there is nothing to map — the
+// address is local to the pod.
+func TestRenderPodIPBindsTheAddressThePodHolds(t *testing.T) {
+	t.Parallel()
+
+	input := goldenInputs(t)["podip"]
+	config, err := Render(&input)
+	if err != nil {
+		t.Fatalf("Render() failed: %v", err)
+	}
+
+	if !strings.Contains(config, "\nlistening-ip="+input.Relay.Address+"\n") {
+		t.Errorf("the relay does not listen on its own address %s:\n%s", input.Relay.Address, config)
+	}
+	if !strings.Contains(config, "\nrelay-ip="+input.Relay.Address+"\n") {
+		t.Errorf("the relay does not relay from its own address %s:\n%s", input.Relay.Address, config)
+	}
+	if strings.Contains(config, "external-ip=") {
+		t.Errorf("a PodIP relay advertises the address it holds, so it must not render external-ip:\n%s", config)
+	}
+	// The deny list is the SSRF guard and stays in force for this mode too.
+	if !strings.Contains(config, "denied-peer-ip=") {
+		t.Errorf("the peer deny list is missing from a PodIP relay:\n%s", config)
+	}
+}
+
+// TestConfigHashFollowsTheAddress is the property that keeps a relay from being
+// recreated for nothing: the rendered configuration, and therefore the config
+// hash, changes when the address changes and not when nothing does.
+func TestConfigHashFollowsTheAddress(t *testing.T) {
+	t.Parallel()
+
+	first := goldenInputs(t)["podip"]
+	second := first
+	second.Relay.Address = "203.0.113.22"
+	second.Relay.BindAddress = "203.0.113.22"
+	second.Relay.Identity = "203.0.113.22|49152-49199"
+
+	firstConfig, err := Render(&first)
+	if err != nil {
+		t.Fatalf("Render() failed: %v", err)
+	}
+	secondConfig, err := Render(&second)
+	if err != nil {
+		t.Fatalf("Render() failed: %v", err)
+	}
+
+	if ConfigHash(firstConfig) == ConfigHash(secondConfig) {
+		t.Error("the config hash is the same for two different addresses: an address change would not roll the relay")
 	}
 }
 

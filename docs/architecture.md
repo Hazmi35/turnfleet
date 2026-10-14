@@ -44,14 +44,17 @@ port range directly on a node address. There is no Service, Ingress or cloud
 load balancer in the relay data path (ADR 3, ADR 4). Relays that share an address
 (PartitionedIP) each get their own listener port — `spec.listeners[].port` plus
 the relay's slot on its node — because a listening socket binds once per address
-(ADR 9).
+(ADR 9). `PodIP` is the one mode that does not use the host's network: its relay
+address belongs to the pod, on the default network or on a Multus attachment,
+which is what makes the mode work on clusters whose nodes have no routable
+address of their own (ADR 18).
 
 ## Components
 
 | Component | Responsibility |
 | --- | --- |
 | `api/v1alpha1` | `TURNPool` spec and status. No logic. |
-| `internal/relay.Planner` | Computes the desired relay set: one identity `(relayAddress, portRange)` per relay, disjoint within a pool, stable across restarts and failover. Implements the three addressing modes. |
+| `internal/relay.Planner` | Computes the desired relay set: one identity `(relayAddress, portRange)` per relay, disjoint within a pool, stable across restarts and failover. Implements the four addressing modes. |
 | `internal/relay.Renderer` | Renders one relay's coturn configuration from the spec, the relay identity and the node address. Pure; golden-tested. |
 | `internal/probe` | A real TURN `Allocate` (plus optional `CreatePermission`/`Send` round trip) against a relay listener on `pion/turn`, asserting the relayed address and range. |
 | `internal/vantage` | The result a vantage runner publishes and where it publishes it: the `<pool>-vantage` ConfigMap, its labels and its JSON payload. |

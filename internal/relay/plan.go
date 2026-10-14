@@ -192,9 +192,48 @@ func candidatesForFamily(spec *turnfleetv1alpha1.TURNPoolSpec, node Node, family
 		}
 		return out
 
+	case turnfleetv1alpha1.AddressingModePodIP:
+		// Every relay in this mode owns its own address: a node's declared
+		// pod addresses are one relay each, and each relay owns the whole port
+		// range. The address is declared by the operator on the node, so it is
+		// known before the pod exists and the relay identity stays stable.
+		addresses := declaredPodAddresses(node, family)
+		out := make([]candidate, 0, len(addresses))
+		for _, addr := range addresses {
+			out = append(out, candidate{
+				nodeName:    node.Name,
+				address:     addr,
+				bindAddress: addr,
+				portRange:   portRange,
+			})
+		}
+		return out
+
 	default:
 		return nil
 	}
+}
+
+// declaredPodAddresses returns the PodIP addresses one node declares for one
+// family, sorted, deduplicated, and reduced to the bare address a relay binds.
+// A declaration carrying a prefix is still that address: the prefix is only
+// what the pod's attachment requests from its IPAM.
+func declaredPodAddresses(node Node, family turnfleetv1alpha1.AddressingFamily) []string {
+	out := make([]string, 0, len(node.PodAddresses))
+	seen := make(map[string]bool, len(node.PodAddresses))
+	for _, declared := range node.PodAddresses {
+		address, ok := PodAddress(declared)
+		if !ok || seen[address] {
+			continue
+		}
+		if AddressFamilyOf(address) != family {
+			continue
+		}
+		seen[address] = true
+		out = append(out, address)
+	}
+	slices.Sort(out)
+	return out
 }
 
 // PartitionPortRange splits a pool's port space into relaysPerNode disjoint

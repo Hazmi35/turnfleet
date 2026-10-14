@@ -31,6 +31,12 @@ func FuzzRenderer(f *testing.F) {
 			// nothing on it, not fall back to its IPv4 address.
 			v4Node("worker-3", "10.0.0.13"),
 		}
+		// PodIP mode plans on the addresses its nodes declare, so the fuzz
+		// nodes declare some; otherwise the mode would place nothing and go
+		// untested.
+		nodes[0].PodAddresses = []string{"203.0.113.21", "2001:db8:100::21"}
+		nodes[1].PodAddresses = []string{"203.0.113.22", "2001:db8:100::22/64"}
+		nodes[2].PodAddresses = []string{"198.51.100.13"}
 
 		plan := ComputePlan(&PlanInput{PoolName: "fuzz", Spec: spec, Nodes: nodes})
 		assertNoOverlap(t, &plan, &spec)
@@ -114,8 +120,9 @@ func specFromBytes(data []byte) turnfleetv1alpha1.TURNPoolSpec {
 		turnfleetv1alpha1.AddressingModeHostNetwork,
 		turnfleetv1alpha1.AddressingModeExternalIPPool,
 		turnfleetv1alpha1.AddressingModePartitionedIP,
+		turnfleetv1alpha1.AddressingModePodIP,
 		"SomethingElse",
-	}[int(byteAt(4))%4]
+	}[int(byteAt(4))%5]
 
 	// byteAt(11) is past every byte the seeds use, so the stored corpus keeps
 	// meaning what it meant before the family existed.

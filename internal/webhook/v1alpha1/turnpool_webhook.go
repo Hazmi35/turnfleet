@@ -15,11 +15,15 @@ import (
 	"regexp"
 	"strings"
 
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation/field"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 
@@ -40,7 +44,7 @@ var groupKind = schema.GroupKind{Group: turnfleetv1alpha1.GroupVersion.Group, Ki
 // SetupTURNPoolWebhookWithManager registers the webhook for TURNPool in the manager.
 func SetupTURNPoolWebhookWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewWebhookManagedBy(mgr, &turnfleetv1alpha1.TURNPool{}).
-		WithValidator(&TURNPoolValidator{}).
+		WithValidator(&TURNPoolValidator{Client: mgr.GetAPIReader()}).
 		WithDefaulter(&TURNPoolDefaulter{}).
 		Complete()
 }
@@ -103,19 +107,31 @@ func (d *TURNPoolDefaulter) Default(_ context.Context, obj *turnfleetv1alpha1.TU
 
 // +kubebuilder:webhook:path=/validate-turnfleet-hzmi-dev-v1alpha1-turnpool,mutating=false,failurePolicy=fail,sideEffects=None,groups=turnfleet.hzmi.dev,resources=turnpools,verbs=create;update,versions=v1alpha1,name=vturnpool-v1alpha1.kb.io,admissionReviewVersions=v1
 
+// +kubebuilder:rbac:groups=k8s.cni.cncf.io,resources=network-attachment-definitions,verbs=get;list;watch
+
 // TURNPoolValidator rejects pools that cannot be relayed safely.
 //
 // NOTE: The +kubebuilder:object:generate=false marker prevents controller-gen
 // from generating DeepCopy methods for this type.
 //
 // +kubebuilder:object:generate=false
-type TURNPoolValidator struct{}
+type TURNPoolValidator struct {
+	// Client reads the cluster state a spec alone cannot express: whether the
+	// NetworkAttachmentDefinition a PodIP pool names exists, and whether the
+	// addresses its relay nodes declare are individually routable.
+	//
+	// It is the manager's uncached reader on purpose: the attachment's kind
+	// only exists on clusters that run Multus, and a cache-backed read would
+	// need an informer for a kind the cluster may not serve.
+	Client client.Reader
+}
 
 // ValidateCreate implements admission.Validator.
-func (v *TURNPoolValidator) ValidateCreate(_ context.Context, obj *turnfleetv1alpha1.TURNPool) (admission.Warnings, error) {
+func (v *TURNPoolValidator) ValidateCreate(ctx context.Context, obj *turnfleetv1alpha1.TURNPool) (admission.Warnings, error) {
 	turnpoollog.V(1).Info("validating TURNPool creation", "name", obj.GetName(), "namespace", obj.GetNamespace())
 
 	errs := validateSpec(&obj.Spec, field.NewPath("spec"))
+	errs = append(errs, validatePodIPDeployment(ctx, v.Client, obj, field.NewPath("spec"))...)
 	if len(errs) > 0 {
 		return nil, apierrors.NewInvalid(groupKind, obj.GetName(), errs)
 	}
@@ -123,10 +139,11 @@ func (v *TURNPoolValidator) ValidateCreate(_ context.Context, obj *turnfleetv1al
 }
 
 // ValidateUpdate implements admission.Validator.
-func (v *TURNPoolValidator) ValidateUpdate(_ context.Context, oldObj, newObj *turnfleetv1alpha1.TURNPool) (admission.Warnings, error) {
+func (v *TURNPoolValidator) ValidateUpdate(ctx context.Context, oldObj, newObj *turnfleetv1alpha1.TURNPool) (admission.Warnings, error) {
 	turnpoollog.V(1).Info("validating TURNPool update", "name", newObj.GetName(), "namespace", newObj.GetNamespace())
 
 	errs := validateSpec(&newObj.Spec, field.NewPath("spec"))
+	errs = append(errs, validatePodIPDeployment(ctx, v.Client, newObj, field.NewPath("spec"))...)
 	errs = append(errs, validateImmutability(&oldObj.Spec, &newObj.Spec, field.NewPath("spec"))...)
 	if len(errs) > 0 {
 		return nil, apierrors.NewInvalid(groupKind, newObj.GetName(), errs)
@@ -235,7 +252,10 @@ func validateListeners(spec *turnfleetv1alpha1.TURNPoolSpec, path *field.Path) f
 		// relay port range: a listener and an allocation cannot share a port.
 		// In PartitionedIP mode the pool's relays serve a span of ports
 		// starting at the declared one, because each relay on a shared address
-		// needs a listening port of its own.
+		// needs a listening port of its own. It is the only mode where several
+		// relays share an address: in PodIP and ExternalIPPool every relay owns
+		// its address, so the span is one and the offset rule does not apply
+		// (docs/adr/0009-partitioned-listener-ports.md).
 		ports := spec.Addressing.PartitionedIP
 		span := int32(1)
 		if ports != nil && spec.Addressing.Mode == turnfleetv1alpha1.AddressingModePartitionedIP {
@@ -279,11 +299,19 @@ func validateAddressing(spec *turnfleetv1alpha1.TURNPoolSpec, path *field.Path) 
 			errs = append(errs, field.Forbidden(path.Child("partitionedIP"),
 				"only applies to mode PartitionedIP"))
 		}
+		if addressing.PodIP != nil {
+			errs = append(errs, field.Forbidden(path.Child("podIP"),
+				"only applies to mode PodIP"))
+		}
 
 	case turnfleetv1alpha1.AddressingModeExternalIPPool:
 		if addressing.PartitionedIP != nil {
 			errs = append(errs, field.Forbidden(path.Child("partitionedIP"),
 				"only applies to mode PartitionedIP"))
+		}
+		if addressing.PodIP != nil {
+			errs = append(errs, field.Forbidden(path.Child("podIP"),
+				"only applies to mode PodIP"))
 		}
 		if addressing.ExternalIPPool == nil || len(addressing.ExternalIPPool.Addresses) == 0 {
 			errs = append(errs, field.Required(path.Child("externalIPPool", "addresses"),
@@ -328,6 +356,10 @@ func validateAddressing(spec *turnfleetv1alpha1.TURNPoolSpec, path *field.Path) 
 			errs = append(errs, field.Forbidden(path.Child("externalIPPool"),
 				"only applies to mode ExternalIPPool"))
 		}
+		if addressing.PodIP != nil {
+			errs = append(errs, field.Forbidden(path.Child("podIP"),
+				"only applies to mode PodIP"))
+		}
 		if addressing.PartitionedIP == nil {
 			errs = append(errs, field.Required(path.Child("partitionedIP"),
 				"mode PartitionedIP needs relaysPerNode: it decides how the port range is split"))
@@ -336,14 +368,144 @@ func validateAddressing(spec *turnfleetv1alpha1.TURNPoolSpec, path *field.Path) 
 				addressing.PartitionedIP.RelaysPerNode, "must be at least 1"))
 		}
 
+	case turnfleetv1alpha1.AddressingModePodIP:
+		errs = append(errs, validatePodIPAddressing(addressing, path)...)
+
 	default:
 		errs = append(errs, field.NotSupported(path.Child("mode"), addressing.Mode, []string{
 			string(turnfleetv1alpha1.AddressingModeHostNetwork),
 			string(turnfleetv1alpha1.AddressingModeExternalIPPool),
 			string(turnfleetv1alpha1.AddressingModePartitionedIP),
+			string(turnfleetv1alpha1.AddressingModePodIP),
 		}))
 	}
 
+	return errs
+}
+
+// networkAttachmentDefinitionKind is the Kind Multus registers for a
+// NetworkAttachmentDefinition. The operator depends on no Multus API package:
+// the attachment is read as an unstructured object, and existence is all it
+// needs from it.
+var networkAttachmentDefinitionKind = schema.GroupVersionKind{
+	Group:   "k8s.cni.cncf.io",
+	Version: "v1",
+	Kind:    "NetworkAttachmentDefinition",
+}
+
+// podIPAttachmentRef is the pool's attachment reference, or "" when the pool
+// names no attachment and its relays bind their own pod address on the
+// default network.
+func podIPAttachmentRef(spec *turnfleetv1alpha1.TURNPoolSpec) string {
+	if spec.Addressing.PodIP == nil {
+		return ""
+	}
+	return strings.TrimSpace(spec.Addressing.PodIP.AttachmentRef)
+}
+
+// validatePodIPDeployment checks the PodIP mode against cluster state, which a
+// spec alone cannot express: the attachment the pool names must exist, and the
+// addresses its relay nodes declare must be individually routable.
+//
+// It is advisory by construction. Nodes are not this object, and a node
+// annotation can change the moment after admission, so the reconciler
+// re-checks exactly the same rules and reports what it dropped as the
+// PodAddressUnusable condition (internal/controller). Without that second half
+// an edit behind admission's back would be silently unenforced.
+func validatePodIPDeployment(ctx context.Context, c client.Reader, pool *turnfleetv1alpha1.TURNPool, path *field.Path) field.ErrorList {
+	if c == nil || pool.Spec.Addressing.Mode != turnfleetv1alpha1.AddressingModePodIP {
+		return nil
+	}
+
+	addressing := path.Child("addressing")
+	reference := addressing.Child("podIP", "attachmentRef")
+	var errs field.ErrorList
+
+	if ref := podIPAttachmentRef(&pool.Spec); ref != "" {
+		namespace, name, ok := relay.PodIPAttachmentParts(ref, pool.Namespace)
+		switch {
+		case !ok:
+			errs = append(errs, field.Invalid(reference, ref,
+				"must be a NetworkAttachmentDefinition name, or namespace/name"))
+		default:
+			exists, err := attachmentExists(ctx, c, namespace, name)
+			switch {
+			case err != nil:
+				errs = append(errs, field.InternalError(reference,
+					fmt.Errorf("reading the declared attachment %s/%s: %w", namespace, name, err)))
+			case !exists:
+				errs = append(errs, field.Invalid(reference, ref,
+					fmt.Sprintf("the declared attachment %s/%s does not exist: create the NetworkAttachmentDefinition it names", namespace, name)))
+			}
+		}
+	}
+
+	nodes := &corev1.NodeList{}
+	if err := c.List(ctx, nodes); err != nil {
+		return append(errs, field.InternalError(addressing.Child("podIP"),
+			fmt.Errorf("listing the relay nodes that declare %s: %w", relay.PodAddressesAnnotation, err)))
+	}
+	declared := addressing.Child("podIP")
+	for i := range nodes.Items {
+		node := &nodes.Items[i]
+		for _, entry := range strings.Split(node.Annotations[relay.PodAddressesAnnotation], ",") {
+			entry = strings.TrimSpace(entry)
+			if entry == "" {
+				continue
+			}
+			address, ok := relay.PodAddress(entry)
+			if !ok {
+				errs = append(errs, field.Invalid(declared, entry,
+					fmt.Sprintf("node %s declares %q, which is not an IP address, optionally with a prefix length", node.Name, entry)))
+				continue
+			}
+			if routable, reason := relay.IndividuallyRoutable(address); !routable {
+				errs = append(errs, field.Invalid(declared, address,
+					fmt.Sprintf("node %s declares a relay address that %s, so no peer could reach the relay: a PodIP relay address must be individually routable", node.Name, reason)))
+			}
+		}
+	}
+	return errs
+}
+
+// attachmentExists reports whether the named NetworkAttachmentDefinition
+// exists.
+func attachmentExists(ctx context.Context, c client.Reader, namespace, name string) (bool, error) {
+	attachment := &unstructured.Unstructured{}
+	attachment.SetGroupVersionKind(networkAttachmentDefinitionKind)
+	err := c.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, attachment)
+	switch {
+	case err == nil:
+		return true, nil
+	case apierrors.IsNotFound(err):
+		return false, nil
+	default:
+		return false, err
+	}
+}
+
+// validatePodIPAddressing is the PodIP mode's pure, spec-only part: the other
+// modes' blocks are forbidden, and nothing is required.
+//
+// Nothing is required because the addresses are declared on the relay nodes
+// (relay.PodAddressesAnnotation), which a TURNPool does not own, and because
+// the attachment is optional: without one the relay binds the pod's own address
+// on the default network. A pool whose nodes declare no address is admitted and
+// reports the replicas it could not place, exactly as ExternalIPPool does for
+// addresses it cannot use. The attachment's existence and the declared
+// addresses are checked against the cluster state, and re-checked by the
+// reconciler.
+func validatePodIPAddressing(addressing turnfleetv1alpha1.AddressingSpec, path *field.Path) field.ErrorList {
+	var errs field.ErrorList
+
+	if addressing.ExternalIPPool != nil {
+		errs = append(errs, field.Forbidden(path.Child("externalIPPool"),
+			"only applies to mode ExternalIPPool"))
+	}
+	if addressing.PartitionedIP != nil {
+		errs = append(errs, field.Forbidden(path.Child("partitionedIP"),
+			"only applies to mode PartitionedIP"))
+	}
 	return errs
 }
 
@@ -479,6 +641,14 @@ func validateImmutability(oldSpec, newSpec *turnfleetv1alpha1.TURNPoolSpec, path
 	if relaysPerNode(oldSpec) != relaysPerNode(newSpec) {
 		errs = append(errs, field.Forbidden(path.Child("addressing", "partitionedIP", "relaysPerNode"),
 			"is immutable: it decides how the port range is split, so changing it re-partitions every relay"))
+	}
+	// The attachment decides which address a PodIP relay holds, so replacing it
+	// moves every relay in the pool and strands the allocations on them: a new
+	// pool is the only safe move, exactly as for mode and family.
+	if oldRef, newRef := podIPAttachmentRef(oldSpec), podIPAttachmentRef(newSpec); oldRef != newRef {
+		errs = append(errs, field.Forbidden(path.Child("addressing", "podIP", "attachmentRef"),
+			fmt.Sprintf("is immutable (%q -> %q): a different attachment changes which address every relay holds and would strand live allocations",
+				oldRef, newRef)))
 	}
 	return errs
 }

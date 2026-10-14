@@ -27,8 +27,8 @@ import (
 )
 
 // Condition types reported on a TURNPool. Ready and ProbeSucceeded are
-// normal-true; CapacityPressure, AddressConflict and Degraded are
-// abnormal-true.
+// normal-true; CapacityPressure, AddressConflict, PodAddressUnusable and
+// Degraded are abnormal-true.
 const (
 	// ConditionReady is true when the desired relays exist, are ready and are
 	// not draining.
@@ -46,6 +46,14 @@ const (
 	// that another pool holds too, on the same address and with overlapping
 	// ports. Disjoint ranges on a shared address are legal.
 	ConditionAddressConflict = "AddressConflict"
+
+	// ConditionPodAddressUnusable is true when a relay node declares a PodIP
+	// address the pool cannot advertise — a private, carrier-grade NAT,
+	// link-local, loopback, multicast or unspecified address. The address is
+	// dropped from the plan, and the condition names the node and the reason.
+	// It is the reconcile-time half of a rule admission also checks, because a
+	// node annotation can change after the pool was admitted.
+	ConditionPodAddressUnusable = "PodAddressUnusable"
 
 	// ConditionReachableFromVantage is true when the latest result published by
 	// a vantage runner says every listener URI the pool publishes answered a
@@ -219,9 +227,23 @@ func writeConditions(status *turnfleetv1alpha1.TURNPoolStatus, pool *turnfleetv1
 
 	unreachable := writeVantageCondition(status, inputs)
 
+	// A PodIP address a node declares but the pool cannot advertise is reported
+	// on its own condition and on Degraded: the relay behind it is dropped from
+	// the plan, so the pool serves less than it asks for until the declaration
+	// or the CNI changes.
+	podAddressMessage := strings.Join(firstN(inputs.podAddressProblems), "; ")
+	if len(inputs.podAddressProblems) > 0 {
+		setCondition(status, ConditionPodAddressUnusable, metav1.ConditionTrue, "UnusableRelayAddress", podAddressMessage)
+	} else {
+		setCondition(status, ConditionPodAddressUnusable, metav1.ConditionFalse, "RelayAddressUsable",
+			"every PodIP relay address the pool's nodes declare is individually routable")
+	}
+
 	switch {
 	case len(inputs.conflicts) > 0:
 		setCondition(status, ConditionDegraded, metav1.ConditionTrue, "RelayIdentityOverlap", conflictMessage)
+	case len(inputs.podAddressProblems) > 0:
+		setCondition(status, ConditionDegraded, metav1.ConditionTrue, "UnusableRelayAddress", podAddressMessage)
 	default:
 		degraded := append(slices.Clone(counts.degraded), unreachable...)
 		if len(degraded) > 0 {

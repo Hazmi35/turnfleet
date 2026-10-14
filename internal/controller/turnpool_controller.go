@@ -161,10 +161,15 @@ func (r *TURNPoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
+	// The declared PodIP addresses are re-checked on every pass, not only at
+	// admission: a node annotation can change after a pool was admitted, and
+	// this is where the change is enforced and reported.
+	podAddressProblems := usablePodAddresses(pool, observed)
+
 	plan := relay.ComputePlan(&relay.PlanInput{PoolName: pool.Name, Spec: pool.Spec, Nodes: observed.relays})
 	relay.SortRelays(plan.Relays)
 
-	states, err := r.renderRelays(pool, &plan, observed.podCIDRs, secret, tlsSecret, pods)
+	states, err := r.renderRelays(pool, &plan, observed, secret, tlsSecret, pods)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -188,12 +193,13 @@ func (r *TURNPoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	if err := r.writeStatus(ctx, pool, &statusInputs{
-		plan:      &plan,
-		states:    states,
-		truncated: plan.Unplaced > 0,
-		vantage:   vantageResult,
-		now:       r.now(),
-		conflicts: conflicts,
+		plan:               &plan,
+		states:             states,
+		truncated:          plan.Unplaced > 0,
+		vantage:            vantageResult,
+		now:                r.now(),
+		conflicts:          conflicts,
+		podAddressProblems: podAddressProblems,
 	}); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -258,9 +264,14 @@ func (r *TURNPoolReconciler) observeNodes(ctx context.Context) (*nodeObservation
 		if err != nil {
 			return nil, err
 		}
+		podAddresses, err := nodePodAddresses(node)
+		if err != nil {
+			return nil, err
+		}
 		observed.relays = append(observed.relays, relay.Node{
-			Name:      node.Name,
-			Addresses: addresses,
+			Name:         node.Name,
+			Addresses:    addresses,
+			PodAddresses: podAddresses,
 		})
 		if node.Spec.PodCIDR != "" {
 			observed.podCIDRs = append(observed.podCIDRs, node.Spec.PodCIDR)
@@ -340,6 +351,34 @@ func nodeAddresses(node *corev1.Node) ([]relay.NodeAddress, error) {
 	// rather than a nicety to ignore.
 	return nil, fmt.Errorf("node %s has %s=%s but no %s address to advertise on: the override must name a family the node has",
 		node.Name, RelayAddressAnnotation, override, family)
+}
+
+// nodePodAddresses parses the addresses a node declares for PodIP relays. The
+// declaration is a comma-separated list, each entry a bare address or an
+// address with the prefix length a pod's attachment should request.
+//
+// A malformed declaration is an error rather than something to skip: it names
+// an address a relay would bind, and silently dropping it would shrink the
+// pool without saying so.
+func nodePodAddresses(node *corev1.Node) ([]string, error) {
+	raw := strings.TrimSpace(node.Annotations[relay.PodAddressesAnnotation])
+	if raw == "" {
+		return nil, nil
+	}
+
+	declared := make([]string, 0, strings.Count(raw, ",")+1)
+	for _, entry := range strings.Split(raw, ",") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		if _, ok := relay.PodAddress(entry); !ok {
+			return nil, fmt.Errorf("node %s has an unusable %s entry %q: it must be an IP address, optionally with a prefix length",
+				node.Name, relay.PodAddressesAnnotation, entry)
+		}
+		declared = append(declared, entry)
+	}
+	return declared, nil
 }
 
 func (r *TURNPoolReconciler) addFinalizer(ctx context.Context, pool *turnfleetv1alpha1.TURNPool) error {
@@ -607,4 +646,11 @@ type statusInputs struct {
 	// conflicts are the relay identities this pool holds that another pool
 	// holds too, with overlapping ports.
 	conflicts []addressConflict
+
+	// podAddressProblems are the PodIP addresses the pool's relay nodes declare
+	// that cannot be advertised (a private, carrier-grade NAT, link-local or
+	// loopback address), each with the node and the reason. They are dropped
+	// from the plan and reported, so an edit behind admission's back is still
+	// enforced and visible.
+	podAddressProblems []string
 }

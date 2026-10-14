@@ -27,14 +27,18 @@ Relays run with `hostNetwork: true` on nodes labelled
 `turnfleet.hzmi.dev/relay-node=true` and bind both their listener ports and
 their relay port range on a node address. A relay is identified by
 `(relayAddress, portRange)`, which is stable across restarts and controller
-failover. Three addressing modes decide how many relays a node runs and where
-their addresses come from:
+failover. Four addressing modes decide how many relays a node runs and where
+their addresses come from. `PodIP` is the one exception to `hostNetwork: true`:
+its relay address belongs to the pod, so its pod has a network namespace of its
+own (ADR 18); every other mode binds an address that belongs to the node and
+needs the host's network.
 
 | Mode | Relays per node | Relay address | Capacity per node |
 | --- | --- | --- | --- |
 | `HostNetwork` | exactly one (required anti-affinity) | the node's `ExternalIP`, or the `turnfleet.hzmi.dev/relay-address` annotation | the whole configured range |
 | `PartitionedIP` | `addressing.partitionedIP.relaysPerNode` | the node address, shared | still one IP's port space: the configured range is split into disjoint slices, so **adding relays per node does not add ports on that node** |
 | `ExternalIPPool` | one per address in `addressing.externalIPPool.addresses` | the declared secondary address, one per relay | addresses × the whole range |
+| `PodIP` | one per address declared on the node in `turnfleet.hzmi.dev/relay-pod-addresses` | the address the pod itself holds, on the default network or on a Multus attachment (`addressing.podIP.attachmentRef`) | addresses × the whole range |
 
 `spec.addressing.family` decides which address family the addresses above are
 taken from: `IPv4` (the default), `IPv6`, or `DualStack`. `DualStack` plans each

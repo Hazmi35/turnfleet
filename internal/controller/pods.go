@@ -150,6 +150,12 @@ func drainRequired(state *relayState) bool {
 	if !state.planned {
 		return true
 	}
+	if state.addressChanged {
+		// The pod holds another address than the relay was planned with, so it
+		// serves an address no client was told about: it goes, and the replace
+		// starts from the declared address again (ADR 6).
+		return true
+	}
 	return state.pod.Annotations[ConfigHashAnnotation] != state.hash
 }
 
@@ -175,6 +181,16 @@ func (r *TURNPoolReconciler) startDrain(ctx context.Context, pool *turnfleetv1al
 	state.drainStarted = now
 	r.Recorder.Eventf(pool, nil, corev1.EventTypeNormal, "RelayDraining", "Drain",
 		"relay %s is draining: it is out of turnURIs and will be deleted once its allocations are gone", state.relay.Name)
+	if state.addressChanged {
+		// A relay that came up on another address is not the relay clients were
+		// given, so it drains instead of advertising it. The event names both
+		// addresses: without it an operator only sees a relay that never
+		// settles, and the cause is a declaration (or a CNI) that does not
+		// deliver the declared address.
+		r.Recorder.Eventf(pool, nil, corev1.EventTypeWarning, "RelayAddressChanged", "Drain",
+			"relay %s holds address %s but was planned on %s: it is draining rather than advertising an address its clients were not given",
+			state.relay.Name, state.observedAddress, state.relay.Address)
+	}
 	logf.FromContext(ctx).V(1).Info("started draining a relay",
 		"relay", state.relay.Name, "pool", pool.Name, "namespace", pool.Namespace)
 	return nil
@@ -218,7 +234,10 @@ func (r *TURNPoolReconciler) drainComplete(ctx context.Context, pool *turnfleetv
 
 // createPod creates the pod for a relay.
 func (r *TURNPoolReconciler) createPod(ctx context.Context, pool *turnfleetv1alpha1.TURNPool, state *relayState) error {
-	pod := desiredPod(pool, state)
+	pod, err := desiredPod(pool, state)
+	if err != nil {
+		return fmt.Errorf("building relay pod %s: %w", state.relay.Name, err)
+	}
 	if err := controllerutil.SetControllerReference(pool, pod, r.Scheme); err != nil {
 		return fmt.Errorf("setting the owner of relay pod %s: %w", pod.Name, err)
 	}
@@ -239,7 +258,7 @@ func (r *TURNPoolReconciler) createPod(ctx context.Context, pool *turnfleetv1alp
 // what makes peer traffic to (address, port) reach the process that owns the
 // port: no Service and no load balancer is involved, so the 5-tuple hashing that
 // would spray peer packets across relays never happens.
-func desiredPod(pool *turnfleetv1alpha1.TURNPool, state *relayState) *corev1.Pod {
+func desiredPod(pool *turnfleetv1alpha1.TURNPool, state *relayState) (*corev1.Pod, error) {
 	pod := &corev1.Pod{Spec: podSpec(pool, state)}
 	pod.Name = state.relay.Name
 	pod.Namespace = pool.Namespace
@@ -249,7 +268,14 @@ func desiredPod(pool *turnfleetv1alpha1.TURNPool, state *relayState) *corev1.Pod
 		RelayIdentityAnnotation:    state.relay.Identity,
 		RelayBindAddressAnnotation: state.relay.BindAddress,
 	}
-	return pod
+	if attachment, ok := podIPAttachmentRef(pool); ok {
+		annotation, err := podIPNetworksAnnotation(pool.Namespace, attachment, state.addressRequest)
+		if err != nil {
+			return nil, err
+		}
+		pod.Annotations[NetworksAnnotation] = annotation
+	}
+	return pod, nil
 }
 
 func podLabels(pool *turnfleetv1alpha1.TURNPool) map[string]string {
@@ -261,9 +287,19 @@ func podLabels(pool *turnfleetv1alpha1.TURNPool) map[string]string {
 }
 
 func podSpec(pool *turnfleetv1alpha1.TURNPool, state *relayState) corev1.PodSpec {
+	// A PodIP relay owns the address the pod holds, so the pod runs in its own
+	// network namespace: sharing the node's would mean sharing the node's
+	// address, which is the mode it exists to avoid. Every other mode binds an
+	// address that belongs to the node, so it needs the host's network.
+	hostNetwork := pool.Spec.Addressing.Mode != turnfleetv1alpha1.AddressingModePodIP
+	dnsPolicy := corev1.DNSClusterFirst
+	if hostNetwork {
+		dnsPolicy = corev1.DNSClusterFirstWithHostNet
+	}
+
 	spec := corev1.PodSpec{
-		HostNetwork:                   true,
-		DNSPolicy:                     corev1.DNSClusterFirstWithHostNet,
+		HostNetwork:                   hostNetwork,
+		DNSPolicy:                     dnsPolicy,
 		RestartPolicy:                 corev1.RestartPolicyAlways,
 		NodeSelector:                  nodeSelector(pool),
 		Tolerations:                   tolerations(pool),
@@ -399,8 +435,11 @@ func containerPorts(pool *turnfleetv1alpha1.TURNPool, planned *relay.Relay) []co
 		})
 	}
 	// Declaring the ports is not cosmetic for a hostNetwork pod: the scheduler
-	// treats them as host ports, which is what stops two relays on one node from
-	// being scheduled onto the same port.
+	// treats them as host ports, which is what stops two relays on one node
+	// from being scheduled onto the same port. A PodIP relay pod has a network
+	// namespace of its own, so there the ports are informational: two relays on
+	// one node bind the same listener port in different namespaces without
+	// colliding, which is exactly what lets one node host several PodIP relays.
 	ports = append(ports, corev1.ContainerPort{
 		Name:          "metrics",
 		ContainerPort: planned.MetricsPort(),
@@ -499,11 +538,17 @@ func affinity(pool *turnfleetv1alpha1.TURNPool, state *relayState) *corev1.Affin
 	}
 
 	// Two relays may share a node only when they own different addresses:
-	// PartitionedIP splits one address between several relays, and a DualStack
-	// pool gives each of a node's two addresses its own relay. Anti-affinity
-	// stays required exactly when one relay per node is the rule.
-	if pool.Spec.Addressing.Mode == turnfleetv1alpha1.AddressingModePartitionedIP ||
-		len(relay.AddressFamilies(pool.Spec.Addressing.Family)) > 1 {
+	// PartitionedIP splits one address between several relays, a DualStack pool
+	// gives each of a node's two addresses its own relay, and PodIP and
+	// ExternalIPPool give every relay an address of its own. Required
+	// anti-affinity stays exactly when one relay per node is the rule — the
+	// HostNetwork mode on a single family — because there the second relay
+	// would have to give up the one address the node offers.
+	switch {
+	case pool.Spec.Addressing.Mode == turnfleetv1alpha1.AddressingModePartitionedIP,
+		pool.Spec.Addressing.Mode == turnfleetv1alpha1.AddressingModeExternalIPPool,
+		pool.Spec.Addressing.Mode == turnfleetv1alpha1.AddressingModePodIP,
+		len(relay.AddressFamilies(pool.Spec.Addressing.Family)) > 1:
 		return affinity
 	}
 

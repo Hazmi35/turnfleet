@@ -22,6 +22,22 @@ const (
 	// use.
 	RelayAddressAnnotation = "turnfleet.hzmi.dev/relay-address"
 
+	// The PodIP mode's address declaration is relay.PodAddressesAnnotation: the
+	// planner, the admission webhook and this controller all read it, so it
+	// lives with the addressing rules.
+
+	// NetworksAnnotation is Multus' network selection annotation: it is how a
+	// PodIP relay pod is attached to the pool's secondary network and, when the
+	// IPAM honours a request, how it is given the address its relay was planned
+	// with.
+	NetworksAnnotation = "k8s.v1.cni.cncf.io/networks"
+
+	// NetworkStatusAnnotation is Multus' network status annotation, where the
+	// address a pod actually holds on a secondary attachment appears. The
+	// controller reads a PodIP relay's address back from here, never from the
+	// pod's primary address.
+	NetworkStatusAnnotation = "k8s.v1.cni.cncf.io/network-status"
+
 	// ConfigHashAnnotation carries the hash of the relay's rendered coturn
 	// configuration and of the Secret it embeds. A change rolls the relay.
 	ConfigHashAnnotation = "turnfleet.hzmi.dev/config-hash"
