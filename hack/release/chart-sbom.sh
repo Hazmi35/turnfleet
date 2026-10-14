@@ -181,7 +181,7 @@ jq -e --argjson count "$count" \
    and ([.files[] | select(.checksums[0].checksumValue | test("^[0-9a-f]{64}$"))] | length) == $count
    and (.packages[0].hasFiles | length) == $count' "$output" >/dev/null \
   || die "chart-sbom: $output does not describe all ${count} files of the chart with their SHA256"
-jq -e '.files | map(.fileName) | index("./'"${name}"'/Chart.yaml") != null' "$output" >/dev/null \
+jq -e --arg chart "./${name}/Chart.yaml" '.files | map(.fileName) | index($chart) != null' "$output" >/dev/null \
   || die "chart-sbom: $output does not carry the chart's own Chart.yaml"
 
 printf 'chart-sbom: %s -> %s: %s files, archive %s, verification code %s\n' \
