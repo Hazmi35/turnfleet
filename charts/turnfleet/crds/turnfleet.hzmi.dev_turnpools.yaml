@@ -489,10 +489,15 @@ spec:
                     - ProbeSucceeded: every ready relay last probed successfully.
                     - CapacityPressure: a relay is near or at its port limit, or a probe
                       observed TURN error 508.
-                    - Degraded: fewer relays than desired, or a relay is failing to converge.
+                    - AddressConflict: this pool holds a relay identity another pool also
+                      holds, on the same address and with overlapping ports. Two relays
+                      cannot own the same ports on one address, so the affected pools serve
+                      less than they report. Disjoint ranges on a shared address are legal.
+                    - Degraded: fewer relays than desired, a relay is failing to converge,
+                      or a relay identity overlaps another pool's.
 
-                  Ready and ProbeSucceeded are normal-true; CapacityPressure and Degraded are
-                  abnormal-true.
+                  Ready and ProbeSucceeded are normal-true; CapacityPressure,
+                  AddressConflict and Degraded are abnormal-true.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
