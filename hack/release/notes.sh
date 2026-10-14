@@ -3,14 +3,16 @@
 # Copyright (C) 2026 Turnfleet Authors
 #
 # notes.sh writes the release notes the release workflow publishes: the digests
-# of the images it signed, and the exact commands that check them. The notes are
-# generated rather than written by hand so a release cannot document a digest or
-# an identity that is not the one the workflow signed.
+# of the images and of the chart it signed, and the exact commands that install,
+# pull and check them. The notes are generated rather than written by hand so a
+# release cannot document a digest or an identity that is not the one the
+# workflow signed.
 #
 # Usage:
 #   notes.sh --tag <tag> --commit <sha> --repository <owner>/<repo> \
 #            --identity <url> --issuer <url> --image <ref> [--image <ref>] \
-#            --output <file>
+#            --chart <oci://host/ns/chart@sha256:digest> \
+#            --chart-version <X.Y.Z> --output <file>
 #
 # The identity is the signing certificate's, as the run reported it
 # (GITHUB_WORKFLOW_REF): a tag push signs under that tag's ref, and the notes
@@ -23,21 +25,26 @@ usage() {
   cat <<'USAGE'
 usage: notes.sh --tag <tag> --commit <sha> --repository <owner>/<repo> \
                 --identity <url> --issuer <url> --output <file> \
-                [--image <registry>/<image>:<tag>@sha256:<digest> ...]
+                --chart <oci://host/ns/chart@sha256:digest> \
+                --chart-version <X.Y.Z> [--image <ref> ...]
 
-  --tag         release tag (required)
-  --commit      commit the tag points at, full sha (required)
-  --repository  owner/repo the release lives in, for the download commands
-                (required)
-  --identity    certificate identity the images were signed with (required)
-  --issuer      OIDC issuer the identity was verified against (required)
-  --image       a signed reference to document; repeat for each image (required)
-  --output      file to write the notes to (required)
+  --tag            release tag (required)
+  --commit         commit the tag points at, full sha (required)
+  --repository     owner/repo the release lives in, for the download commands
+                   (required)
+  --identity       certificate identity the artifacts were signed with (required)
+  --issuer         OIDC issuer the identity was verified against (required)
+  --image          a signed image reference to document; repeat per image
+                   (required)
+  --chart          the published chart digest to document (required)
+  --chart-version  the chart's version, which is the release version (required)
+  --output         file to write the notes to (required)
 USAGE
   exit "${1:-2}"
 }
 
 tag=''; commit=''; repository=''; identity=''; issuer=''; output=''
+chart=''; chart_version=''
 images=()
 
 while [ "$#" -gt 0 ]; do
@@ -48,13 +55,15 @@ while [ "$#" -gt 0 ]; do
     --identity) identity="${2:-}"; shift 2 ;;
     --issuer) issuer="${2:-}"; shift 2 ;;
     --image) images+=("${2:-}"); shift 2 ;;
+    --chart) chart="${2:-}"; shift 2 ;;
+    --chart-version) chart_version="${2:-}"; shift 2 ;;
     --output) output="${2:-}"; shift 2 ;;
     -h|--help) usage 0 ;;
     *) die "notes: unknown argument '$1'" ;;
   esac
 done
 
-for required in tag commit repository identity issuer output; do
+for required in tag commit repository identity issuer output chart chart_version; do
   [ -n "${!required}" ] || die "notes: --${required//_/-} is required"
 done
 [ "${#images[@]}" -gt 0 ] || die 'notes: at least one --image is required'
@@ -64,6 +73,16 @@ for ref in "${images[@]}"; do
     *) die "notes: --image '$ref' is not a digest reference; the notes record the digest, never only the tag" ;;
   esac
 done
+case "$chart" in
+  oci://*@sha256:*) ;;
+  *) die "notes: --chart '$chart' is not a digest reference (oci://host/ns/chart@sha256:<digest>); the notes record the digest, never only the tag" ;;
+esac
+
+# The chart's reference without its digest is what helm takes, with the version
+# beside it; cosign takes the reference on its own.
+chart_oci="${chart%@*}"
+chart_digest="${chart#*@}"
+chart_ref="${chart#oci://}"
 
 # The file names the release carries are derived from the image name, so the
 # notes point at the file the workflow uploaded.
@@ -93,6 +112,26 @@ EOF
   done
 
   cat <<EOF
+
+## Chart
+
+The controller chart ships beside the images as its own OCI artifact, one
+artifact per release, at the release's version: installed without flags it runs
+\`turnfleet-controller:${chart_version}\`, the released image.
+
+| Chart | Version | Digest |
+| --- | --- | --- |
+| \`${chart_oci}\` | \`${chart_version}\` | \`${chart_digest}\` |
+
+\`\`\`sh
+# Install it. The chart creates the CRDs, the RBAC and the manager; a cluster
+# gets the controller from this chart or from config/, never both.
+helm install turnfleet ${chart_oci} \\
+  --version ${chart_version} --namespace turnfleet-system --create-namespace
+
+# Or pull the artifact and read it.
+helm pull ${chart_oci} --version ${chart_version}
+\`\`\`
 
 ## Verifying this release
 
@@ -146,6 +185,32 @@ EOF
   cat <<EOF
 \`\`\`
 
+### The chart
+
+The chart carries the same three things at its digest: a keyless signature, the
+SLSA provenance and an SPDX document of the files the artifact contains.
+
+\`\`\`sh
+# Its signature.
+cosign verify \\
+  --certificate-identity '${identity}' \\
+  --certificate-oidc-issuer '${issuer}' \\
+  ${chart_ref}
+
+# Its SLSA provenance. invocation.configSource.digest.sha1 is ${commit}, the
+# commit above, and parameters.chartVersion is ${chart_version}.
+cosign verify-attestation --type slsaprovenance \\
+  --certificate-identity '${identity}' \\
+  --certificate-oidc-issuer '${issuer}' \\
+  ${chart_ref}
+
+# Its SPDX document: every file in the artifact with its SHA256.
+cosign verify-attestation --type spdxjson \\
+  --certificate-identity '${identity}' \\
+  --certificate-oidc-issuer '${issuer}' \\
+  ${chart_ref} | jq -r .payload | base64 -d | jq .predicate
+\`\`\`
+
 ### Verifying against a public key instead
 
 cosign also takes \`--key cosign.pub\`, which skips Fulcio and the OIDC issuer:
@@ -169,6 +234,12 @@ it describes the bytes that were signed rather than a checkout, and it is
 attached twice: as the release asset below, and as a cosign attestation on the
 image, which is what the verification above fetches by digest.
 
+The chart has one too, written from the artifact pulled by its digest: it lists
+the files the chart contains with their SHA256 values and the package
+verification code over them. It is attached to the chart's digest as a cosign
+attestation and not as a file on this release, so write it out with the
+\`spdxjson\` command under "The chart" above.
+
 | File | Image |
 | --- | --- |
 EOF
@@ -189,5 +260,5 @@ instead, with the digest the repository pins it to.
 EOF
 } >"$output"
 
-printf 'notes: %s -> %s (%s images, identity %s)\n' \
-  "$tag" "$output" "${#images[@]}" "$identity"
+printf 'notes: %s -> %s (%s images and chart %s, identity %s)\n' \
+  "$tag" "$output" "${#images[@]}" "$chart_version" "$identity"

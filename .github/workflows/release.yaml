@@ -2,8 +2,9 @@
 # Copyright (C) 2026 Turnfleet Authors
 #
 # Release: sign the two images at the digest `image.yaml` published for a tag,
-# attach an SPDX SBOM and SLSA provenance to each of them, and write the release
-# with the digests and the commands that check them.
+# publish the chart and sign it at its own digest, attach an SPDX SBOM and SLSA
+# provenance to each of the three artifacts, and write the release with the
+# versions, the digests and the commands that check them.
 #
 # Shape, and why:
 #
@@ -26,6 +27,14 @@
 # * The images are referenced as `tag@sha256:digest` everywhere, and the index
 #   digest is what gets signed: it is the digest `image.yaml` publishes and the
 #   one a consumer pulls by.
+# * The chart is published from this workflow, not from a second one on the same
+#   event: the keyless identity, `packages: write` and the registry login are
+#   already here, and a second workflow would hold a second copy of all three
+#   and sign under a different identity (ADR 17 records the trigger). The chart
+#   job checks the chart's version and appVersion against the release tag before
+#   it packages anything, so a release whose checklist bump was missed fails
+#   instead of publishing a chart the release does not carry, and it signs the
+#   digest its own push reported rather than the tag.
 # * The notes and the evidence are written by the scripts in hack/release/, so
 #   every step of this workflow can also be run by hand against a published
 #   digest, and the notes take the digests and the identity as arguments instead
@@ -253,11 +262,168 @@ jobs:
             | jq -e '.predicate.spdxVersion == "SPDX-2.3"' >/dev/null
           echo "${REF}: signature, provenance and SBOM attestation verify"
 
+  # The chart is the release's third artifact, beside the two images: one OCI
+  # artifact per release, in its own namespace in the same registry, signed
+  # keyless at the digest its own push reported. Nothing in here runs until a
+  # release is cut (ADR 17), so the first release is where it is exercised; the
+  # guard in the push step is what keeps a missed checklist bump from shipping.
+  chart:
+    name: Publish and sign the chart
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      # Keyless signing, as the sign job: the chart's signature carries the same
+      # short-lived Fulcio certificate for this workflow.
+      id-token: write
+      # The chart, its signature and its two attestations are pushed to ghcr.io.
+      packages: write
+    outputs:
+      # The published chart as one record: name, version, digest, the OCI
+      # reference and the cosign reference, which the release job hands to the
+      # notes.
+      chart: ${{ steps.publish.outputs.chart }}
+    env:
+      TAG: ${{ needs.prepare.outputs.tag }}
+      COMMIT: ${{ needs.prepare.outputs.commit }}
+      IDENTITY: ${{ needs.prepare.outputs.identity }}
+    steps:
+      - name: Check out the tagged commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # `make helm` asks the Go toolchain which helm release to download, so this
+      # job needs `go` for that one question and nothing else. The version comes
+      # from go.mod, the pin, rather than a second copy of GO_VERSION here.
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      # The pinned helm with the checksum its release publishes next to it: the
+      # Makefile holds the one copy of that pin (HELM_VERSION).
+      - name: Get the pinned helm
+        run: make helm
+
+      # `helm push` reads the credentials `docker login` writes, so the one login
+      # this job makes is the one the push and cosign both use: there is no
+      # second `helm registry login` here.
+      - name: Log in to ghcr.io
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # One step for the guard, the package and the push: chart.sh checks the
+      # chart's version and appVersion against the release tag before it builds
+      # the package, and it resolves the digest the push reported and proves the
+      # registry serves it back.
+      - name: Package, push and resolve the chart digest
+        id: publish
+        env:
+          RECORD: ${{ runner.temp }}/chart.json
+        run: |
+          set -euo pipefail
+          source hack/release/lib.sh
+          hack/release/chart.sh \
+            --tag "${TAG}" \
+            --chart "$(makefile_pin HELM_CHART)" \
+            --registry "$(makefile_pin IMAGE_REGISTRY)/turnfleet-chart" \
+            --output "${RECORD}"
+          echo "chart=$(jq -c . "${RECORD}")" >>"$GITHUB_OUTPUT"
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: ${{ env.COSIGN_VERSION }}
+
+      - name: Sign the published chart digest
+        env:
+          REF: ${{ fromJSON(steps.publish.outputs.chart).ref }}
+        run: |
+          set -euo pipefail
+          cosign sign --yes \
+            -a "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            -a "org.opencontainers.image.revision=${COMMIT}" \
+            -a "org.opencontainers.image.version=${TAG}" \
+            "${REF}"
+
+      - name: Write the chart's provenance predicate
+        env:
+          OCI: ${{ fromJSON(steps.publish.outputs.chart).oci }}
+          VERSION: ${{ fromJSON(steps.publish.outputs.chart).version }}
+        run: |
+          set -euo pipefail
+          hack/release/chart-provenance.sh \
+            --chart "${OCI}" \
+            --chart-version "${VERSION}" \
+            --tag "${TAG}" \
+            --commit "${COMMIT}" \
+            --repository-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
+            --workflow-ref "${GITHUB_WORKFLOW_REF}" \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            --cosign-version "${COSIGN_VERSION}" \
+            --output chart.provenance.json
+
+      - name: Attach the provenance to the chart digest
+        env:
+          REF: ${{ fromJSON(steps.publish.outputs.chart).ref }}
+        run: cosign attest --yes --type slsaprovenance --predicate chart.provenance.json "${REF}"
+
+      # The chart's SBOM is pulled back by digest, so the document describes the
+      # bytes the signature covers and not the checkout they were packaged from.
+      - name: Write the chart's SBOM from the published digest
+        env:
+          OCI: ${{ fromJSON(steps.publish.outputs.chart).oci }}
+        run: hack/release/chart-sbom.sh --chart "${OCI}" --output chart.spdx.json
+
+      - name: Attach the SBOM to the chart digest
+        env:
+          REF: ${{ fromJSON(steps.publish.outputs.chart).ref }}
+        run: cosign attest --yes --type spdxjson --predicate chart.spdx.json "${REF}"
+
+      # The three checks the notes record, run once here: the chart's signature,
+      # the provenance naming the tagged commit and the released version, and the
+      # SPDX document naming the chart it describes.
+      - name: Check the chart's signature and both attestations
+        env:
+          REF: ${{ fromJSON(steps.publish.outputs.chart).ref }}
+          NAME: ${{ fromJSON(steps.publish.outputs.chart).name }}
+          VERSION: ${{ fromJSON(steps.publish.outputs.chart).version }}
+        run: |
+          set -euo pipefail
+          cosign verify \
+            --certificate-identity "${IDENTITY}" \
+            --certificate-oidc-issuer "${ISSUER}" \
+            "${REF}" >/dev/null
+          cosign verify-attestation --type slsaprovenance \
+            --certificate-identity "${IDENTITY}" \
+            --certificate-oidc-issuer "${ISSUER}" \
+            "${REF}" \
+            | jq -r .payload | base64 -d \
+            | jq -e --arg commit "${COMMIT}" --arg version "${VERSION}" \
+                '.predicate.invocation.configSource.digest.sha1 == $commit
+                 and .predicate.invocation.parameters.chartVersion == $version' >/dev/null
+          cosign verify-attestation --type spdxjson \
+            --certificate-identity "${IDENTITY}" \
+            --certificate-oidc-issuer "${ISSUER}" \
+            "${REF}" \
+            | jq -r .payload | base64 -d \
+            | jq -e --arg name "${NAME}" --arg version "${VERSION}" \
+                '[.predicate.packages[] | select(.name == $name and .versionInfo == $version)] | length == 1' >/dev/null
+          echo "${REF}: signature, provenance and SBOM attestation verify (chart ${VERSION})"
+
   release:
     name: Write the release
     needs:
       - prepare
       - sign
+      - chart
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -270,6 +436,7 @@ jobs:
       COMMIT: ${{ needs.prepare.outputs.commit }}
       IDENTITY: ${{ needs.prepare.outputs.identity }}
       IMAGES: ${{ needs.prepare.outputs.images }}
+      CHART: ${{ needs.chart.outputs.chart }}
     steps:
       - name: Check out the tagged commit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -314,6 +481,8 @@ jobs:
             --repository "${GITHUB_REPOSITORY}" \
             --identity "${IDENTITY}" \
             --issuer "${ISSUER}" \
+            --chart "$(jq -r .oci <<<"${CHART}")" \
+            --chart-version "$(jq -r .version <<<"${CHART}")" \
             --output RELEASE_NOTES.md \
             "${args[@]}"
 
