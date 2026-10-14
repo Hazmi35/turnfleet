@@ -9,6 +9,10 @@
 #
 # A push to main builds the `main` tag for day-to-day work; a published release
 # builds the release's tag, and that is the only path that publishes a version.
+# A release publishes two tags: the git tag (`v0.1.0`) and its bare semver
+# (`0.1.0`), because the chart's default image tag is its `appVersion`, the bare
+# number (ADR 17, docs/versions.md). The version embedded in the binary stays the
+# git ref, so a released image reports `v0.1.0` exactly as `make build` does.
 name: Image
 
 on:
@@ -65,12 +69,22 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ghcr.io/hazmi35/turnfleet-controller
+          # The default rules are branch and tag refs; the semver rule is the one
+          # the chart's default image tag needs.
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{version}}
 
       - name: Derive tags for turnfleet-probe
         id: meta-probe
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ghcr.io/hazmi35/turnfleet-probe
+          tags: |
+            type=ref,event=branch
+            type=ref,event=tag
+            type=semver,pattern={{version}}
 
       - name: Build and push turnfleet-controller
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -86,7 +100,7 @@ jobs:
           build-args: |
             GO_IMAGE=${{ env.GO_IMAGE }}
             RUNTIME_IMAGE=${{ env.RUNTIME_IMAGE }}
-            LDFLAGS=-s -w -X github.com/Hazmi35/turnfleet/internal/version.version=${{ steps.meta-controller.outputs.version }} -X github.com/Hazmi35/turnfleet/internal/version.commit=${{ github.sha }}
+            LDFLAGS=-s -w -X github.com/Hazmi35/turnfleet/internal/version.version=${{ github.ref_name }} -X github.com/Hazmi35/turnfleet/internal/version.commit=${{ github.sha }}
 
       - name: Build and push turnfleet-probe
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -102,4 +116,4 @@ jobs:
           build-args: |
             GO_IMAGE=${{ env.GO_IMAGE }}
             RUNTIME_IMAGE=${{ env.RUNTIME_IMAGE }}
-            LDFLAGS=-s -w -X github.com/Hazmi35/turnfleet/internal/version.version=${{ steps.meta-probe.outputs.version }} -X github.com/Hazmi35/turnfleet/internal/version.commit=${{ github.sha }}
+            LDFLAGS=-s -w -X github.com/Hazmi35/turnfleet/internal/version.version=${{ github.ref_name }} -X github.com/Hazmi35/turnfleet/internal/version.commit=${{ github.sha }}
