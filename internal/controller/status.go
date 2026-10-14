@@ -163,7 +163,7 @@ func writeConditions(status *turnfleetv1alpha1.TURNPoolStatus, pool *turnfleetv1
 	} else {
 		message := fmt.Sprintf("%d of %d relays are ready", counts.readyRelays, desired)
 		if len(counts.degraded) > 0 {
-			message = message + ": " + strings.Join(firstN(counts.degraded, 3), "; ")
+			message = message + ": " + strings.Join(firstN(counts.degraded), "; ")
 		}
 		setCondition(status, ConditionReady, metav1.ConditionFalse, "RelaysNotReady", message)
 	}
@@ -202,7 +202,7 @@ func writeConditions(status *turnfleetv1alpha1.TURNPoolStatus, pool *turnfleetv1
 		setCondition(status, ConditionAddressConflict, metav1.ConditionFalse, "NoOverlap",
 			"no other pool holds a relay on this pool's addresses with overlapping ports")
 		if len(counts.degraded) > 0 {
-			setCondition(status, ConditionDegraded, metav1.ConditionTrue, "RelaysUnavailable", strings.Join(firstN(counts.degraded, 3), "; "))
+			setCondition(status, ConditionDegraded, metav1.ConditionTrue, "RelaysUnavailable", strings.Join(firstN(counts.degraded), "; "))
 		} else {
 			setCondition(status, ConditionDegraded, metav1.ConditionFalse, "AsExpected", "every planned relay exists and is placeable")
 		}
@@ -374,9 +374,13 @@ func observedGeneration(status *turnfleetv1alpha1.TURNPoolStatus) int64 {
 	return *status.ObservedGeneration
 }
 
-func firstN(values []string, n int) []string {
-	if len(values) <= n {
+// firstNShown caps how many of a pool's problems a condition message names, so
+// a message stays readable when many relays or peers are involved.
+const firstNShown = 3
+
+func firstN(values []string) []string {
+	if len(values) <= firstNShown {
 		return values
 	}
-	return values[:n]
+	return values[:firstNShown]
 }

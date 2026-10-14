@@ -208,9 +208,9 @@ func describeConflicts(conflicts []addressConflict) string {
 		parts = append(parts, fmt.Sprintf("relay %s:%s overlaps a relay of pool %s (%s)",
 			conflict.identity.address, conflict.identity.portRange, conflict.other, conflict.otherRange))
 	}
-	message := strings.Join(firstN(parts, 3), "; ")
-	if len(conflicts) > 3 {
-		message += fmt.Sprintf("; and %d more", len(conflicts)-3)
+	message := strings.Join(firstN(parts), "; ")
+	if len(conflicts) > firstNShown {
+		message += fmt.Sprintf("; and %d more", len(conflicts)-firstNShown)
 	}
 	return message + ": two relays must not own the same ports on one address"
 }
