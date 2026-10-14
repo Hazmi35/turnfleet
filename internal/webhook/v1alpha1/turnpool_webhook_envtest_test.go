@@ -139,7 +139,7 @@ var _ = Describe("TURNPool admission through the API server", func() {
 				Mode: turnfleetv1alpha1.AddressingModePodIP,
 			}
 			if attachment != "" {
-				pool.Spec.Addressing.PodIP = &turnfleetv1alpha1.PodIPSpec{AttachmentRef: attachment}
+				pool.Spec.Addressing.PodIP = &turnfleetv1alpha1.PodIPSpec{AttachmentRef: new(attachment)}
 			}
 			return pool
 		}
@@ -252,7 +252,7 @@ var _ = Describe("TURNPool admission through the API server", func() {
 
 			stored := &turnfleetv1alpha1.TURNPool{}
 			Expect(k8sClient.Get(ctx, key("admission-podip-immutable"), stored)).To(Succeed())
-			stored.Spec.Addressing.PodIP.AttachmentRef = "podip-relay-pods-v2"
+			stored.Spec.Addressing.PodIP.AttachmentRef = new("podip-relay-pods-v2")
 			err := k8sClient.Update(ctx, stored)
 			Expect(err).To(HaveOccurred())
 			Expect(apierrors.IsInvalid(err)).To(BeTrue(), "error was %v", err)

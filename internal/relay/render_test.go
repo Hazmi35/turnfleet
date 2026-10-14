@@ -43,7 +43,7 @@ func renderSpec(mode turnfleetv1alpha1.AddressingMode) turnfleetv1alpha1.TURNPoo
 			},
 		}
 	case turnfleetv1alpha1.AddressingModePodIP:
-		spec.Addressing.PodIP = &turnfleetv1alpha1.PodIPSpec{AttachmentRef: "relay-pods"}
+		spec.Addressing.PodIP = &turnfleetv1alpha1.PodIPSpec{AttachmentRef: new("relay-pods")}
 	case turnfleetv1alpha1.AddressingModeHostNetwork:
 	}
 	return spec

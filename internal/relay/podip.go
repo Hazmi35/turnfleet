@@ -79,7 +79,7 @@ var carrierGradeNAT = netip.MustParsePrefix("100.64.0.0/10")
 // NAT, loopback, link-local, multicast or unspecified use cannot be, and
 // admitting one would produce a relay that allocates, probes healthy
 // in-cluster, and is unreachable from every peer.
-func IndividuallyRoutable(address string) (bool, string) {
+func IndividuallyRoutable(address string) (routable bool, reason string) {
 	addr, err := netip.ParseAddr(strings.TrimSpace(address))
 	if err != nil {
 		return false, "is not an IP address"

@@ -304,7 +304,7 @@ func TestReconcilePodIP(t *testing.T) {
 	pool := hostNetworkPool("tpool-podip", 2)
 	pool.Spec.Addressing = turnfleetv1alpha1.AddressingSpec{
 		Mode:  turnfleetv1alpha1.AddressingModePodIP,
-		PodIP: &turnfleetv1alpha1.PodIPSpec{AttachmentRef: "relay-pods"},
+		PodIP: &turnfleetv1alpha1.PodIPSpec{AttachmentRef: new("relay-pods")},
 	}
 	f.createPool(pool)
 

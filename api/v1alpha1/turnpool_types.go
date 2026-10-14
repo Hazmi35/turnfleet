@@ -188,11 +188,11 @@ type PodIPSpec struct {
 	// the pod. It is immutable, like mode and family: a different attachment
 	// changes which address a relay holds.
 	//
-	// When it is empty the relay has no secondary interface and binds its own
-	// pod address on the cluster's default network, which must likewise be
+	// When it is unset (nil) the relay has no secondary interface and binds its
+	// own pod address on the cluster's default network, which must likewise be
 	// reserved and individually routable.
 	// +optional
-	AttachmentRef string `json:"attachmentRef,omitempty"`
+	AttachmentRef *string `json:"attachmentRef,omitempty"`
 }
 
 // AddressingSpec selects how relays are placed and addressed.

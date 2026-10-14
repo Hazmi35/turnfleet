@@ -15,27 +15,31 @@ import (
 	"github.com/Hazmi35/turnfleet/internal/relay"
 )
 
+// plannedPodIPAddress is the address every planned PodIP relay fixture in this
+// file holds.
+const plannedPodIPAddress = "203.0.113.21"
+
 // podIPPool is a PodIP pool with an attachment, which is the explicit form of
 // the mode.
-func podIPPool(name, attachment string) *turnfleetv1alpha1.TURNPool {
-	pool := hostNetworkPool(name, 2)
+func podIPPool(attachment string) *turnfleetv1alpha1.TURNPool {
+	pool := hostNetworkPool("demo", 2)
 	pool.Namespace = "turnfleet"
 	pool.Spec.Addressing = turnfleetv1alpha1.AddressingSpec{
 		Mode:  turnfleetv1alpha1.AddressingModePodIP,
-		PodIP: &turnfleetv1alpha1.PodIPSpec{AttachmentRef: attachment},
+		PodIP: &turnfleetv1alpha1.PodIPSpec{AttachmentRef: new(attachment)},
 	}
 	return pool
 }
 
 // plannedPodIPRelay is one PodIP relay as the planner would hand it over.
-func plannedPodIPRelay(address string) relay.Relay {
-	identity := address + "|49152-49199"
+func plannedPodIPRelay() relay.Relay {
+	identity := plannedPodIPAddress + "|49152-49199"
 	return relay.Relay{
 		Name:        relay.RelayName("demo", identity),
 		Identity:    identity,
 		NodeName:    "worker-1",
-		Address:     address,
-		BindAddress: address,
+		Address:     plannedPodIPAddress,
+		BindAddress: plannedPodIPAddress,
 		PortRange:   relay.PortRange{Start: 49152, End: 49199},
 	}
 }
@@ -59,12 +63,12 @@ func relayPod(addresses []corev1.PodIP, status string) *corev1.Pod {
 	return pod
 }
 
-// networkStatusAnnotation renders Multus' network-status annotation for one
-// attachment.
-func networkStatusAnnotation(t *testing.T, name string, ips ...string) string {
+// networkStatusAnnotation renders Multus' network-status annotation for the
+// pool's attachment.
+func networkStatusAnnotation(t *testing.T, ips ...string) string {
 	t.Helper()
 
-	encoded, err := json.Marshal([]networkStatus{{Name: name, IPs: ips}})
+	encoded, err := json.Marshal([]networkStatus{{Name: "turnfleet/relay-pods", IPs: ips}})
 	if err != nil {
 		t.Fatalf("encoding the network status: %v", err)
 	}
@@ -77,8 +81,8 @@ func networkStatusAnnotation(t *testing.T, name string, ips ...string) string {
 func TestPodIPRelayPodsRunInTheirOwnNetworkNamespace(t *testing.T) {
 	t.Parallel()
 
-	pool := podIPPool("demo", "relay-pods")
-	state := &relayState{relay: plannedPodIPRelay("203.0.113.21"), addressRequest: "203.0.113.21/24"}
+	pool := podIPPool("relay-pods")
+	state := &relayState{relay: plannedPodIPRelay(), addressRequest: "203.0.113.21/24"}
 
 	pod, err := desiredPod(pool, state)
 	if err != nil {
@@ -124,7 +128,7 @@ func TestEveryOtherModeKeepsTheHostNetwork(t *testing.T) {
 	} {
 		pool := hostNetworkPool("demo", 1)
 		pool.Spec.Addressing.Mode = mode
-		state := &relayState{relay: plannedPodIPRelay("203.0.113.21")}
+		state := &relayState{relay: plannedPodIPRelay()}
 
 		pod, err := desiredPod(pool, state)
 		if err != nil {
@@ -163,8 +167,8 @@ func TestPodIPAttachmentCrossNamespace(t *testing.T) {
 func TestPodIPAddressReadBack(t *testing.T) {
 	t.Parallel()
 
-	attachmentPool := podIPPool("demo", "relay-pods") // pool namespace "turnfleet"
-	noAttachmentPool := podIPPool("demo", "")         // the pod's own address on the default network
+	attachmentPool := podIPPool("relay-pods") // pool namespace "turnfleet"
+	noAttachmentPool := podIPPool("")         // the pod's own address on the default network
 	otherMode := hostNetworkPool("demo", 1)
 
 	tests := []struct {
@@ -177,13 +181,13 @@ func TestPodIPAddressReadBack(t *testing.T) {
 			name: "attachment holds the planned address",
 			pool: attachmentPool,
 			pod: relayPod([]corev1.PodIP{{IP: "10.244.0.9"}},
-				networkStatusAnnotation(t, "turnfleet/relay-pods", "203.0.113.21/24")),
+				networkStatusAnnotation(t, "203.0.113.21/24")),
 		},
 		{
 			name: "attachment holds another address",
 			pool: attachmentPool,
 			pod: relayPod([]corev1.PodIP{{IP: "10.244.0.9"}},
-				networkStatusAnnotation(t, "turnfleet/relay-pods", "203.0.113.99/24")),
+				networkStatusAnnotation(t, "203.0.113.99/24")),
 			changed: true,
 		},
 		{
@@ -192,7 +196,7 @@ func TestPodIPAddressReadBack(t *testing.T) {
 			// The pod IP equals the planned address, but the attachment holds
 			// another one: the read-back must follow the attachment, not the
 			// primary CNI.
-			pod:     relayPod([]corev1.PodIP{{IP: "203.0.113.21"}}, networkStatusAnnotation(t, "turnfleet/relay-pods", "203.0.113.99/24")),
+			pod:     relayPod([]corev1.PodIP{{IP: "203.0.113.21"}}, networkStatusAnnotation(t, "203.0.113.99/24")),
 			changed: true,
 		},
 		{
@@ -204,7 +208,7 @@ func TestPodIPAddressReadBack(t *testing.T) {
 			name: "a pod that is not running is not judged",
 			pool: attachmentPool,
 			pod: func() *corev1.Pod {
-				pod := relayPod([]corev1.PodIP{{IP: "10.244.0.9"}}, networkStatusAnnotation(t, "turnfleet/relay-pods", "203.0.113.99/24"))
+				pod := relayPod([]corev1.PodIP{{IP: "10.244.0.9"}}, networkStatusAnnotation(t, "203.0.113.99/24"))
 				pod.Status.Phase = corev1.PodPending
 				return pod
 			}(),
@@ -231,8 +235,8 @@ func TestPodIPAddressReadBack(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			planned := plannedPodIPRelay("203.0.113.21")
-			if got := relayAddressChanged(tc.pool, planned, tc.pod); got != tc.changed {
+			planned := plannedPodIPRelay()
+			if got := relayAddressChanged(tc.pool, &planned, tc.pod); got != tc.changed {
 				t.Errorf("relayAddressChanged() = %v, want %v", got, tc.changed)
 			}
 		})
@@ -250,7 +254,7 @@ func TestDrainFollowsTheAddressChange(t *testing.T) {
 		Annotations: map[string]string{ConfigHashAnnotation: "unchanged"},
 	}}
 	state := &relayState{
-		relay:          plannedPodIPRelay("203.0.113.21"),
+		relay:          plannedPodIPRelay(),
 		planned:        true,
 		hash:           "unchanged",
 		pod:            pod,
@@ -280,9 +284,9 @@ func TestAddressOwningModesSkipRequiredAntiAffinity(t *testing.T) {
 		turnfleetv1alpha1.AddressingModePartitionedIP,
 	}
 	for _, mode := range addressOwning {
-		pool := podIPPool("demo", "relay-pods")
+		pool := podIPPool("relay-pods")
 		pool.Spec.Addressing.Mode = mode
-		state := &relayState{relay: plannedPodIPRelay("203.0.113.21")}
+		state := &relayState{relay: plannedPodIPRelay()}
 
 		spec := podSpec(pool, state)
 		if spec.Affinity == nil || spec.Affinity.PodAntiAffinity != nil {
@@ -293,7 +297,7 @@ func TestAddressOwningModesSkipRequiredAntiAffinity(t *testing.T) {
 	// HostNetwork on one family is the case where one relay per node is the
 	// rule: the second one would have to give up the node's only address.
 	pool := hostNetworkPool("demo", 1)
-	state := &relayState{relay: plannedPodIPRelay("203.0.113.21")}
+	state := &relayState{relay: plannedPodIPRelay()}
 	spec := podSpec(pool, state)
 	if spec.Affinity == nil || spec.Affinity.PodAntiAffinity == nil {
 		t.Error("HostNetwork must keep required anti-affinity: its nodes offer one relay address each")
@@ -336,7 +340,7 @@ func TestNodePodAddresses(t *testing.T) {
 func TestUsablePodAddressesEnforcesRoutability(t *testing.T) {
 	t.Parallel()
 
-	pool := podIPPool("demo", "relay-pods")
+	pool := podIPPool("relay-pods")
 	observed := &nodeObservation{relays: []relay.Node{{
 		Name:         "worker-1",
 		PodAddresses: []string{"203.0.113.21", "10.0.0.5", "rubbish"},

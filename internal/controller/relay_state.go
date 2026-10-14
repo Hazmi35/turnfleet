@@ -166,7 +166,7 @@ func (r *TURNPoolReconciler) renderRelays(
 			state.drainStarted = parseTime(pod.Annotations[DrainStartedAtAnnotation])
 			state.draining = !state.drainStarted.IsZero()
 			state.observedAddress, _ = relayAddressOnPod(pool, pod)
-			state.addressChanged = relayAddressChanged(pool, state.relay, pod)
+			state.addressChanged = relayAddressChanged(pool, &state.relay, pod)
 		}
 		state.probeDue = r.probeDue(pool, state)
 

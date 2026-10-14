@@ -156,7 +156,7 @@ func poolFromBytes(data []byte) *turnfleetv1alpha1.TURNPool {
 		// The attachment is optional; half the corpus gets one so both shapes
 		// are validated.
 		if byteAt(5)%2 == 0 {
-			pool.Spec.Addressing.PodIP = &turnfleetv1alpha1.PodIPSpec{AttachmentRef: "relay-pods"}
+			pool.Spec.Addressing.PodIP = &turnfleetv1alpha1.PodIPSpec{AttachmentRef: new("relay-pods")}
 		}
 	case turnfleetv1alpha1.AddressingModeHostNetwork:
 	}

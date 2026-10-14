@@ -367,7 +367,7 @@ func nodePodAddresses(node *corev1.Node) ([]string, error) {
 	}
 
 	declared := make([]string, 0, strings.Count(raw, ",")+1)
-	for _, entry := range strings.Split(raw, ",") {
+	for entry := range strings.SplitSeq(raw, ",") {
 		entry = strings.TrimSpace(entry)
 		if entry == "" {
 			continue

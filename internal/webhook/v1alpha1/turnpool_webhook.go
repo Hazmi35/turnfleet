@@ -291,28 +291,10 @@ func validateAddressing(spec *turnfleetv1alpha1.TURNPoolSpec, path *field.Path) 
 	addressing := spec.Addressing
 	switch addressing.Mode {
 	case turnfleetv1alpha1.AddressingModeHostNetwork:
-		if addressing.ExternalIPPool != nil {
-			errs = append(errs, field.Forbidden(path.Child("externalIPPool"),
-				"only applies to mode ExternalIPPool"))
-		}
-		if addressing.PartitionedIP != nil {
-			errs = append(errs, field.Forbidden(path.Child("partitionedIP"),
-				"only applies to mode PartitionedIP"))
-		}
-		if addressing.PodIP != nil {
-			errs = append(errs, field.Forbidden(path.Child("podIP"),
-				"only applies to mode PodIP"))
-		}
+		errs = append(errs, otherModeConfiguration(addressing, turnfleetv1alpha1.AddressingModeHostNetwork, path)...)
 
 	case turnfleetv1alpha1.AddressingModeExternalIPPool:
-		if addressing.PartitionedIP != nil {
-			errs = append(errs, field.Forbidden(path.Child("partitionedIP"),
-				"only applies to mode PartitionedIP"))
-		}
-		if addressing.PodIP != nil {
-			errs = append(errs, field.Forbidden(path.Child("podIP"),
-				"only applies to mode PodIP"))
-		}
+		errs = append(errs, otherModeConfiguration(addressing, turnfleetv1alpha1.AddressingModeExternalIPPool, path)...)
 		if addressing.ExternalIPPool == nil || len(addressing.ExternalIPPool.Addresses) == 0 {
 			errs = append(errs, field.Required(path.Child("externalIPPool", "addresses"),
 				"mode ExternalIPPool needs at least one secondary address to place a relay on"))
@@ -352,14 +334,7 @@ func validateAddressing(spec *turnfleetv1alpha1.TURNPoolSpec, path *field.Path) 
 		}
 
 	case turnfleetv1alpha1.AddressingModePartitionedIP:
-		if addressing.ExternalIPPool != nil {
-			errs = append(errs, field.Forbidden(path.Child("externalIPPool"),
-				"only applies to mode ExternalIPPool"))
-		}
-		if addressing.PodIP != nil {
-			errs = append(errs, field.Forbidden(path.Child("podIP"),
-				"only applies to mode PodIP"))
-		}
+		errs = append(errs, otherModeConfiguration(addressing, turnfleetv1alpha1.AddressingModePartitionedIP, path)...)
 		if addressing.PartitionedIP == nil {
 			errs = append(errs, field.Required(path.Child("partitionedIP"),
 				"mode PartitionedIP needs relaysPerNode: it decides how the port range is split"))
@@ -369,7 +344,15 @@ func validateAddressing(spec *turnfleetv1alpha1.TURNPoolSpec, path *field.Path) 
 		}
 
 	case turnfleetv1alpha1.AddressingModePodIP:
-		errs = append(errs, validatePodIPAddressing(addressing, path)...)
+		// Nothing is required: the addresses are declared on the relay nodes
+		// (relay.PodAddressesAnnotation), which a TURNPool does not own, and
+		// the attachment is optional — without one the relay binds the pod's
+		// own address on the default network. A pool whose nodes declare no
+		// address is admitted and reports the replicas it could not place,
+		// exactly as ExternalIPPool does for addresses it cannot use. The
+		// attachment's existence and the declared addresses are checked
+		// against the cluster state, and re-checked by the reconciler.
+		errs = append(errs, otherModeConfiguration(addressing, turnfleetv1alpha1.AddressingModePodIP, path)...)
 
 	default:
 		errs = append(errs, field.NotSupported(path.Child("mode"), addressing.Mode, []string{
@@ -397,10 +380,10 @@ var networkAttachmentDefinitionKind = schema.GroupVersionKind{
 // names no attachment and its relays bind their own pod address on the
 // default network.
 func podIPAttachmentRef(spec *turnfleetv1alpha1.TURNPoolSpec) string {
-	if spec.Addressing.PodIP == nil {
+	if spec.Addressing.PodIP == nil || spec.Addressing.PodIP.AttachmentRef == nil {
 		return ""
 	}
-	return strings.TrimSpace(spec.Addressing.PodIP.AttachmentRef)
+	return strings.TrimSpace(*spec.Addressing.PodIP.AttachmentRef)
 }
 
 // validatePodIPDeployment checks the PodIP mode against cluster state, which a
@@ -448,7 +431,7 @@ func validatePodIPDeployment(ctx context.Context, c client.Reader, pool *turnfle
 	declared := addressing.Child("podIP")
 	for i := range nodes.Items {
 		node := &nodes.Items[i]
-		for _, entry := range strings.Split(node.Annotations[relay.PodAddressesAnnotation], ",") {
+		for entry := range strings.SplitSeq(node.Annotations[relay.PodAddressesAnnotation], ",") {
 			entry = strings.TrimSpace(entry)
 			if entry == "" {
 				continue
@@ -484,27 +467,24 @@ func attachmentExists(ctx context.Context, c client.Reader, namespace, name stri
 	}
 }
 
-// validatePodIPAddressing is the PodIP mode's pure, spec-only part: the other
-// modes' blocks are forbidden, and nothing is required.
-//
-// Nothing is required because the addresses are declared on the relay nodes
-// (relay.PodAddressesAnnotation), which a TURNPool does not own, and because
-// the attachment is optional: without one the relay binds the pod's own address
-// on the default network. A pool whose nodes declare no address is admitted and
-// reports the replicas it could not place, exactly as ExternalIPPool does for
-// addresses it cannot use. The attachment's existence and the declared
-// addresses are checked against the cluster state, and re-checked by the
-// reconciler.
-func validatePodIPAddressing(addressing turnfleetv1alpha1.AddressingSpec, path *field.Path) field.ErrorList {
+// otherModeConfiguration reports the addressing configuration blocks that are
+// set although they belong to a mode other than mode. Every mode's arm forbids
+// the other modes' blocks, and the field paths and messages are part of the
+// API, so they live in one place.
+func otherModeConfiguration(addressing turnfleetv1alpha1.AddressingSpec, mode turnfleetv1alpha1.AddressingMode, path *field.Path) field.ErrorList {
 	var errs field.ErrorList
 
-	if addressing.ExternalIPPool != nil {
+	if mode != turnfleetv1alpha1.AddressingModeExternalIPPool && addressing.ExternalIPPool != nil {
 		errs = append(errs, field.Forbidden(path.Child("externalIPPool"),
 			"only applies to mode ExternalIPPool"))
 	}
-	if addressing.PartitionedIP != nil {
+	if mode != turnfleetv1alpha1.AddressingModePartitionedIP && addressing.PartitionedIP != nil {
 		errs = append(errs, field.Forbidden(path.Child("partitionedIP"),
 			"only applies to mode PartitionedIP"))
+	}
+	if mode != turnfleetv1alpha1.AddressingModePodIP && addressing.PodIP != nil {
+		errs = append(errs, field.Forbidden(path.Child("podIP"),
+			"only applies to mode PodIP"))
 	}
 	return errs
 }

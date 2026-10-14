@@ -266,7 +266,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `attachmentRef` _string_ | attachmentRef names the Multus NetworkAttachmentDefinition the relay pods<br />attach, in the pool's namespace ("name") or in another one<br />("namespace/name"). The attachment is where the declared address reaches<br />the pod. It is immutable, like mode and family: a different attachment<br />changes which address a relay holds.<br />When it is empty the relay has no secondary interface and binds its own<br />pod address on the cluster's default network, which must likewise be<br />reserved and individually routable. |  | Optional: \{\} <br /> |
+| `attachmentRef` _string_ | attachmentRef names the Multus NetworkAttachmentDefinition the relay pods<br />attach, in the pool's namespace ("name") or in another one<br />("namespace/name"). The attachment is where the declared address reaches<br />the pod. It is immutable, like mode and family: a different attachment<br />changes which address a relay holds.<br />When it is unset (nil) the relay has no secondary interface and binds its<br />own pod address on the cluster's default network, which must likewise be<br />reserved and individually routable. |  | Optional: \{\} <br /> |
 
 
 #### PortRange

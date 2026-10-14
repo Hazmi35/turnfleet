@@ -41,10 +41,10 @@ type podIPAttachment struct {
 // an empty attachmentRef, has no attachment and binds the pod's own address on
 // the default network.
 func podIPAttachmentRef(pool *turnfleetv1alpha1.TURNPool) (podIPAttachment, bool) {
-	if pool.Spec.Addressing.PodIP == nil {
+	if pool.Spec.Addressing.PodIP == nil || pool.Spec.Addressing.PodIP.AttachmentRef == nil {
 		return podIPAttachment{}, false
 	}
-	namespace, name, ok := relay.PodIPAttachmentParts(pool.Spec.Addressing.PodIP.AttachmentRef, pool.Namespace)
+	namespace, name, ok := relay.PodIPAttachmentParts(*pool.Spec.Addressing.PodIP.AttachmentRef, pool.Namespace)
 	if !ok {
 		return podIPAttachment{}, false
 	}
@@ -123,7 +123,7 @@ func relayAddressOnPod(pool *turnfleetv1alpha1.TURNPool, pod *corev1.Pod) (strin
 // serves an address no client was told about, so it drains (ADR 6) rather than
 // re-advertising the address it happens to hold: silently changing it would
 // move the relay and strand the allocations on it.
-func relayAddressChanged(pool *turnfleetv1alpha1.TURNPool, planned relay.Relay, pod *corev1.Pod) bool {
+func relayAddressChanged(pool *turnfleetv1alpha1.TURNPool, planned *relay.Relay, pod *corev1.Pod) bool {
 	if pool.Spec.Addressing.Mode != turnfleetv1alpha1.AddressingModePodIP {
 		return false
 	}

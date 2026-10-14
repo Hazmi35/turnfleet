@@ -137,7 +137,7 @@ type NodeAddress struct {
 }
 
 // addressOf returns the node's address in one family.
-func (n Node) addressOf(family turnfleetv1alpha1.AddressingFamily) (NodeAddress, bool) {
+func (n *Node) addressOf(family turnfleetv1alpha1.AddressingFamily) (NodeAddress, bool) {
 	for _, address := range n.Addresses {
 		if AddressFamilyOf(address.Address) == family {
 			return address, true

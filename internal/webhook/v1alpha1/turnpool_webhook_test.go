@@ -194,7 +194,7 @@ func TestValidateCreate(t *testing.T) {
 			mutate: func(p *turnfleetv1alpha1.TURNPool) {
 				p.Spec.Addressing = turnfleetv1alpha1.AddressingSpec{
 					Mode:  turnfleetv1alpha1.AddressingModePodIP,
-					PodIP: &turnfleetv1alpha1.PodIPSpec{AttachmentRef: "relay-pods"},
+					PodIP: &turnfleetv1alpha1.PodIPSpec{AttachmentRef: new("relay-pods")},
 				}
 			},
 		},
@@ -210,7 +210,7 @@ func TestValidateCreate(t *testing.T) {
 		{
 			name: "podIP on a HostNetwork pool",
 			mutate: func(p *turnfleetv1alpha1.TURNPool) {
-				p.Spec.Addressing.PodIP = &turnfleetv1alpha1.PodIPSpec{AttachmentRef: "relay-pods"}
+				p.Spec.Addressing.PodIP = &turnfleetv1alpha1.PodIPSpec{AttachmentRef: new("relay-pods")}
 			},
 			wantErr:   true,
 			wantField: "spec.addressing.podIP",
@@ -730,7 +730,7 @@ func TestValidateUpdateKeepsThePodIPAttachment(t *testing.T) {
 	oldPool := validPool()
 	oldPool.Spec.Addressing = turnfleetv1alpha1.AddressingSpec{
 		Mode:  turnfleetv1alpha1.AddressingModePodIP,
-		PodIP: &turnfleetv1alpha1.PodIPSpec{AttachmentRef: "relay-pods"},
+		PodIP: &turnfleetv1alpha1.PodIPSpec{AttachmentRef: new("relay-pods")},
 	}
 
 	if _, err := validator.ValidateUpdate(context.Background(), oldPool, oldPool.DeepCopy()); err != nil {
@@ -738,7 +738,7 @@ func TestValidateUpdateKeepsThePodIPAttachment(t *testing.T) {
 	}
 
 	changed := oldPool.DeepCopy()
-	changed.Spec.Addressing.PodIP.AttachmentRef = "relay-pods-v2"
+	changed.Spec.Addressing.PodIP.AttachmentRef = new("relay-pods-v2")
 	_, err := validator.ValidateUpdate(context.Background(), oldPool, changed)
 	if err == nil {
 		t.Fatal("changing the attachment was admitted: every relay's address would move")
