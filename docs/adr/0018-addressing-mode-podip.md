@@ -125,10 +125,14 @@ What the mode forbids:
 * The declaration is node-wide, so two `PodIP` pools with relays on one node
   collide on the addresses offered there; the cross-pool check (ADR 12) reports
   it, because the identities carry the address.
-* Kind cannot provide this mode's data path — a kind node has no routable
-  secondary address and no Multus — so the mode is proven by unit, envtest and
-  the renderer's golden files, and its data path shares the flag set ADR 8
-  verified against the pinned image. `make test-e2e` covers the other modes.
+* Kind as `make kind-up` configures it has no Multus and no secondary address
+  for a pod, so this mode's data path is not exercised by `make test-e2e` yet:
+  it is proven by unit, envtest and the renderer's golden files, and its data
+  path shares the flag set ADR 8 verified against the pinned image. That is a
+  gap in the local cluster, not in the mode — #19 tracks the fixture (Multus
+  plus a macvlan attachment, whose host side the suite already probes for
+  `ExternalIPPool` in `test/fixtures/attach-secondary-address.sh` and
+  `hostProbe`) that would let the suite exercise it.
 * Admission remains advisory for the node-declared half of the rule, and the
   reconciler is what enforces it. The vantage point (ADR 7) remains the only
   proof that the address is reachable from outside.

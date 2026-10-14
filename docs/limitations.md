@@ -90,8 +90,9 @@ its statement and gains a pointer to the issue.
   Admission cannot prove routability, so the mode is gated on the external
   vantage point like every other one; a network whose inbound traffic arrives
   only through a load balancer is a hard blocker unless the pod addresses are
-  themselves public and permitted. Kind cannot provide this data path, so the
-  mode is proven by unit, envtest and golden-file tests rather than by
-  `make test-e2e`.
+  themselves public and permitted. Kind as `make kind-up` configures it has no
+  Multus and no secondary address for a pod, so the mode is proven by unit,
+  envtest and golden-file tests rather than by `make test-e2e` today; the
+  fixture that would exercise it is tracked in #19.
 * **The e2e suite runs on amd64.** The kind node image and the loaded coturn
   image are amd64; arm64 is built in CI but not exercised end to end.
