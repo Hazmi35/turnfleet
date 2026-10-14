@@ -50,7 +50,10 @@ make test-fuzz            # fuzz the renderer and the webhook validators
 make build                # bin/turnfleet-controller, bin/turnfleet-probe
 make kind-up kind-down    # local 1 control-plane + 3 relay-node workers
 make install deploy undeploy
+make helm-install        # install the controller from charts/turnfleet
+make helm-lint helm-drift  # lint the chart, fail when it drifts from config/
 make test-e2e             # full kind suite; loads images, installs, deploys
+make test-e2e-chart       # kind suite for the chart install: helm, then probe
 make verify               # generated files, headers, no diff
 make vuln licenses ci     # govulncheck, AGPL-3.0-only dependency check, everything CI runs
 make dco                  # every commit in the range is signed off
@@ -73,6 +76,7 @@ change affects relay behaviour, rendering, drain, or the probe.
 | `cmd/turnfleet-controller/`, `cmd/turnfleet-probe/` | Binaries; flag parsing and wiring only. |
 | `test/e2e/` | kind end-to-end suite (build-tagged `e2e`), `test/fixtures/` holds cluster fixtures. |
 | `config/` | kustomize manifests. `config/default` (what `make deploy` applies) runs the controller without admission webhooks; `config/with-webhook` adds them and their cert-manager certificates; `config/vantage` is the per-pool vantage runner the operator does not schedule. |
+| `charts/turnfleet/` | Helm chart for the controller only (never relay pods). Source of truth for the controller stays `config/`: `make helm-drift` renders both and fails on drift. |
 | `docs/` | `architecture.md`, `capacity-model.md`, `api.md` (generated), `adr/`, `versions.md`, `limitations.md`. |
 
 ## Agent harness
