@@ -102,6 +102,22 @@ spec:
                         - address
                         x-kubernetes-list-type: map
                     type: object
+                  family:
+                    default: IPv4
+                    description: |-
+                      family is the address family the pool's relay addresses belong to. It is
+                      immutable for the same reason mode is: changing it changes the address,
+                      or half the addresses, of every relay and strands live allocations.
+
+                      IPv4 keeps the pool on the node's IPv4 addresses. IPv6 plans on IPv6
+                      addresses only. DualStack plans the mode's relay set once per family,
+                      so a node with both addresses runs two relays and offers two port
+                      spaces.
+                    enum:
+                    - IPv4
+                    - IPv6
+                    - DualStack
+                    type: string
                   mode:
                     description: |-
                       mode is the addressing mode. It is immutable: changing it changes every

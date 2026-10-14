@@ -363,7 +363,14 @@ func relayContainer(pool *turnfleetv1alpha1.TURNPool, state *relayState) corev1.
 	// probe instead, which is the honest check: an open UDP port proves nothing.
 	if port := tcpReadinessPort(pool.Spec.Listeners, state.relay.ListenerPortOffset); port != 0 {
 		container.ReadinessProbe = &corev1.Probe{
-			ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.FromInt32(port)}},
+			ProbeHandler: corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{
+				Port: intstr.FromInt32(port),
+				// The listener binds the relay's own address, which is not the
+				// pod IP when the pod is hostNetwork on a dual-stack node or the
+				// relay advertises a NATed address. Probing the pod IP would
+				// report a healthy relay as unready, forever.
+				Host: state.relay.BindAddress,
+			}},
 			InitialDelaySeconds: 2,
 			PeriodSeconds:       5,
 			TimeoutSeconds:      2,
@@ -484,9 +491,12 @@ func affinity(pool *turnfleetv1alpha1.TURNPool, state *relayState) *corev1.Affin
 		},
 	}
 
-	// In PartitionedIP mode several relays share a node on purpose, so
-	// anti-affinity must stay soft there.
-	if pool.Spec.Addressing.Mode == turnfleetv1alpha1.AddressingModePartitionedIP {
+	// Two relays may share a node only when they own different addresses:
+	// PartitionedIP splits one address between several relays, and a DualStack
+	// pool gives each of a node's two addresses its own relay. Anti-affinity
+	// stays required exactly when one relay per node is the rule.
+	if pool.Spec.Addressing.Mode == turnfleetv1alpha1.AddressingModePartitionedIP ||
+		len(relay.AddressFamilies(pool.Spec.Addressing.Family)) > 1 {
 		return affinity
 	}
 

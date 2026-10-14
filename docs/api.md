@@ -14,6 +14,29 @@ Package v1alpha1 contains API Schema definitions for the turnfleet v1alpha1 API 
 
 
 
+#### AddressingFamily
+
+_Underlying type:_ _string_
+
+AddressingFamily selects the address family of a pool's relay addresses.
+
+A family is part of an address, not an extra port space: a node's IPv4 and
+IPv6 addresses are two relay addresses with two port spaces each, and a
+second family never adds ports to one address. See docs/capacity-model.md.
+
+_Validation:_
+- Enum: [IPv4 IPv6 DualStack]
+
+_Appears in:_
+- [AddressingSpec](#addressingspec)
+
+| Field | Description |
+| --- | --- |
+| `IPv4` | AddressingFamilyIPv4 places relays on IPv4 addresses only. It is the<br />default, and what every pool planned before this field existed does.<br /> |
+| `IPv6` | AddressingFamilyIPv6 places relays on IPv6 addresses only.<br /> |
+| `DualStack` | AddressingFamilyDualStack plans the mode's relay set once per family. On<br />a node that has both addresses that is one relay identity per family,<br />and each of them owns the whole port range: two addresses, two port<br />spaces.<br /> |
+
+
 #### AddressingMode
 
 _Underlying type:_ _string_
@@ -51,6 +74,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `mode` _[AddressingMode](#addressingmode)_ | mode is the addressing mode. It is immutable: changing it changes every<br />relay's advertised address and invalidates live allocations. |  | Enum: [HostNetwork ExternalIPPool PartitionedIP] <br />Required: \{\} <br /> |
+| `family` _[AddressingFamily](#addressingfamily)_ | family is the address family the pool's relay addresses belong to. It is<br />immutable for the same reason mode is: changing it changes the address,<br />or half the addresses, of every relay and strands live allocations.<br />IPv4 keeps the pool on the node's IPv4 addresses. IPv6 plans on IPv6<br />addresses only. DualStack plans the mode's relay set once per family,<br />so a node with both addresses runs two relays and offers two port<br />spaces. | IPv4 | Enum: [IPv4 IPv6 DualStack] <br />Optional: \{\} <br /> |
 | `externalIPPool` _[ExternalIPPoolSpec](#externalippoolspec)_ | externalIPPool configures AddressingModeExternalIPPool and must be set<br />(with at least one address) when mode is ExternalIPPool. Forbidden for the<br />other modes. |  | Optional: \{\} <br /> |
 | `partitionedIP` _[PartitionedIPSpec](#partitionedipspec)_ | partitionedIP configures AddressingModePartitionedIP and must be set when<br />mode is PartitionedIP. Forbidden for the other modes. |  | Optional: \{\} <br /> |
 

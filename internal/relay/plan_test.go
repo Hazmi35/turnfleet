@@ -5,11 +5,28 @@ package relay
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 	"testing"
 
 	turnfleetv1alpha1 "github.com/Hazmi35/turnfleet/api/v1alpha1"
 )
+
+// v4Node is a relay node with one IPv4 address, which is what most tests need:
+// the address a relay advertises and the one it binds are the same unless the
+// node has a NATed or overridden address.
+func v4Node(name, address string) Node {
+	return Node{Name: name, Addresses: []NodeAddress{{Address: address, BindAddress: address}}}
+}
+
+// dualStackNode is a relay node with one address per family, in the order the
+// controller observes them.
+func dualStackNode(name, v4, v6 string) Node {
+	return Node{Name: name, Addresses: []NodeAddress{
+		{Address: v4, BindAddress: v4},
+		{Address: v6, BindAddress: v6},
+	}}
+}
 
 func baseSpec() turnfleetv1alpha1.TURNPoolSpec {
 	return turnfleetv1alpha1.TURNPoolSpec{
@@ -31,9 +48,9 @@ func TestComputePlanHostNetwork(t *testing.T) {
 		PoolName: "demo",
 		Spec:     baseSpec(),
 		Nodes: []Node{
-			{Name: "worker-2", Address: "203.0.113.12", BindAddress: "203.0.113.12"},
-			{Name: "worker-1", Address: "203.0.113.11", BindAddress: "203.0.113.11"},
-			{Name: "worker-3", Address: "203.0.113.13", BindAddress: "203.0.113.13"},
+			v4Node("worker-2", "203.0.113.12"),
+			v4Node("worker-1", "203.0.113.11"),
+			v4Node("worker-3", "203.0.113.13"),
 		},
 	}
 
@@ -70,12 +87,12 @@ func TestComputePlanIsStable(t *testing.T) {
 	spec := baseSpec()
 	spec.Replicas = 2
 	first := ComputePlan(&PlanInput{PoolName: "demo", Spec: spec, Nodes: []Node{
-		{Name: "worker-1", Address: "203.0.113.11"},
-		{Name: "worker-2", Address: "203.0.113.12"},
+		v4Node("worker-1", "203.0.113.11"),
+		v4Node("worker-2", "203.0.113.12"),
 	}})
 	second := ComputePlan(&PlanInput{PoolName: "demo", Spec: spec, Nodes: []Node{
-		{Name: "worker-2", Address: "203.0.113.12"},
-		{Name: "worker-1", Address: "203.0.113.11"},
+		v4Node("worker-2", "203.0.113.12"),
+		v4Node("worker-1", "203.0.113.11"),
 	}})
 
 	if len(first.Relays) != len(second.Relays) {
@@ -90,9 +107,9 @@ func TestComputePlanIsStable(t *testing.T) {
 	// A scale-up must not change the relays that already exist.
 	spec.Replicas = 3
 	third := ComputePlan(&PlanInput{PoolName: "demo", Spec: spec, Nodes: []Node{
-		{Name: "worker-1", Address: "203.0.113.11"},
-		{Name: "worker-2", Address: "203.0.113.12"},
-		{Name: "worker-3", Address: "203.0.113.13"},
+		v4Node("worker-1", "203.0.113.11"),
+		v4Node("worker-2", "203.0.113.12"),
+		v4Node("worker-3", "203.0.113.13"),
 	}})
 	if len(third.Relays) != 3 {
 		t.Fatalf("placed %d relays after scale-up, want 3", len(third.Relays))
@@ -115,8 +132,8 @@ func TestComputePlanRejectsOverlap(t *testing.T) {
 		PoolName: "demo",
 		Spec:     baseSpec(),
 		Nodes: []Node{
-			{Name: "worker-1", Address: "203.0.113.11"},
-			{Name: "worker-2", Address: "203.0.113.11"}, // same address
+			v4Node("worker-1", "203.0.113.11"),
+			v4Node("worker-2", "203.0.113.11"), // same address
 		},
 	})
 
@@ -153,8 +170,8 @@ func TestPartitionedRelaysGetTheirOwnListenerPorts(t *testing.T) {
 		PoolName: "demo",
 		Spec:     spec,
 		Nodes: []Node{
-			{Name: "worker-1", Address: "10.0.0.11"},
-			{Name: "worker-2", Address: "10.0.0.12"},
+			v4Node("worker-1", "10.0.0.11"),
+			v4Node("worker-2", "10.0.0.12"),
 		},
 	})
 
@@ -198,8 +215,8 @@ func TestComputePlanPartitionedIP(t *testing.T) {
 		PoolName: "demo",
 		Spec:     spec,
 		Nodes: []Node{
-			{Name: "worker-1", Address: "10.0.0.11"},
-			{Name: "worker-2", Address: "10.0.0.12"},
+			v4Node("worker-1", "10.0.0.11"),
+			v4Node("worker-2", "10.0.0.12"),
 		},
 	})
 
@@ -264,8 +281,8 @@ func TestComputePlanExternalIPPool(t *testing.T) {
 		PoolName: "demo",
 		Spec:     spec,
 		Nodes: []Node{
-			{Name: "worker-1", Address: "10.0.0.11"},
-			{Name: "worker-2", Address: "10.0.0.12"},
+			v4Node("worker-1", "10.0.0.11"),
+			v4Node("worker-2", "10.0.0.12"),
 		},
 	})
 
@@ -367,5 +384,399 @@ func TestListenerURIs(t *testing.T) {
 		if uris[i] != want[i] {
 			t.Errorf("URI %d = %q, want %q", i, uris[i], want[i])
 		}
+	}
+}
+
+// TestListenerURIsIPv6 pins the authority form RFC 7065 requires: an IPv6
+// relay address is bracketed, or every colon in it reads as a port separator
+// and the published URI is unusable.
+func TestListenerURIsIPv6(t *testing.T) {
+	t.Parallel()
+
+	relay := Relay{Address: "2001:db8::1"}
+	uris := ListenerURIs(&relay, []turnfleetv1alpha1.ListenerSpec{
+		{Name: "turn", Protocol: turnfleetv1alpha1.ListenerProtocolUDP, Port: 3478},
+		{Name: "turns", Protocol: turnfleetv1alpha1.ListenerProtocolTLS, Port: 5349},
+	})
+
+	want := []string{
+		"turn:[2001:db8::1]:3478?transport=udp",
+		"turns:[2001:db8::1]:5349?transport=tcp",
+	}
+	if len(uris) != len(want) {
+		t.Fatalf("got %d URIs, want %d: %v", len(uris), len(want), uris)
+	}
+	for i := range want {
+		if uris[i] != want[i] {
+			t.Errorf("URI %d = %q, want %q", i, uris[i], want[i])
+		}
+	}
+}
+
+func TestAddressFamilies(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		family turnfleetv1alpha1.AddressingFamily
+		want   []turnfleetv1alpha1.AddressingFamily
+	}{
+		{turnfleetv1alpha1.AddressingFamilyIPv4, []turnfleetv1alpha1.AddressingFamily{turnfleetv1alpha1.AddressingFamilyIPv4}},
+		{turnfleetv1alpha1.AddressingFamilyIPv6, []turnfleetv1alpha1.AddressingFamily{turnfleetv1alpha1.AddressingFamilyIPv6}},
+		{turnfleetv1alpha1.AddressingFamilyDualStack, []turnfleetv1alpha1.AddressingFamily{
+			turnfleetv1alpha1.AddressingFamilyIPv4, turnfleetv1alpha1.AddressingFamilyIPv6,
+		}},
+		// The API default, and a value the CRD enum rejects: both mean IPv4
+		// rather than "plan nothing".
+		{"", []turnfleetv1alpha1.AddressingFamily{turnfleetv1alpha1.AddressingFamilyIPv4}},
+		{"SomethingElse", []turnfleetv1alpha1.AddressingFamily{turnfleetv1alpha1.AddressingFamilyIPv4}},
+	}
+	for _, tc := range tests {
+		got := AddressFamilies(tc.family)
+		if !slices.Equal(got, tc.want) {
+			t.Errorf("AddressFamilies(%q) = %v, want %v", tc.family, got, tc.want)
+		}
+	}
+}
+
+func TestAddressFamilyOf(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		address string
+		want    turnfleetv1alpha1.AddressingFamily
+	}{
+		{"203.0.113.10", turnfleetv1alpha1.AddressingFamilyIPv4},
+		{"2001:db8::1", turnfleetv1alpha1.AddressingFamilyIPv6},
+		{"fe80::1", turnfleetv1alpha1.AddressingFamilyIPv6},
+		// An IPv4-mapped address reaches an IPv4 peer, so it is IPv4.
+		{"::ffff:203.0.113.10", turnfleetv1alpha1.AddressingFamilyIPv4},
+		{"not-an-address", ""},
+		{"", ""},
+	}
+	for _, tc := range tests {
+		if got := AddressFamilyOf(tc.address); got != tc.want {
+			t.Errorf("AddressFamilyOf(%q) = %q, want %q", tc.address, got, tc.want)
+		}
+	}
+}
+
+// TestComputePlanIPv6 plans an IPv6 relay per node and nothing on a node that
+// has no IPv6 address.
+func TestComputePlanIPv6(t *testing.T) {
+	t.Parallel()
+
+	spec := baseSpec()
+	spec.Replicas = 2
+	spec.Addressing.Family = turnfleetv1alpha1.AddressingFamilyIPv6
+
+	plan := ComputePlan(&PlanInput{
+		PoolName: "demo",
+		Spec:     spec,
+		Nodes: []Node{
+			dualStackNode("worker-1", "203.0.113.11", "2001:db8::11"),
+			v4Node("worker-2", "203.0.113.12"),
+			dualStackNode("worker-3", "203.0.113.13", "2001:db8::13"),
+		},
+	})
+
+	if len(plan.Relays) != 2 {
+		t.Fatalf("placed %d relays, want 2: only the nodes with an IPv6 address can host one", len(plan.Relays))
+	}
+	for _, r := range plan.Relays {
+		if got := AddressFamilyOf(r.Address); got != turnfleetv1alpha1.AddressingFamilyIPv6 {
+			t.Errorf("relay %s advertises %s (%s), want IPv6", r.Name, r.Address, got)
+		}
+		if r.BindAddress != r.Address {
+			t.Errorf("relay %s binds %s but advertises %s", r.Name, r.BindAddress, r.Address)
+		}
+	}
+	if plan.Relays[0].Address != "2001:db8::11" || plan.Relays[1].Address != "2001:db8::13" {
+		t.Errorf("relay addresses are %s and %s, want the nodes' IPv6 addresses in name order",
+			plan.Relays[0].Address, plan.Relays[1].Address)
+	}
+	if plan.PortsTotal != 96 {
+		t.Errorf("portsTotal = %d, want 96 (two addresses, 48 ports each)", plan.PortsTotal)
+	}
+}
+
+// TestComputePlanDualStack is the property that decides what DualStack means:
+// one relay identity per address family per node, each owning the whole port
+// range, and one metrics port per relay on the node, because coturn's metrics
+// endpoint binds every address on the node rather than the relay's own.
+func TestComputePlanDualStack(t *testing.T) {
+	t.Parallel()
+
+	spec := baseSpec()
+	spec.Replicas = 4
+	spec.Addressing.Family = turnfleetv1alpha1.AddressingFamilyDualStack
+
+	plan := ComputePlan(&PlanInput{
+		PoolName: "demo",
+		Spec:     spec,
+		Nodes: []Node{
+			dualStackNode("worker-1", "203.0.113.11", "2001:db8::11"),
+			dualStackNode("worker-2", "203.0.113.12", "2001:db8::12"),
+		},
+	})
+
+	if len(plan.Relays) != 4 {
+		t.Fatalf("placed %d relays, want 4 (two families on each of two nodes)", len(plan.Relays))
+	}
+	perNode := map[string]map[turnfleetv1alpha1.AddressingFamily]int{}
+	metricsPorts := map[string]map[int32]string{}
+	identities := map[string]bool{}
+	for _, r := range plan.Relays {
+		if !r.PortRange.Same(PortRange{Start: 49152, End: 49199}) {
+			t.Errorf("relay %s owns %s, want the whole pool range: a family is a second address, not a second slice",
+				r.Name, r.PortRange)
+		}
+		if identities[r.Identity] {
+			t.Errorf("identity %s is planned twice", r.Identity)
+		}
+		identities[r.Identity] = true
+
+		family := AddressFamilyOf(r.Address)
+		if perNode[r.NodeName] == nil {
+			perNode[r.NodeName] = map[turnfleetv1alpha1.AddressingFamily]int{}
+		}
+		perNode[r.NodeName][family]++
+		if metricsPorts[r.NodeName] == nil {
+			metricsPorts[r.NodeName] = map[int32]string{}
+		}
+		if other, clash := metricsPorts[r.NodeName][r.MetricsPort()]; clash {
+			t.Errorf("relays %s and %s on node %s would both serve metrics on %d", other, r.Name, r.NodeName, r.MetricsPort())
+		}
+		metricsPorts[r.NodeName][r.MetricsPort()] = r.Name
+	}
+
+	if len(perNode) != 2 {
+		t.Fatalf("relays are placed on %d nodes, want 2", len(perNode))
+	}
+	for node, families := range perNode {
+		if families[turnfleetv1alpha1.AddressingFamilyIPv4] != 1 || families[turnfleetv1alpha1.AddressingFamilyIPv6] != 1 {
+			t.Errorf("node %s runs %v, want exactly one relay per family", node, families)
+		}
+	}
+	// Two addresses, two port spaces: the plan must claim both.
+	if plan.PortsTotal != 192 {
+		t.Errorf("portsTotal = %d, want 192 (four addresses of 48 ports)", plan.PortsTotal)
+	}
+	if plan.Unplaced != 0 {
+		t.Errorf("unplaced = %d, want 0", plan.Unplaced)
+	}
+}
+
+// TestComputePlanFamilySkipsNodesWithoutThatFamily covers the honest failure
+// mode: an IPv6 pool on a cluster whose nodes have no IPv6 address places
+// nothing, says so, and does not fall back to IPv4.
+func TestComputePlanFamilySkipsNodesWithoutThatFamily(t *testing.T) {
+	t.Parallel()
+
+	spec := baseSpec()
+	spec.Replicas = 1
+	spec.Addressing.Family = turnfleetv1alpha1.AddressingFamilyIPv6
+
+	plan := ComputePlan(&PlanInput{
+		PoolName: "demo",
+		Spec:     spec,
+		Nodes:    []Node{v4Node("worker-1", "203.0.113.11")},
+	})
+
+	if len(plan.Relays) != 0 {
+		t.Fatalf("placed %d relays on a node with no IPv6 address: %+v", len(plan.Relays), plan.Relays)
+	}
+	if plan.Unplaced != 1 {
+		t.Errorf("unplaced = %d, want 1", plan.Unplaced)
+	}
+	if len(plan.Notes) == 0 || !strings.Contains(plan.Notes[0], "IPv6") {
+		t.Errorf("notes = %v, want one that names the family", plan.Notes)
+	}
+}
+
+// TestComputePlanDualStackPartitionedIP keeps the two offsets distinct: the
+// listener port is offset per address (two relays on one address cannot bind
+// one port), and the metrics port is offset per node (coturn's metrics endpoint
+// binds every address on the node).
+func TestComputePlanDualStackPartitionedIP(t *testing.T) {
+	t.Parallel()
+
+	spec := baseSpec()
+	spec.Replicas = 4
+	spec.RelayPortRange = turnfleetv1alpha1.PortRange{Start: 50000, End: 50009}
+	spec.Addressing = turnfleetv1alpha1.AddressingSpec{
+		Mode:          turnfleetv1alpha1.AddressingModePartitionedIP,
+		Family:        turnfleetv1alpha1.AddressingFamilyDualStack,
+		PartitionedIP: &turnfleetv1alpha1.PartitionedIPSpec{RelaysPerNode: 2},
+	}
+
+	plan := ComputePlan(&PlanInput{
+		PoolName: "demo",
+		Spec:     spec,
+		Nodes:    []Node{dualStackNode("worker-1", "10.0.0.11", "fd00::11")},
+	})
+
+	if len(plan.Relays) != 4 {
+		t.Fatalf("placed %d relays, want 4 (two slices on each of two addresses)", len(plan.Relays))
+	}
+
+	byAddress := map[string][]PortRange{}
+	listenerPorts := map[string]map[int32]string{}
+	metricsPorts := map[int32]string{}
+	for _, r := range plan.Relays {
+		byAddress[r.Address] = append(byAddress[r.Address], r.PortRange)
+		if listenerPorts[r.Address] == nil {
+			listenerPorts[r.Address] = map[int32]string{}
+		}
+		port := r.ListenerPort(&spec.Listeners[0])
+		if other, clash := listenerPorts[r.Address][port]; clash {
+			t.Errorf("relays %s and %s would both bind %s:%d", other, r.Name, r.Address, port)
+		}
+		listenerPorts[r.Address][port] = r.Name
+		if other, clash := metricsPorts[r.MetricsPort()]; clash {
+			t.Errorf("relays %s and %s on one node would both serve metrics on %d", other, r.Name, r.MetricsPort())
+		}
+		metricsPorts[r.MetricsPort()] = r.Name
+	}
+
+	if len(byAddress) != 2 {
+		t.Fatalf("relays use %d addresses, want 2", len(byAddress))
+	}
+	for address, ranges := range byAddress {
+		ports := int32(0)
+		for i := range ranges {
+			ports += ranges[i].Ports()
+			for j := i + 1; j < len(ranges); j++ {
+				if ranges[i].Overlaps(ranges[j]) {
+					t.Errorf("ranges %s and %s overlap on address %s", ranges[i], ranges[j], address)
+				}
+			}
+		}
+		if ports != 10 {
+			t.Errorf("address %s holds %d ports across %d relays, want the pool range of 10", address, ports, len(ranges))
+		}
+	}
+	// Two addresses of ten ports each, whatever the family split.
+	if plan.PortsTotal != 20 {
+		t.Errorf("portsTotal = %d, want 20", plan.PortsTotal)
+	}
+}
+
+// TestComputePlanExternalIPPoolDualStack takes declared addresses in both
+// families and leaves a declared address of the wrong family alone.
+func TestComputePlanExternalIPPoolDualStack(t *testing.T) {
+	t.Parallel()
+
+	spec := baseSpec()
+	spec.Replicas = 2
+	spec.Addressing = turnfleetv1alpha1.AddressingSpec{
+		Mode:   turnfleetv1alpha1.AddressingModeExternalIPPool,
+		Family: turnfleetv1alpha1.AddressingFamilyIPv6,
+		ExternalIPPool: &turnfleetv1alpha1.ExternalIPPoolSpec{
+			Addresses: []turnfleetv1alpha1.ExternalAddress{
+				{NodeName: "worker-1", Address: "198.51.100.11"},
+				{NodeName: "worker-1", Address: "2001:db8::100"},
+			},
+		},
+	}
+
+	plan := ComputePlan(&PlanInput{
+		PoolName: "demo",
+		Spec:     spec,
+		Nodes:    []Node{dualStackNode("worker-1", "10.0.0.11", "fd00::11")},
+	})
+
+	if len(plan.Relays) != 1 {
+		t.Fatalf("placed %d relays, want 1: only the declared IPv6 address is in this pool's family", len(plan.Relays))
+	}
+	if plan.Relays[0].Address != "2001:db8::100" {
+		t.Errorf("relay advertises %s, want the declared IPv6 address", plan.Relays[0].Address)
+	}
+}
+
+// TestComputePlanIPv6IsStable is the property that matters most, checked in the
+// family that was added last: the same nodes and spec always produce the same
+// relays, in the same order, however the observations are ordered.
+func TestComputePlanIPv6IsStable(t *testing.T) {
+	t.Parallel()
+
+	spec := baseSpec()
+	spec.Replicas = 2
+	spec.Addressing.Family = turnfleetv1alpha1.AddressingFamilyIPv6
+
+	first := ComputePlan(&PlanInput{PoolName: "demo", Spec: spec, Nodes: []Node{
+		dualStackNode("worker-1", "203.0.113.11", "2001:db8::11"),
+		dualStackNode("worker-2", "203.0.113.12", "2001:db8::12"),
+	}})
+	second := ComputePlan(&PlanInput{PoolName: "demo", Spec: spec, Nodes: []Node{
+		dualStackNode("worker-2", "203.0.113.12", "2001:db8::12"),
+		dualStackNode("worker-1", "203.0.113.11", "2001:db8::11"),
+	}})
+
+	if len(first.Relays) != len(second.Relays) {
+		t.Fatalf("plans differ in size: %d vs %d", len(first.Relays), len(second.Relays))
+	}
+	for i := range first.Relays {
+		if first.Relays[i] != second.Relays[i] {
+			t.Errorf("relay %d differs between runs: %+v vs %+v", i, first.Relays[i], second.Relays[i])
+		}
+	}
+}
+
+// TestAddressChangeIsANewIdentity is the planner half of the drain path: a
+// relay's identity is (address, port range), so when a node's address changes —
+// the relay-address annotation moving, a cloud address being reattached — the
+// old identity disappears from the plan and the controller drains it instead of
+// reusing a pod that is relaying on an address it no longer owns.
+func TestAddressChangeIsANewIdentity(t *testing.T) {
+	t.Parallel()
+
+	spec := baseSpec()
+	spec.Replicas = 1
+
+	before := ComputePlan(&PlanInput{PoolName: "demo", Spec: spec, Nodes: []Node{
+		v4Node("worker-1", "203.0.113.11"),
+	}})
+	after := ComputePlan(&PlanInput{PoolName: "demo", Spec: spec, Nodes: []Node{
+		v4Node("worker-1", "203.0.113.99"),
+	}})
+
+	if len(before.Relays) != 1 || len(after.Relays) != 1 {
+		t.Fatalf("placed %d then %d relays, want 1 each", len(before.Relays), len(after.Relays))
+	}
+	if before.Relays[0].Identity == after.Relays[0].Identity {
+		t.Error("the relay identity survived an address change: the old relay would keep relaying on an address it no longer owns")
+	}
+	if before.Relays[0].Name == after.Relays[0].Name {
+		t.Errorf("both addresses produced pod %s, so the old pod would be reused in place", before.Relays[0].Name)
+	}
+	for _, r := range after.Relays {
+		if r.Identity == before.Relays[0].Identity {
+			t.Errorf("the old identity %s is still planned", r.Identity)
+		}
+	}
+}
+
+// TestFamilyChangeIsANewIdentity is the same property across families: the two
+// families' relays on one node never share an identity, which is what lets a
+// DualStack pool run both.
+func TestFamilyChangeIsANewIdentity(t *testing.T) {
+	t.Parallel()
+
+	spec := baseSpec()
+	spec.Replicas = 2
+	spec.Addressing.Family = turnfleetv1alpha1.AddressingFamilyDualStack
+
+	plan := ComputePlan(&PlanInput{PoolName: "demo", Spec: spec, Nodes: []Node{
+		dualStackNode("worker-1", "203.0.113.11", "2001:db8::11"),
+	}})
+
+	if len(plan.Relays) != 2 {
+		t.Fatalf("placed %d relays, want 2", len(plan.Relays))
+	}
+	if plan.Relays[0].Identity == plan.Relays[1].Identity {
+		t.Fatalf("both families produced the identity %s", plan.Relays[0].Identity)
+	}
+	if plan.Relays[0].Name == plan.Relays[1].Name {
+		t.Errorf("both families produced pod %s", plan.Relays[0].Name)
 	}
 }

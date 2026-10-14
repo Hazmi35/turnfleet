@@ -35,6 +35,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/signal"
 	"strconv"
@@ -249,7 +250,10 @@ func writeHumanResult(stdout io.Writer, result *probe.Result) {
 	}
 	_, _ = fmt.Fprintf(stdout, "%s %s\n", status, result.URI)
 	if result.Succeeded {
-		_, _ = fmt.Fprintf(stdout, "  relayed address: %s:%d\n", result.RelayedAddress, result.RelayedPort)
+		// JoinHostPort brackets an IPv6 address, so the line is unambiguous
+		// whichever family the relay answered in.
+		_, _ = fmt.Fprintf(stdout, "  relayed address: %s\n",
+			net.JoinHostPort(result.RelayedAddress, strconv.Itoa(int(result.RelayedPort))))
 	}
 	if result.ErrorCode != 0 {
 		_, _ = fmt.Fprintf(stdout, "  turn error code: %d\n", result.ErrorCode)

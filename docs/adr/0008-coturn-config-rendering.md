@@ -50,6 +50,16 @@ read-only and coturn is started with `-c /etc/turnfleet/turnserver.conf`.
     that need them and still count against the pool's capacity. Verified by
     allocating over TCP against the pinned image and observing a relayed port
     inside the configured range.
+  * **An IPv6 relay uses the same flags with IPv6 values, and they were verified
+    the same way.** `--listening-ip`, `--relay-ip` and `--external-ip` take a
+    bare IPv6 address (`-X` is split on `/`, so a public/private pair needs no
+    brackets), and `--denied-peer-ip` takes IPv6 ranges. Running the pinned
+    image with a rendered v6 configuration starts it; a probe allocates on
+    `::1` and reads the v6 `XOR-RELAYED-ADDRESS`; `-X 2001:db8:ffff::77/fd00::11`
+    is reported as the relayed address instead of the bound one; and a peer in a
+    denied v6 range is refused with TURN error 403. The v6 values are rendered
+    from `::/128`, `::1/128`, `::ffff:0:0/96`, `fc00::/7`, `fe80::/10`,
+    `ff00::/8` and the pool's own ranges.
 * Authentication uses `--use-auth-secret` with `--static-auth-secret` only.
   `--lt-cred-mech` is not rendered: coturn warns when both are set, and the
   shared-secret mechanism is the one the credential issuer uses. This was
@@ -78,4 +88,7 @@ does not model.
   mechanical, not a review habit.
 * Denied peer ranges are asserted by a unit test that the default deny list
   covers RFC 1918, RFC 6598, loopback, link-local (including
-  `169.254.169.254`) and the cluster pod/service CIDRs.
+  `169.254.169.254`) and the cluster pod/service CIDRs. The IPv6 golden files do
+  the same for loopback, link-local, unique local addresses and the IPv4-mapped
+  space `::ffff:0:0/96`, which is where the metadata address lives for an IPv6
+  peer.

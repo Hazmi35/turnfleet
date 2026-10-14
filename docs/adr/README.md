@@ -17,6 +17,7 @@ decision gets a new ADR that says so.
 | [0009](0009-partitioned-listener-ports.md) | Partitioned relays get their own listener ports: a listening socket binds once per address. |
 | [0010](0010-harness-agnostic-agent-config.md) | The agent harness is harness-agnostic: canonical content under `.agents/`/`hack/agent/`, thin per-harness wiring. |
 | [0011](0011-pin-provenance-in-place.md) | Version pins live next to what they pin; `docs/versions.md` records only the pins that are held, and why. |
+| [0013](0013-addressing-family.md) | Address families: `IPv4`, `IPv6` and `DualStack`, one relay identity per family per node. |
 | [0015](0015-vantage-result-delivery.md) | A vantage runner publishes its result in a `<pool>-vantage` ConfigMap; the controller reads it into the `ReachableFromVantage` condition and cannot mask it. |
 | [0016](0016-release-signature-storage.md) | Release signatures and attestations live in the registry on cosign's tag-based storage, so the cosign pin is held on the v2 line. |
 | [0014](0014-helm-chart-delivery.md) | The chart installs the controller; `config/` stays the source of truth, held together by `make helm-drift`. |

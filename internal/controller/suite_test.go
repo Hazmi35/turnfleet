@@ -292,6 +292,38 @@ func (f *testFixture) createNode(name, address string) {
 	})
 }
 
+// createDualStackNode creates a relay node with one address per family, the way
+// a dual-stack cluster reports them.
+func (f *testFixture) createDualStackNode(name, v4, v6 string) {
+	f.t.Helper()
+
+	node := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   name,
+			Labels: map[string]string{RelayNodeLabel: "true"},
+		},
+	}
+	node.Spec.PodCIDR = "10.244.0.0/24"
+
+	if err := k8sClient.Create(f.ctx, node); err != nil {
+		f.t.Fatalf("creating node %s: %v", name, err)
+	}
+	node.Status = corev1.NodeStatus{
+		Addresses: []corev1.NodeAddress{
+			{Type: corev1.NodeInternalIP, Address: v4},
+			{Type: corev1.NodeExternalIP, Address: v4},
+			{Type: corev1.NodeInternalIP, Address: v6},
+			{Type: corev1.NodeExternalIP, Address: v6},
+		},
+	}
+	if err := k8sClient.Status().Update(f.ctx, node); err != nil {
+		f.t.Fatalf("setting the addresses of node %s: %v", name, err)
+	}
+	f.t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: name}})
+	})
+}
+
 // createSecret creates the pool's shared HMAC secret, under the name every
 // fixture pool refers to.
 func (f *testFixture) createSecret() {

@@ -629,3 +629,177 @@ func readyRelays(t *testing.T, f *testFixture, name string) int32 {
 func namespaced(namespace, name string) types.NamespacedName {
 	return types.NamespacedName{Namespace: namespace, Name: name}
 }
+
+// TestDualStackRunsOneRelayPerFamily is the controller half of the DualStack
+// decision: a dual-stack node hosts one relay per address family, each owning
+// the whole port range, and the two relays get distinct metrics ports because
+// coturn's metrics endpoint binds every address on the node.
+func TestDualStackRunsOneRelayPerFamily(t *testing.T) {
+	f := newFixture(t)
+	f.createSecret()
+	f.createDualStackNode("tf-worker-1", "203.0.113.11", "2001:db8::11")
+
+	pool := hostNetworkPool("tpool-dual", 2)
+	pool.Spec.Addressing.Family = turnfleetv1alpha1.AddressingFamilyDualStack
+	f.createPool(pool)
+
+	f.reconcile("tpool-dual")
+	f.reconcile("tpool-dual")
+
+	status := f.pool("tpool-dual").Status
+	if status == nil || len(status.Relays) != 2 {
+		t.Fatalf("status lists %v relays, want 2 (one per family on one node)", status)
+	}
+	byFamily := map[turnfleetv1alpha1.AddressingFamily]string{}
+	for _, relayStatus := range status.Relays {
+		if relayStatus.NodeName == nil || *relayStatus.NodeName != "tf-worker-1" {
+			t.Errorf("relay %s runs on %v, want tf-worker-1: its address is on that node", relayStatus.Name, relayStatus.NodeName)
+		}
+		if relayStatus.RelayAddress == nil {
+			t.Fatalf("relay %s has no address in status", relayStatus.Name)
+		}
+		if got := relayStatus.PortRange; got.Start != 49152 || got.End != 49199 {
+			t.Errorf("relay %s owns %d-%d, want the whole pool range: a family is a second address, not a second slice",
+				relayStatus.Name, got.Start, got.End)
+		}
+		family := relay.AddressFamilyOf(*relayStatus.RelayAddress)
+		if previous, duplicate := byFamily[family]; duplicate {
+			t.Errorf("relays %s and %s both use %s addresses", previous, relayStatus.Name, family)
+		}
+		byFamily[family] = relayStatus.Name
+	}
+	if len(byFamily) != 2 {
+		t.Fatalf("relays cover %v, want one address per family", byFamily)
+	}
+
+	// The metrics port is not part of the status, so read it from the pods: two
+	// relays on one node must not both serve metrics on 9641.
+	metricsPorts := map[int32]string{}
+	for _, pod := range f.pods("tpool-dual") {
+		for _, container := range pod.Spec.Containers {
+			for _, port := range container.Ports {
+				if port.Name != "metrics" {
+					continue
+				}
+				if other, clash := metricsPorts[port.ContainerPort]; clash {
+					t.Errorf("pods %s and %s both declare metrics port %d", other, pod.Name, port.ContainerPort)
+				}
+				metricsPorts[port.ContainerPort] = pod.Name
+			}
+			// The listener binds the relay's own address, not the pod IP, which
+			// a dual-stack hostNetwork pod only has one of.
+			if probe := container.ReadinessProbe; probe != nil && probe.TCPSocket != nil {
+				if probe.TCPSocket.Host == "" {
+					t.Errorf("pod %s probes the pod IP, which is not the address the relay binds", pod.Name)
+				}
+			}
+		}
+	}
+	if len(metricsPorts) != 2 {
+		t.Errorf("relay pods declare metrics ports %v, want one distinct port per relay on the node", metricsPorts)
+	}
+}
+
+// TestNodeAddresses covers the observation the family decision rests on: one
+// address per family, ExternalIP preferred, and the relay-address annotation
+// overriding the advertised address of the family it names.
+func TestNodeAddresses(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		node      *corev1.Node
+		want      []relay.NodeAddress
+		wantError bool
+	}{
+		{
+			name: "external address only",
+			node: &corev1.Node{Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{
+				{Type: corev1.NodeExternalIP, Address: "203.0.113.11"},
+			}}},
+			want: []relay.NodeAddress{{Address: "203.0.113.11", BindAddress: "203.0.113.11"}},
+		},
+		{
+			name: "internal address when there is no external one",
+			node: &corev1.Node{Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{
+				{Type: corev1.NodeInternalIP, Address: "203.0.113.11"},
+			}}},
+			want: []relay.NodeAddress{{Address: "203.0.113.11", BindAddress: "203.0.113.11"}},
+		},
+		{
+			name: "both families, external preferred in each",
+			node: &corev1.Node{Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{
+				{Type: corev1.NodeInternalIP, Address: "10.0.0.11"},
+				{Type: corev1.NodeExternalIP, Address: "203.0.113.11"},
+				{Type: corev1.NodeInternalIP, Address: "fd00::11"},
+				{Type: corev1.NodeExternalIP, Address: "2001:db8::11"},
+				{Type: corev1.NodeHostName, Address: "tf-worker-1"},
+			}}},
+			want: []relay.NodeAddress{
+				{Address: "203.0.113.11", BindAddress: "203.0.113.11"},
+				{Address: "2001:db8::11", BindAddress: "2001:db8::11"},
+			},
+		},
+		{
+			name: "a name is not an address",
+			node: &corev1.Node{Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{
+				{Type: corev1.NodeHostName, Address: "tf-worker-1"},
+				{Type: corev1.NodeExternalDNS, Address: "tf-worker-1.example.net"},
+			}}},
+		},
+		{
+			name: "the annotation overrides the family it names",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{RelayAddressAnnotation: "203.0.113.77"}},
+				Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{
+					{Type: corev1.NodeExternalIP, Address: "203.0.113.11"},
+					{Type: corev1.NodeExternalIP, Address: "2001:db8::11"},
+				}},
+			},
+			want: []relay.NodeAddress{
+				{Address: "203.0.113.77", BindAddress: "203.0.113.11"},
+				{Address: "2001:db8::11", BindAddress: "2001:db8::11"},
+			},
+		},
+		{
+			name: "an annotation for a family the node does not have",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{RelayAddressAnnotation: "2001:db8::77"}},
+				Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{
+					{Type: corev1.NodeExternalIP, Address: "203.0.113.11"},
+				}},
+			},
+			wantError: true,
+		},
+		{
+			name: "an annotation that is not an address",
+			node: &corev1.Node{
+				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{RelayAddressAnnotation: "relay.example.net"}},
+				Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{
+					{Type: corev1.NodeExternalIP, Address: "203.0.113.11"},
+				}},
+			},
+			wantError: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := nodeAddresses(tc.node)
+			if tc.wantError {
+				if err == nil {
+					t.Fatalf("nodeAddresses() accepted %+v and returned %+v", tc.node.Status.Addresses, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("nodeAddresses() failed: %v", err)
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("nodeAddresses() = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
