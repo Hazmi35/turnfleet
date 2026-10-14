@@ -126,12 +126,10 @@ offset per address.
 
 An IPv6 pool binds IPv6 addresses only: a client reaches a relay on the address
 its own path uses, so a v6 relay has v6 peers and a v4 relay has v4 peers. The
-default peer deny list follows the family for the same reason (see ADR 13): the
-defaulting webhook picks it from `family`, and a pool that never passed
-admission (see `config/default`) is given the v4 list by the controller, so an
-IPv6 or `DualStack` pool installed without webhooks should declare
-`peerPolicy.deniedCIDRs` itself. A peer range of the other family is rejected
-rather than kept as decoration.
+default peer deny list follows the family for the same reason (see ADR 13):
+both the defaulting webhook and the controller's own fallback for a pool that
+never passed admission (see `config/default`) pick it from `family`. A peer
+range of the other family is rejected rather than kept as decoration.
 
 A node without an address in a planned family hosts no relay there. An IPv6 pool
 on IPv4-only nodes places nothing and reports the shortfall on the `Ready` and
