@@ -110,6 +110,18 @@ and `make helm-drift` check the chart against `config/` (the drift guard fails
 when the two stop agreeing). Installing from the chart replaces the two steps
 above, so run `make install`/`make deploy` or `make helm-install`, not both.
 
+A release publishes the same chart as an OCI artifact on ghcr.io, at the
+release's version, so a consumer with no checkout installs the released chart:
+
+```sh
+helm install turnfleet oci://ghcr.io/hazmi35/turnfleet-chart/turnfleet \
+  --version 0.1.0 --namespace turnfleet-system --create-namespace
+```
+
+Installed without `--set`, that chart runs the released
+`turnfleet-controller:0.1.0`, which is the image the release published. The
+release notes carry the chart's digest and the commands that verify it.
+
 Upgrading is one step more than installing. Helm installs the files under
 `crds/` on the first install and never updates an existing CRD, so a release
 that changes the schema needs `make helm-crds-apply` before `helm upgrade`; the

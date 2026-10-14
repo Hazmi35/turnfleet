@@ -24,7 +24,10 @@ output as evidence for each one; "looks fine" is not evidence.
    on the commit being released: `version` is the chart's semver (`0.1.0`) and
    `appVersion` is the image tag the chart installs by default (`0.1.0`, the
    number beside the git tag's `v0.1.0`). They are the same number on purpose.
-   Bumping either after the release leaves it carrying the previous one.
+   Bumping either after the release leaves it carrying the previous one. The
+   Release workflow checks both against the release tag before it publishes the
+   chart, so a bump missed here fails the release instead of publishing a chart
+   the release does not carry.
 5. **Version pins agree**: each pin's copies in `go.mod`, `tools/go.mod`, the
    `Makefile`, `.custom-gcl.yml`, the Dockerfiles and the workflows hold the same
    value, and the held modules, vulnerability floors and the held cosign pin
@@ -47,20 +50,26 @@ output as evidence for each one; "looks fine" is not evidence.
     released (`gh release create vX.Y.Z --title "Turnfleet vX.Y.Z" --notes …`),
     which is also what creates the tag. `image.yaml` then builds and pushes both
     images for that tag, and `release.yaml` waits for their digests, signs them
-    keyless, attaches the SPDX SBOM and the SLSA provenance and writes the
-    release body (ADR 16). A tag push with no release publishes nothing. Release
-    notes may claim the chart: it ships in this tree, and `make test-e2e-chart`
-    proves it installs.
+    keyless, attaches the SPDX SBOM and the SLSA provenance, publishes the chart
+    to `oci://ghcr.io/hazmi35/turnfleet-chart/turnfleet` at the release's
+    version and signs it at its own digest, and writes the release body
+    (ADR 16, ADR 17). A tag push with no release publishes nothing. Release notes
+    may claim the chart: it ships in this tree, and `make test-e2e-chart` proves
+    it installs.
 
 ## After the release
 
-* Confirm the release body carries the digest of both published images.
+* Confirm the release body carries the digest of both published images and the
+  chart's version and digest.
 * Watch the Release workflow for the tag. It waits for the Image workflow to
   publish `ghcr.io/hazmi35/turnfleet-{controller,probe}:<tag>`, signs both index
-  digests keyless, attaches an SPDX SBOM and SLSA provenance to each, verifies
-  all three with the identity it records, and writes the release body from the
-  digests and the commands. It fails loudly if the digests never appear (look at
-  the Image run for the tag) or if one of its own verifications fails.
+  digests keyless, attaches an SPDX SBOM and SLSA provenance to each, publishes
+  and signs the chart at the digest its own push reported, verifies all of it
+  with the identity it records, and writes the release body from the digests and
+  the commands. It fails loudly if the digests never appear (look at the Image
+  run for the tag), if the chart's `version` or `appVersion` is not the release
+  version (nothing is pushed in that case), or if one of its own verifications
+  fails.
 * Check what it published rather than trusting it. The release notes carry the
   digests, the certificate identity and the exact commands; `identity` is
   `https://github.com/Hazmi35/turnfleet/.github/workflows/release.yaml@refs/tags/<tag>`:
@@ -82,4 +91,19 @@ output as evidence for each one; "looks fine" is not evidence.
   coturn digest. Repeat for `turnfleet-probe`. A consumer that holds a public key
   instead of trusting the Fulcio identity uses `cosign verify --key cosign.pub
   <ref>`, which needs a key-based signature this repository does not produce.
+* The chart was published with the same identity and verifies the same way, at
+  `oci://ghcr.io/hazmi35/turnfleet-chart/turnfleet`, version `<tag without its v>`.
+  Pull it and check its digest, which the release body records, rather than the
+  tag:
+
+  ```sh
+  helm pull oci://ghcr.io/hazmi35/turnfleet-chart/turnfleet --version <tag without v>
+  cosign verify --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" \
+    ghcr.io/hazmi35/turnfleet-chart/turnfleet@sha256:<chart digest>
+  ```
+
+  Its provenance and its SPDX document verify with the `slsaprovenance` and
+  `spdxjson` commands above, against the same reference. #39's acceptance —
+  installing from that published reference on a fresh cluster and probing a relay
+  — needs a release to have happened, the way the image digest checks above do.
 * Re-run `make verify` on the tag: a tag is a commit, not a branch state.
