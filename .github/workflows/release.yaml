@@ -12,9 +12,20 @@
 #   and the workflow waits for that build to publish the digests
 #   (`IMAGE_WAIT_SECONDS`) before it resolves one. Both workflows start on the
 #   release at once, and a pipeline that signed whatever the tag happened to
-#   point at before the build finished would sign nothing in particular. The
-#   digest is read back from the registry at the release's tag, so the images,
-#   their signatures and their attestations come from one build.
+#   point at before the build finished would sign nothing in particular.
+# * Resolution is not "the tag exists". A tag is a mutable reference, and it can
+#   already resolve to an image built from an earlier commit: the v0.1.2 tag
+#   resolved to the pre-fix build until the Image run republished it, and a
+#   preparation that stopped at "the tag resolved" would have signed and
+#   documented that build. A digest is therefore accepted only once the image it
+#   points at carries the release's commit in
+#   `org.opencontainers.image.revision`; a tag that never carries that build
+#   fails the run, naming the revision it did see. The digest is read back from
+#   the registry at the release's tag, so the images, their signatures, their
+#   attestations and the notes all describe the build of the released commit,
+#   and the tag resolves to the digest that was signed.
+# * `image.yaml` gates the release's version tags on the release event, so the
+#   tag this workflow resolves has one writer and not also a manual run's.
 # * Signing is keyless (`id-token: write`): the signature carries a short-lived
 #   Fulcio certificate for this workflow, so the repository holds no key to
 #   rotate. docs/adr/0016-release-signature-storage.md records why the pinned
@@ -97,7 +108,9 @@ jobs:
           persist-credentials: false
 
       # Buildx is the registry client here: `imagetools inspect --raw` returns
-      # the manifest bytes a tag resolves to, and their sha256 is the digest.
+      # the manifest bytes a tag resolves to, and their sha256 is the digest,
+      # and `inspect --format '{{json .Image}}'` returns the image config the
+      # revision label lives in.
       - name: Set up Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
@@ -123,23 +136,60 @@ jobs:
           images="${RUNNER_TEMP}/images.tsv"
           deadline=$((SECONDS + IMAGE_WAIT_SECONDS))
           : >"$images"
+          # image_revision prints the commit the image at REF was built from, as
+          # the build stamped it. The revision is a label, so it lives in the
+          # image config and not in the manifest: `.Image` is one config for a
+          # single-platform image and a map of them keyed by platform for a
+          # multi-arch one, which is why this searches for the first label
+          # rather than indexing a platform's config directly. A digest carries
+          # configs for both architectures and both are built from the same
+          # commit, so the first is the image's revision. A registry that
+          # answers nothing is reported as no revision rather than as a failure:
+          # the caller then waits, the way it waits for a tag that is not
+          # published yet, and the deadline is what ends the run.
+          image_revision() {
+            docker buildx imagetools inspect "$1" --format '{{json .Image}}' 2>/dev/null \
+              | jq -r '[.. | .config? // empty | .Labels? // empty | .["org.opencontainers.image.revision"]? // empty] | first // ""' \
+              || true
+          }
           for name in turnfleet-controller turnfleet-probe; do
             ref="${base}/${name}:${TAG}"
             digest=''
             while [ -z "$digest" ]; do
               raw="$(docker buildx imagetools inspect "$ref" --raw 2>/dev/null || true)"
-              # Only a manifest response resolves: an empty answer means the
-              # Image workflow has not pushed this tag yet, and hashing that
-              # would bless a digest of nothing.
               if printf '%s' "$raw" | jq -e 'has("mediaType")' >/dev/null 2>&1; then
-                digest="sha256:$(printf '%s' "$raw" | sha256sum | cut -d' ' -f1)"
-                break
+                candidate="sha256:$(printf '%s' "$raw" | sha256sum | cut -d' ' -f1)"
+                # The revision is read from the digest that was just resolved,
+                # not from the tag again: the tag can be republished between the
+                # two reads, and a revision read from the newer image would
+                # justify the older digest.
+                revision="$(image_revision "${base}/${name}@${candidate}")"
+                # The tag can already resolve to an image built from another
+                # commit: it is what an earlier release of this tag published,
+                # and the Image run for the release being cut has not replaced
+                # it yet. Signing that digest would document a build that is not
+                # this release's, and the tag would not resolve to it once the
+                # run lands, so it is not a digest at all until the image behind
+                # it says it was built from this commit.
+                if [ "$revision" = "$commit" ]; then
+                  digest="$candidate"
+                  break
+                fi
+                if [ "$SECONDS" -ge "$deadline" ]; then
+                  echo "::error::${ref} resolves to ${candidate}, built from ${revision:-an image with no org.opencontainers.image.revision label}, not from ${commit} after ${IMAGE_WAIT_SECONDS}s; check the Image workflow run for ${TAG}" >&2
+                  exit 1
+                fi
+                echo "${ref} resolves to ${candidate}, built from ${revision:-an image with no org.opencontainers.image.revision label}, not from ${commit}; waiting for the Image run for ${TAG} to republish it"
+              else
+                # Only a manifest response resolves: an empty answer means the
+                # Image workflow has not pushed this tag yet, and hashing that
+                # would bless a digest of nothing.
+                if [ "$SECONDS" -ge "$deadline" ]; then
+                  echo "::error::${ref} is still not published after ${IMAGE_WAIT_SECONDS}s; check the Image workflow run for ${TAG}" >&2
+                  exit 1
+                fi
+                echo "${ref} is not published yet; waiting for the Image run for ${TAG} to push it"
               fi
-              if [ "$SECONDS" -ge "$deadline" ]; then
-                echo "::error::${ref} is still not published after ${IMAGE_WAIT_SECONDS}s; check the Image workflow run for ${TAG}" >&2
-                exit 1
-              fi
-              echo "${ref} is not published yet; waiting for the Image run for ${TAG} to push it"
               sleep 30
             done
             printf '%s\t%s\n' "$name" "${ref}@${digest}" >>"$images"
@@ -334,7 +384,23 @@ jobs:
             --chart "$(makefile_pin HELM_CHART)" \
             --registry "$(makefile_pin IMAGE_REGISTRY)/turnfleet-chart" \
             --output "${RECORD}"
-          echo "chart=$(jq -c . "${RECORD}")" >>"$GITHUB_OUTPUT"
+          record="$(jq -c . "${RECORD}")"
+          echo "chart=${record}" >>"$GITHUB_OUTPUT"
+          # The record's fields as environment variables rather than as an output
+          # the steps below read with fromJSON: an output a failed step never
+          # wrote is an expression error in the *next* step's env, and the run
+          # then reports "The template is not valid ... Error reading JToken from
+          # JsonReader" for every step that touches it, burying the error that
+          # actually failed the job (v0.1.2's chart-version guard produced seven
+          # of those for one real failure). A name in the environment is a plain
+          # string, so the step after this one is simply skipped when this one
+          # fails, and the run shows the real error.
+          {
+            echo "CHART_NAME=$(jq -r .name <<<"${record}")"
+            echo "CHART_VERSION=$(jq -r .version <<<"${record}")"
+            echo "CHART_REF=$(jq -r .ref <<<"${record}")"
+            echo "CHART_OCI=$(jq -r .oci <<<"${record}")"
+          } >>"$GITHUB_ENV"
 
       - name: Install cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
@@ -342,25 +408,20 @@ jobs:
           cosign-release: ${{ env.COSIGN_VERSION }}
 
       - name: Sign the published chart digest
-        env:
-          REF: ${{ fromJSON(steps.publish.outputs.chart).ref }}
         run: |
           set -euo pipefail
           cosign sign --yes \
             -a "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
             -a "org.opencontainers.image.revision=${COMMIT}" \
             -a "org.opencontainers.image.version=${TAG}" \
-            "${REF}"
+            "${CHART_REF}"
 
       - name: Write the chart's provenance predicate
-        env:
-          OCI: ${{ fromJSON(steps.publish.outputs.chart).oci }}
-          VERSION: ${{ fromJSON(steps.publish.outputs.chart).version }}
         run: |
           set -euo pipefail
           hack/release/chart-provenance.sh \
-            --chart "${OCI}" \
-            --chart-version "${VERSION}" \
+            --chart "${CHART_OCI}" \
+            --chart-version "${CHART_VERSION}" \
             --tag "${TAG}" \
             --commit "${COMMIT}" \
             --repository-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}" \
@@ -371,52 +432,42 @@ jobs:
             --output chart.provenance.json
 
       - name: Attach the provenance to the chart digest
-        env:
-          REF: ${{ fromJSON(steps.publish.outputs.chart).ref }}
-        run: cosign attest --yes --type slsaprovenance --predicate chart.provenance.json "${REF}"
+        run: cosign attest --yes --type slsaprovenance --predicate chart.provenance.json "${CHART_REF}"
 
       # The chart's SBOM is pulled back by digest, so the document describes the
       # bytes the signature covers and not the checkout they were packaged from.
       - name: Write the chart's SBOM from the published digest
-        env:
-          OCI: ${{ fromJSON(steps.publish.outputs.chart).oci }}
-        run: hack/release/chart-sbom.sh --chart "${OCI}" --output chart.spdx.json
+        run: hack/release/chart-sbom.sh --chart "${CHART_OCI}" --output chart.spdx.json
 
       - name: Attach the SBOM to the chart digest
-        env:
-          REF: ${{ fromJSON(steps.publish.outputs.chart).ref }}
-        run: cosign attest --yes --type spdxjson --predicate chart.spdx.json "${REF}"
+        run: cosign attest --yes --type spdxjson --predicate chart.spdx.json "${CHART_REF}"
 
       # The three checks the notes record, run once here: the chart's signature,
       # the provenance naming the tagged commit and the released version, and the
       # SPDX document naming the chart it describes.
       - name: Check the chart's signature and both attestations
-        env:
-          REF: ${{ fromJSON(steps.publish.outputs.chart).ref }}
-          NAME: ${{ fromJSON(steps.publish.outputs.chart).name }}
-          VERSION: ${{ fromJSON(steps.publish.outputs.chart).version }}
         run: |
           set -euo pipefail
           cosign verify \
             --certificate-identity "${IDENTITY}" \
             --certificate-oidc-issuer "${ISSUER}" \
-            "${REF}" >/dev/null
+            "${CHART_REF}" >/dev/null
           cosign verify-attestation --type slsaprovenance \
             --certificate-identity "${IDENTITY}" \
             --certificate-oidc-issuer "${ISSUER}" \
-            "${REF}" \
+            "${CHART_REF}" \
             | jq -r .payload | base64 -d \
-            | jq -e --arg commit "${COMMIT}" --arg version "${VERSION}" \
+            | jq -e --arg commit "${COMMIT}" --arg version "${CHART_VERSION}" \
                 '.predicate.invocation.configSource.digest.sha1 == $commit
                  and .predicate.invocation.parameters.chartVersion == $version' >/dev/null
           cosign verify-attestation --type spdxjson \
             --certificate-identity "${IDENTITY}" \
             --certificate-oidc-issuer "${ISSUER}" \
-            "${REF}" \
+            "${CHART_REF}" \
             | jq -r .payload | base64 -d \
-            | jq -e --arg name "${NAME}" --arg version "${VERSION}" \
+            | jq -e --arg name "${CHART_NAME}" --arg version "${CHART_VERSION}" \
                 '[.predicate.packages[] | select(.name == $name and .versionInfo == $version)] | length == 1' >/dev/null
-          echo "${REF}: signature, provenance and SBOM attestation verify (chart ${VERSION})"
+          echo "${CHART_REF}: signature, provenance and SBOM attestation verify (chart ${CHART_VERSION})"
 
   release:
     name: Write the release
