@@ -160,7 +160,7 @@ test: generate manifests envtest ## Run unit and envtest suites.
 
 .PHONY: test-fuzz
 test-fuzz: generate ## Fuzz the renderer and the webhook validators.
-	$(GO) test -run '^$$' -fuzz '^FuzzRenderer$' -fuzztime $(FUZZ_TIME) ./internal/relay/
+	$(GO) test -run '^$$' -fuzz '^FuzzRenderer$$' -fuzztime $(FUZZ_TIME) ./internal/relay/
 	$(GO) test -run '^$$' -fuzz '^FuzzWebhookValidation$$' -fuzztime $(FUZZ_TIME) ./internal/webhook/v1alpha1/
 
 .PHONY: test-e2e
@@ -286,7 +286,10 @@ deploy: ## Deploy the controller into the kind cluster.
 
 .PHONY: undeploy
 undeploy: ## Remove the controller from the kind cluster.
-	-$(KUSTOMIZE) build $(KUSTOMIZE_OVERLAY) | $(KUBECTL) delete --ignore-not-found -f -
+	# Bounded: a pool deleted while the controller was down keeps its drain
+	# finalizer, and `kubectl delete` waits on it — a wedged object must end the
+	# command, not hold the cluster lock for tens of minutes.
+	-$(KUSTOMIZE) build $(KUSTOMIZE_OVERLAY) | timeout 60 $(KUBECTL) delete --ignore-not-found -f -
 
 ##@ Helm
 
