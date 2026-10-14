@@ -1,0 +1,74 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Turnfleet Authors
+#
+# The scaffolded TURNPool roles, for people rather than for the controller:
+# cluster admin, editor and viewer of TURNPools. Not used by the controller.
+{{- if .Values.rbac.create }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "turnfleet.name" . }}-turnpool-admin-role
+  labels:
+    {{- include "turnfleet.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - turnfleet.hzmi.dev
+    resources:
+      - turnpools
+    verbs:
+      - "*"
+  - apiGroups:
+      - turnfleet.hzmi.dev
+    resources:
+      - turnpools/status
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "turnfleet.name" . }}-turnpool-editor-role
+  labels:
+    {{- include "turnfleet.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - turnfleet.hzmi.dev
+    resources:
+      - turnpools
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - turnfleet.hzmi.dev
+    resources:
+      - turnpools/status
+    verbs:
+      - get
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "turnfleet.name" . }}-turnpool-viewer-role
+  labels:
+    {{- include "turnfleet.labels" . | nindent 4 }}
+rules:
+  - apiGroups:
+      - turnfleet.hzmi.dev
+    resources:
+      - turnpools
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - turnfleet.hzmi.dev
+    resources:
+      - turnpools/status
+    verbs:
+      - get
+{{- end }}

@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Turnfleet Authors
+#
+# The serving certificates. They are what makes admission webhooks opt-in: the
+# manager reads the serving key from `webhook-server-cert`, and cert-manager
+# fills the webhook configurations' caBundle from the annotation above.
+{{- if .Values.webhook.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: {{ .Values.webhook.issuerName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "turnfleet.labels" . | nindent 4 }}
+spec:
+  selfSigned: {}
+---
+# The webhook server's certificate, for the webhook Service above.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: serving-cert
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "turnfleet.labels" . | nindent 4 }}
+spec:
+  dnsNames:
+    - webhook-service.{{ .Release.Namespace }}.svc
+    - webhook-service.{{ .Release.Namespace }}.svc.cluster.local
+  issuerRef:
+    kind: Issuer
+    name: {{ .Values.webhook.issuerName }}
+  secretName: {{ .Values.webhook.certSecretName }}
+---
+# The metrics endpoint's certificate. Nothing mounts
+# `metrics-server-cert` unless the manager is also told to serve metrics with
+# it, which this chart does not do; config/with-webhook's certmanager carries
+# the same Certificate, so the chart does too rather than diverge from it.
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: metrics-certs
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "turnfleet.labels" . | nindent 4 }}
+spec:
+  dnsNames:
+    - {{ include "turnfleet.name" . }}-controller-manager-metrics-service.{{ .Release.Namespace }}.svc
+    - {{ include "turnfleet.name" . }}-controller-manager-metrics-service.{{ .Release.Namespace }}.svc.cluster.local
+  issuerRef:
+    kind: Issuer
+    name: {{ .Values.webhook.issuerName }}
+  secretName: metrics-server-cert
+{{- end }}

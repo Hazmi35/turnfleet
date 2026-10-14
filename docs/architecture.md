@@ -58,6 +58,8 @@ the relay's slot on its node — because a listening socket binds once per addre
 | `internal/controller` | Reconciles a `TURNPool`: planner + renderer + relay pods + config ConfigMap + `<pool>-turn-uris` ConfigMap + status; runs the drain state machine, the rolling config-hash update and the periodic probe. |
 | `internal/webhook/v1alpha1` | Defaulting, validation, immutability, mode-specific rules. |
 | `cmd/turnfleet-probe` | The same probe as a CLI with JSON output, so the check can run from outside the cluster. |
+| `config/` | The kustomize manifests for the controller: `config/default` runs it without admission webhooks, `config/with-webhook` adds them and their cert-manager certificates. Source of truth for what the controller is deployed as. |
+| `charts/turnfleet` | The Helm chart for the same controller — CRDs, RBAC, the manager, the metrics Service and, opt-in, the webhooks — for a consumer who does not want to run kustomize. It never templates relays: relay pods come from the planner, and nothing in the relay data path goes through it. `make helm-drift` renders the chart and `config/` and fails on drift. |
 
 ## Reconcile flow
 
@@ -146,5 +148,7 @@ The full list, including what each omission costs operationally, is in
 
 * The direct/STUN path, signalling, and the credential-issuing endpoint are out
   of scope. Turnfleet only consumes the shared HMAC secret the issuer uses.
-* No Service/LoadBalancer exposure, no ingress controller, no Helm chart (yet —
-  tracked in #8).
+* No Service/LoadBalancer exposure, no ingress controller. The controller is
+  installed with kustomize (`config/`) or with the Helm chart
+  (`charts/turnfleet`); both are the same controller, and neither is in the relay
+  data path.
