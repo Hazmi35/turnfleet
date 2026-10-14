@@ -593,6 +593,36 @@ func TestPeerPolicyDefaultsWithoutTheWebhook(t *testing.T) {
 	}
 }
 
+// TestPeerPolicyDefaultFollowsTheFamilyWithoutTheWebhook is the IPv6 half of
+// the same install path: nothing defaulted the spec, and a relay only reaches
+// peers in its own family, so the v6 pool has to get the v6 list. The v4 list
+// would deny nothing this relay can route to and leave fc00::/7 and the whole
+// IPv4-mapped space open.
+func TestPeerPolicyDefaultFollowsTheFamilyWithoutTheWebhook(t *testing.T) {
+	f := newFixture(t)
+	f.createSecret()
+	f.createNode("tf-worker-1", "2001:db8::21")
+
+	pool := hostNetworkPool("tpool-v6-no-policy", 1)
+	pool.Spec.Addressing.Family = turnfleetv1alpha1.AddressingFamilyIPv6
+	pool.Spec.PeerPolicy = nil
+	f.createPool(pool)
+	f.reconcile("tpool-v6-no-policy")
+
+	rendered := f.relayConfig("tpool-v6-no-policy")
+	// fc00::/7 is the IPv6 RFC 1918, where an in-cluster service network often
+	// lives; ::ffff:0:0/96 covers the metadata address in its mapped form.
+	if !strings.Contains(rendered, "denied-peer-ip=fc00::") {
+		t.Errorf("an IPv6 pool that declares no peerPolicy does not deny unique local addresses:\n%s", rendered)
+	}
+	if !strings.Contains(rendered, "denied-peer-ip=::ffff:0.0.0.0-::ffff:255.255.255.255") {
+		t.Errorf("an IPv6 pool that declares no peerPolicy does not deny the IPv4-mapped space:\n%s", rendered)
+	}
+	if strings.Contains(rendered, "169.254.0.0-169.254.255.255") {
+		t.Errorf("an IPv6 pool was given the IPv4 default deny list, which denies nothing its relay can reach:\n%s", rendered)
+	}
+}
+
 // TestPeerPolicyFromTheSpecIsNotWidened pins the other side of the same rule:
 // a pool that declares its own deny list gets that list, not the default
 // silently added to it.

@@ -47,10 +47,10 @@ addresses: `IPv4` (the default), `IPv6`, or `DualStack`.
   ranges — unspecified, loopback, link-local `fe80::/10`, unique local
   `fc00::/7`, multicast, and `::ffff:0:0/96`, the whole IPv4-mapped space, which
   covers the metadata address in its mapped form `::ffff:169.254.169.254`. A
-  `DualStack` pool gets both lists. The defaulting webhook picks the list from
-  `family`; the controller's own fallback for a spec that never passed admission
-  is the IPv4 list, so an IPv6 or `DualStack` pool installed without webhooks
-  should declare `peerPolicy.deniedCIDRs` itself.
+  `DualStack` pool gets both lists. Both the defaulting webhook and the
+  controller's own fallback for a spec that never passed admission pick the list
+  from `family`, so an IPv6 or `DualStack` pool gets the ranges its relays can
+  reach whether or not admission webhooks are running.
 * Node addresses are the node's own addresses, one per family (`ExternalIP`,
   falling back to `InternalIP`). The `turnfleet.hzmi.dev/relay-address`
   annotation overrides the advertised address of the family it names. A node
