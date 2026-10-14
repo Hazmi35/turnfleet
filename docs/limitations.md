@@ -32,7 +32,14 @@ its statement and gains a pointer to the issue.
 * **An in-cluster probe can pass while external reachability fails.** Hairpin
   NAT and firewalls in front of a node are invisible from inside; the external
   `turnfleet-probe` run is the authoritative check
-  (`docs/adr/0007-probe-vantage-point.md`).
+  (`docs/adr/0007-probe-vantage-point.md`). A runner can now publish its result
+  for the controller to report (`ReachableFromVantage`,
+  `docs/adr/0015-vantage-result-delivery.md`), but **nothing shipped here puts
+  the vantage point outside the cluster**: `config/vantage/runner.yaml` runs in
+  a pod, and the controller cannot tell where a runner ran. Making the check
+  authoritative needs relay addresses that route from outside and ingress rules
+  per address, which the operator builds. Until then the condition reports what
+  a runner saw, not that a peer can connect.
 * **Webhooks need certificates in-cluster, so they live in their own overlay.**
   `config/default` (what `make deploy` applies) runs the controller without
   admission webhooks; `config/with-webhook` adds the webhook configurations, the

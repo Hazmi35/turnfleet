@@ -94,6 +94,27 @@ make install            # install the CRDs
 make deploy             # deploy the controller (config/default: no admission webhooks)
 ```
 
+Or install the controller from the chart, which is the same controller with the
+kustomize step done for you — CRDs, RBAC, the manager, the metrics Service and,
+with `--set webhook.enabled=true` on a cluster that has cert-manager, the
+admission webhooks:
+
+```sh
+make helm-install       # chart install: CRDs, RBAC, the controller, metrics
+```
+
+`make helm-install` passes the image the Makefile just built and loaded, so it is
+the same dev image `make deploy` runs. It renders what `config/default` renders;
+`charts/turnfleet/values.yaml` lists what is configurable, and `make helm-lint`
+and `make helm-drift` check the chart against `config/` (the drift guard fails
+when the two stop agreeing). Installing from the chart replaces the two steps
+above, so run `make install`/`make deploy` or `make helm-install`, not both.
+
+Upgrading is one step more than installing. Helm installs the files under
+`crds/` on the first install and never updates an existing CRD, so a release
+that changes the schema needs `make helm-crds-apply` before `helm upgrade`; the
+kustomize path gets the same thing from `make install`.
+
 Then create a pool. A minimal `HostNetwork` pool with three relays:
 
 ```yaml
@@ -140,6 +161,22 @@ bin/turnfleet-probe --uri "turn:<relay-address>:3478?transport=udp" \
   --secret-file /tmp/turn-secret --expect-address <relay-address> --json
 ```
 
+To have the controller report that check instead of leaving it in a terminal,
+apply the vantage runner next to the pool (`config/vantage` is written for this
+`demo` pool):
+
+```sh
+kubectl --context kind-turnfleet -n default apply -f config/vantage/runner.yaml
+kubectl --context kind-turnfleet -n default create job --from=cronjob/vantage-runner vantage-runner-once
+kubectl --context kind-turnfleet -n default get turnpool demo \
+  -o jsonpath='{.status.conditions[?(@.type=="ReachableFromVantage")]}'
+```
+
+The runner's pod is on the cluster's network, so this exercises the delivery
+path and the condition, not external reachability: for that the same command has
+to run from outside the cluster
+([`docs/adr/0015-vantage-result-delivery.md`](docs/adr/0015-vantage-result-delivery.md)).
+
 `make test-e2e` runs the full suite against this cluster, including the
 saturation and peer-policy cases.
 
@@ -150,8 +187,12 @@ saturation and peer-policy cases.
 | `api/v1alpha1` | `TURNPool` types and their markers. |
 | `internal/relay` | The planner (relay identities per addressing mode) and the coturn config renderer. |
 | `internal/probe` | The TURN `Allocate` probe, shared by the controller and the CLI. |
+| `internal/vantage` | The result a vantage runner publishes and where the controller reads it. |
 | `internal/controller`, `internal/webhook` | Reconciliation and admission. |
 | `cmd/` | `turnfleet-controller` and `turnfleet-probe`. |
+| `config/vantage` | The vantage runner the operator applies per pool and does not schedule. |
+| `charts/turnfleet` | The Helm chart: the same controller `config/` deploys, with the webhooks optional. Held against `config/` by `make helm-drift`. |
+| `config/` | The kustomize manifests the chart mirrors: `config/default` (no admission webhooks) and `config/with-webhook` (cert-manager certificates). |
 | `docs/` | Architecture, capacity model, ADRs, pinned versions, known limitations, generated API reference. |
 | `test/e2e` | The kind end-to-end suite. |
 | `.agents/` | The skills and subagent definitions every agent harness shares; `.claude/` and `.omp/` hold the per-harness wiring and symlinks, `hack/agent/` the hook policy. |
@@ -168,8 +209,10 @@ an alias instead of the canonical file fails `make verify`.
 
 ```sh
 make help        # every target
-make ci          # what CI runs: verify, lint, test, vuln, licenses, dco
+make ci          # what CI runs: verify, helm-verify, lint, test, vuln, licenses, dco
 make test-e2e    # the kind suite
+make test-e2e-chart  # install the controller from the chart, then probe a relay
+make helm-verify # lint the chart and check it against config/
 ```
 
 Commits are Conventional Commits and must be signed off (`git commit -s`).

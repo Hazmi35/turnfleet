@@ -1,0 +1,105 @@
+# Values for the Turnfleet controller chart.
+#
+# Every field the controller's own manifests set and that a user has an opinion
+# about is here; the rest (the probe paths, the pod security context, the
+# readiness and liveness probes) is fixed in the templates, because config/ fixes
+# it and changing it is not a deployment decision. The defaults render exactly
+# what config/default renders, which `make helm-drift` enforces.
+
+# Prefix on every object the chart creates. It is a value rather than something
+# derived from the release name because the names have to be the ones the
+# project's own manifests give the controller (turnfleet-controller-manager and
+# friends): the drift guard renders the chart and the kustomize overlay and
+# compares them object by object.
+nameOverride: turnfleet
+
+# The manager runs one replica and takes the leader election lease; raising this
+# buys availability, not relay capacity (relay capacity is the port space on the
+# relay addresses).
+replicaCount: 1
+
+image:
+  repository: ghcr.io/hazmi35/turnfleet-controller
+  # Empty means the chart's appVersion, which until the project tags a release is
+  # `dev` — the Makefile's IMAGE_TAG, the tag `make docker-build` builds and
+  # `make load-images` loads into kind. Pass the tag to use in any other cluster;
+  # `make helm-install` passes the Makefile's IMAGE_REGISTRY and IMAGE_TAG, so a
+  # local install runs the image the Makefile just built.
+  tag: ""
+  # The manager image is immutable per release and is loaded into the cluster
+  # rather than pulled on kind, so a cached image is the intended one.
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# Manager flags. The chart derives the flags from these values in the order
+# config/ ends up with them (the metrics flag first, then leader election and
+# the health probe, then the webhook flags).
+leaderElection:
+  enabled: true
+
+healthProbe:
+  bindAddress: ":8081"
+
+metrics:
+  # Serve the controller's metrics. The Service in front of them is created with
+  # them, and the RBAC that protects the endpoint is always installed.
+  enabled: true
+  bindAddress: ":8443"
+  # true serves metrics over HTTPS with the API server's authentication and
+  # authorization in front; false serves plain HTTP, which is what config/e2e
+  # does so the end-to-end suite can read the endpoint through the API server.
+  secure: true
+
+webhook:
+  # Admission webhooks. They need serving certificates, so turning this on means
+  # cert-manager is installed in the cluster: the chart then also renders what
+  # config/with-webhook adds (the webhook Service, the Issuer, the serving
+  # Certificate and the two webhook configurations). config/default is the
+  # default here too: the controller runs without admission webhooks, and the
+  # controller defaults a pool that arrives unvalidated.
+  enabled: false
+  port: 9443
+  certPath: /tmp/k8s-webhook-server/serving-certs
+  certSecretName: webhook-server-cert
+  issuerName: selfsigned-issuer
+  # Fail keeps an unreachable webhook from admitting a TURNPool that the
+  # controller would then reject in its own validation, which is what
+  # config/webhook/manifests.yaml sets.
+  failurePolicy: Fail
+
+# Extra manager arguments, appended after the ones above. config/e2e's
+# `--metrics-secure=false` is `metrics.secure: false`; anything else belongs
+# here rather than in a new value.
+extraArgs: []
+
+# Extra environment variables for the manager container.
+extraEnv: []
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 128Mi
+  requests:
+    cpu: 10m
+    memory: 64Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# Labels and annotations added to the manager pods.
+podLabels: {}
+podAnnotations: {}
+
+serviceAccount:
+  # Create the ServiceAccount the manager runs as. Set this to false to use one
+  # that already exists, named in `name`.
+  create: true
+  name: ""
+
+rbac:
+  # Create the RBAC the controller needs: the manager role, leader election,
+  # metrics authentication and the TURNPool admin/editor/viewer helper roles.
+  # Turning it off is for a cluster where those exist already.
+  create: true
