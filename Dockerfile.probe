@@ -14,10 +14,13 @@ ARG LDFLAGS
 
 WORKDIR /workspace
 COPY go.mod go.sum ./
-RUN go mod download
+# See Dockerfile: the module cache and the build cache are cache mounts, so a
+# rebuild that only changes the build stamps reuses every compiled dependency.
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-    go build -trimpath -a -ldflags "${LDFLAGS}" -o /out/turnfleet-probe ./cmd/turnfleet-probe
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags "${LDFLAGS}" -o /out/turnfleet-probe ./cmd/turnfleet-probe
 
 FROM ${RUNTIME_IMAGE}
 # RUNTIME_IMAGE is declared before the first FROM, which puts it out of scope
