@@ -170,9 +170,11 @@ Single-context: the vocabulary is the "Glossary" section of this file, the decis
 * Change API types without regenerating and updating `docs/api.md`.
 * Bump a version that `docs/versions.md` records as held (a held module, a
   vulnerability floor, an image digest) without moving that note with it.
-* Run `kubectl` against any context other than `kind-turnfleet`
-  (`hack/agent/guard-kubectl.sh`, wired into every harness, blocks it); `make`
-  sets the context for you.
+* Run `kubectl` against any context other than `kind-turnfleet`, or against
+  `jepreto-production` with anything but a read-only verb or a `Secret`
+  (`hack/agent/guard-kubectl.sh`, wired into every harness, blocks both); `make`
+  sets the kind context for you, and the production context is only named on the
+  command line, never switched to.
 * Edit a `.claude/` or `.omp/` alias, or replace it with a copy: the content
   under `.agents/` is canonical, and `make verify` checks the links.
 * Put a Service, Ingress or load balancer in the relay data path, or move the
