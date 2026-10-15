@@ -9,6 +9,17 @@ name: E2E
 
 on:
   pull_request:
+    # Docs and chart-only edits cannot change what the end-to-end suite proves:
+    # it exercises the controller image built from this tree against a real
+    # coturn. Skipping it there saves ~10 minutes on every documentation pull
+    # request. `make helm-lint` and `make helm-drift` (the ci job) already hold
+    # the chart to config/, and the chart install path is exercised by the step
+    # below whenever anything else changes.
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+      - '.github/pull_request_template.md'
   push:
     branches:
       - main
