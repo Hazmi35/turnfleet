@@ -96,8 +96,8 @@ type mutationCounter struct {
 	calls []string
 }
 
-func (c *mutationCounter) record(call, kind string, obj client.Object) {
-	c.calls = append(c.calls, call+" "+kind+"/"+obj.GetName())
+func (c *mutationCounter) record(call string, obj client.Object) {
+	c.calls = append(c.calls, call+" "+obj.GetName())
 }
 
 func (c *mutationCounter) count() int { return len(c.calls) }
@@ -112,27 +112,27 @@ func (c *mutationCounter) since(n int) []string {
 }
 
 func (c *mutationCounter) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
-	c.record("create", "object", obj)
+	c.record("create", obj)
 	return c.Client.Create(ctx, obj, opts...)
 }
 
 func (c *mutationCounter) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
-	c.record("update", "object", obj)
+	c.record("update", obj)
 	return c.Client.Update(ctx, obj, opts...)
 }
 
 func (c *mutationCounter) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
-	c.record("patch", "object", obj)
+	c.record("patch", obj)
 	return c.Client.Patch(ctx, obj, patch, opts...)
 }
 
 func (c *mutationCounter) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
-	c.record("delete", "object", obj)
+	c.record("delete", obj)
 	return c.Client.Delete(ctx, obj, opts...)
 }
 
 func (c *mutationCounter) DeleteAllOf(ctx context.Context, obj client.Object, opts ...client.DeleteAllOfOption) error {
-	c.record("deleteAllOf", "object", obj)
+	c.record("deleteAllOf", obj)
 	return c.Client.DeleteAllOf(ctx, obj, opts...)
 }
 
@@ -149,12 +149,12 @@ type countingStatusWriter struct {
 }
 
 func (w *countingStatusWriter) Update(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
-	w.counter.record("statusUpdate", "object", obj)
+	w.counter.record("statusUpdate", obj)
 	return w.SubResourceWriter.Update(ctx, obj, opts...)
 }
 
 func (w *countingStatusWriter) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
-	w.counter.record("statusPatch", "object", obj)
+	w.counter.record("statusPatch", obj)
 	return w.SubResourceWriter.Patch(ctx, obj, patch, opts...)
 }
 

@@ -48,19 +48,18 @@ import (
 // check is cluster-wide and envtest never finishes terminating a namespace, so
 // ranges shared with another test's leftover pool are reported as conflicts.
 
-// requireRequeueAfter pins the interval a pass asked for, and that it asked for
-// nothing else: no immediate requeue and no error.
+// requireRequeueAfter pins the interval a pass asked for and that it asked for
+// nothing else. The whole result is compared, so an immediate requeue — the
+// deprecated Requeue field, which no pass sets — or a priority fails this too,
+// without reading the deprecated field to check it.
 func requireRequeueAfter(t *testing.T, what string, result ctrl.Result, err error, want time.Duration) {
 	t.Helper()
 
 	if err != nil {
 		t.Fatalf("%s: Reconcile() returned an error: %v", what, err)
 	}
-	if result.Requeue {
-		t.Errorf("%s: Reconcile() asked for an immediate requeue as well as RequeueAfter %s", what, result.RequeueAfter)
-	}
-	if result.RequeueAfter != want {
-		t.Errorf("%s: Reconcile() asked to be re-run in %s, want %s", what, result.RequeueAfter, want)
+	if result != (ctrl.Result{RequeueAfter: want}) {
+		t.Errorf("%s: Reconcile() asked for %+v, want RequeueAfter %s and nothing else", what, result, want)
 	}
 }
 
