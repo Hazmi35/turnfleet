@@ -164,7 +164,7 @@ test-fuzz: generate ## Fuzz the renderer and the webhook validators.
 	$(GO) test -run '^$$' -fuzz '^FuzzWebhookValidation$$' -fuzztime $(FUZZ_TIME) ./internal/webhook/v1alpha1/
 
 .PHONY: test-e2e
-test-e2e: kind-up docker-build build install ## Run the end-to-end suite against the local kind cluster.
+test-e2e: kind-up docker-build probe-bin install ## Run the end-to-end suite against the local kind cluster.
 	$(MAKE) load-images
 	$(MAKE) deploy KUSTOMIZE_OVERLAY=config/e2e
 	KUBE_CONTEXT=$(KUBE_CONTEXT) KIND_CLUSTER=$(KIND_CLUSTER) COTURN_IMAGE="$(COTURN_IMAGE)" \
@@ -197,7 +197,16 @@ envtest: ## Download the envtest control plane binaries.
 build: generate ## Build the controller and probe binaries.
 	@mkdir -p bin
 	CGO_ENABLED=0 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/turnfleet-controller ./cmd/turnfleet-controller
-	CGO_ENABLED=0 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/turnfleet-probe ./cmd/turnfleet-probe
+	CGO_ENABLED=0 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(PROBE_BIN) ./cmd/turnfleet-probe
+
+# probe-bin builds only the host probe binary. The e2e suite needs that binary
+# and nothing else `make build` produces: the controller under test runs from
+# the container image, so building its host binary as part of a run was time
+# spent on an artifact the run never reads.
+.PHONY: probe-bin
+probe-bin: generate ## Build the host probe binary, which the e2e suite runs.
+	@mkdir -p bin
+	CGO_ENABLED=0 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(PROBE_BIN) ./cmd/turnfleet-probe
 
 .PHONY: run
 run: generate ## Run the controller against the current kubeconfig.
