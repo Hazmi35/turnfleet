@@ -26,8 +26,12 @@ import (
 	"github.com/Hazmi35/turnfleet/internal/relay"
 )
 
-// controllerNamespace is where the manager runs (config/manager).
-const controllerNamespace = "turnfleet-system"
+// controllerNamespace is where the manager runs (config/manager), and
+// controllerDeploymentName is the Deployment both install paths create.
+const (
+	controllerNamespace      = "turnfleet-system"
+	controllerDeploymentName = "turnfleet-controller-manager"
+)
 
 // TestHostNetworkMode covers the mode that makes capacity grow with nodes: one
 // relay per labelled node, each on its own address, each allocating for real.
@@ -259,7 +263,11 @@ func TestSaturationBecomesObservable(t *testing.T) {
 	})
 
 	// The counter the operator publishes must move. It is scoped to the pool, so
-	// a capacity problem at one relay is attributable.
+	// a capacity problem at one relay is attributable. The read needs the
+	// controller to be serving metrics over plain HTTP, which is what
+	// `make test-e2e` deploys; a chart install serves them securely and the
+	// assertion is skipped there with the reason why.
+	requireReadableMetrics(ctx, t)
 	waitFor(ctx, t, "turnfleet_allocation_failures_total{code=\"508\"} to count the refusal", 90*time.Second,
 		func(ctx context.Context) (bool, error) {
 			return strings.Contains(controllerMetrics(ctx, t), `turnfleet_allocation_failures_total{code="508"`), nil
@@ -614,13 +622,54 @@ func holdAllocation(t *testing.T, address string, port int32) func() {
 // service proxy.
 //
 // The suite runs on the host and a kind pod address is not routable from there,
-// so the read goes through the API server. That is also why the e2e overlay
-// serves metrics over plain HTTP: one request, no port-forward, no long-lived
-// process.
+// so the read goes through the API server. That is also why `make test-e2e`
+// deploys config/e2e, the one install that serves metrics over plain HTTP: one
+// request, no port-forward, no long-lived process.
+//
+// The scheme is read from the running Deployment, not assumed. Metrics are
+// secure by default — `-metrics-secure` defaults to true in the manager
+// (config/manager sets nothing, and the chart only emits
+// `--metrics-secure=false` when `metrics.secure` is false) — and a secure
+// endpoint cannot be read through the proxy at all, because the metrics server
+// authenticates its caller while the proxy forwards no credential. Assuming
+// `http:` is what turned a suite pointed at a chart install into
+// `Error from server (BadRequest): the server rejected our request for an
+// unknown reason` with nothing naming the cause (REPORT.md §4 row 18).
 func controllerMetrics(ctx context.Context, t *testing.T) string {
 	t.Helper()
 
-	path := fmt.Sprintf("/api/v1/namespaces/%s/services/http:%s:8443/proxy/metrics",
-		controllerNamespace, metricsServiceName)
+	path := fmt.Sprintf("/api/v1/namespaces/%s/services/%s:%s:8443/proxy/metrics",
+		controllerNamespace, controllerMetricsScheme(ctx, t), metricsServiceName)
 	return kubectl(ctx, t, "get", "--raw", path)
+}
+
+// controllerMetricsScheme is the scheme the controller on this cluster serves
+// its metrics over, read from the arguments it was started with.
+func controllerMetricsScheme(ctx context.Context, t *testing.T) string {
+	t.Helper()
+
+	args := kubectl(ctx, t, "get", "deployment", controllerDeploymentName, "-n", controllerNamespace,
+		"-o", "jsonpath={.spec.template.spec.containers[*].args}")
+	if strings.Contains(args, "--metrics-secure=false") {
+		return "http"
+	}
+	return "https"
+}
+
+// requireReadableMetrics skips when the controller on this cluster serves its
+// metrics over HTTPS, which the API server's service proxy cannot read: the
+// metrics server authenticates and authorizes its caller (controller-runtime's
+// default for a secure endpoint) and the proxy forwards no credential.
+//
+// It is what makes the two e2e targets independent in either order. The chart
+// step installs the chart, whose metrics are secure by default; a suite run
+// afterwards says why it cannot check the counter instead of failing on a
+// BadRequest that names nothing. Where the assertion is possible — `make
+// test-e2e`, which deploys config/e2e — nothing is skipped.
+func requireReadableMetrics(ctx context.Context, t *testing.T) {
+	t.Helper()
+
+	if scheme := controllerMetricsScheme(ctx, t); scheme != "http" {
+		t.Skipf("the controller on this cluster serves metrics over %s, and the API server's service proxy has no credential for a secure metrics endpoint, so this assertion cannot run here. `make test-e2e` deploys config/e2e, which serves plain HTTP for exactly this read.", scheme)
+	}
 }
