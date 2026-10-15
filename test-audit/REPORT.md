@@ -112,9 +112,14 @@ inconsistency to report. What was wrong was the helper assuming its own overlay.
 
 ### What is still open, and why
 
-* **The rollout flake**: see "The rollout flake" below. Honest state: *not
-  fixed*; root cause still unproven, with a classification of what the dumps
-  show.
+* **The rollout flake**: *not fixed, not classified*. 200 local cycles across
+  five pressures produced no failure, and the eight original CI failures predate
+  the dump that would classify them, so no classification is possible from the
+  evidence that exists. The next CI occurrence classifies itself; the four
+  CI-only differences worth reproducing are listed in the next subsection. The
+  gate stays at 180s: the healthy distribution has a 10x margin to it, so the
+  failure is a stall, not a slow rollout, which is the test the task sets for
+  raising the timeout.
 * **`make test-fuzz` still runs in no CI job** (§4 row 15). Wiring it in needs a
   time budget from the maintainer; unchanged.
 * **The e2e specs are still serial** (`PLAN.md` §8, ~40s of CI), and the envtest
@@ -124,10 +129,12 @@ inconsistency to report. What was wrong was the helper assuming its own overlay.
 
 | Commit | Change | Measured effect |
 |---|---|---|
-| `edeb70b` | `reconcileResult` + eight requeue specs | no timing claim; the three intervals and the no-requeue paths are asserted where none was |
-| `813d64e` | `carryTransitionTimes`: stop rewriting an unchanged status | one mutating request per steady-state pass → zero |
-| `6a05a0d` | metrics scheme derived from the deployed Deployment | chart step's spec no longer fails on a BadRequest; both orders pass |
-| `…` | revert of the `probe-bin` change | see "Reverted" below |
+| `edeb70b` | `reconcileResult` + eight requeue specs | no timing claim; the three intervals, both no-requeue paths and the absence of an immediate requeue are asserted where none was |
+| `813d64e` | `carryTransitionTimes`: stop rewriting an unchanged status | one mutating request per steady-state pass → zero, and the stored `LastTransitionTime` stops drifting |
+| `6a05a0d` | metrics scheme derived from the deployed Deployment | the chart step's spec no longer fails on a BadRequest; both orders pass, 12/12 stages |
+| `948aade` | revert of the `probe-bin` change (session 1's `9cb5ac4`) | none: the host build measures 48-78s against 62s for `make build`, so the derived saving is contradicted — `DECISIONS.md` §10 |
+| `0acd56d` | lint fixes in the new helpers (deprecated `Result.Requeue`, unused param) | two findings → zero; no behaviour change |
+| `a55e9f8`, `edef183`, `bcae02f` | this report, the plan and the decision log | — |
 
 ### The CI numbers, measured instead of derived
 
