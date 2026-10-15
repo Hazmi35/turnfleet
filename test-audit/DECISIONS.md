@@ -117,3 +117,64 @@ and the chart install path is covered by a spec that does not read metrics. The
 finding, and the suggestion to write it down, are in `REPORT.md` §4 row 18 and
 §9; what I did *not* do is make the metrics read scheme-configurable, because
 that would change a spec whose behaviour I have no evidence is wrong.
+
+## 10. `probe-bin` is reverted: five CI runs do not show the saving it was derived from
+
+`make test-e2e` depended on `build`, which builds both host binaries. Session 1
+replaced it with a `probe-bin` target on the argument that the controller host
+binary is dead weight — the controller under test runs from the container image —
+and derived ~14s of saving from a local cold-cache ratio (controller 194.8s,
+probe alone 151.4s).
+
+The measured CI runs do not show it. The host-build step takes 48-78s with
+`probe-bin` (attempts: 78, 48, 77, 76, 49) against 62s for `make build` in the
+one baseline sample, and the spread tracks the runner rather than the change:
+attempts 1, 3 and 4 have both the controller image build and the host build slow
+(119-122s and 76-78s), attempts 2 and 5 have both fast (92-94s and 48-49s).
+
+The reason is visible in the baseline log: `make build` compiles the controller
+first (61.8s) and the probe then takes 1.1s, because the two share the 281
+client-go/controller-runtime packages the probe pulls in through
+`internal/vantage`. The probe's own dependency graph is most of the cost, so
+building it alone is not cheaper — and building the controller's binary alongside
+it is nearly free.
+
+Reverted. The change saved nothing measurable, it was the one item in the branch
+whose effect was derived rather than measured, and `PLAN.md` §3 already said so.
+What remains from that commit is `-o $(PROBE_BIN)` instead of `-o
+bin/turnfleet-probe`, which is the same path through the variable the Makefile
+already exports for the e2e suite.
+
+## 11. The rollout flake is left unfixed, with the diagnostics in place
+
+160 local cycles across five pressures (bare, after an image import, under host
+CPU saturation, and twice with the kind nodes resource-limited) produced no
+failure. The healthy distribution has a 10x margin to the gate — p50 13.4s, max
+17.8s against a 180s timeout — and the old pod finished terminating within three
+kubectl polls every time, so the CI failure is a stall rather than a rollout that
+was progressing slowly.
+
+That matters for the one fix the task allowed me to consider: raising the timeout
+counts only when the dumps show the rollout was still progressing normally when
+it expired, with measured convergence times to justify the new value. The
+measurements say the opposite of "still progressing" — nothing local ever came
+within 10x of the gate — so the timeout stays at 180s.
+
+Two further reasons not to guess at a fix. The eight original failures predate
+`await-rollout`, so their logs contain no state to classify; and the fix that
+would make the symptom disappear (`kubectl wait --for=condition=Available`, which
+does not wait for old pods) would also hide a genuinely stuck rollout. Recorded
+as unfixed in `REPORT.md` §9 with the four CI-only differences to try next.
+
+## 12. The node-constraint experiment is reported twice, once as a failed attempt
+
+The first run of the node-pressure variant applied `docker update --cpus=0.5
+--memory=2g`; docker rejects a memory limit unless memory-swap is set at the same
+time, rejects the whole invocation, and I did not check — so those 40 cycles were
+unconstrained and prove nothing about node pressure. The second run applies both
+and verifies `NanoCpus`/`Memory` are non-zero on all four nodes before cycling.
+
+Both are in the report: the 40 unconstrained cycles as evidence of a mistake I
+made, the constrained ones as the real test. The distinction is the whole point
+of "every claim needs evidence" — the first run would have read as a clean null
+result.

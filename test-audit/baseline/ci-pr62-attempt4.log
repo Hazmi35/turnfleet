@@ -1,0 +1,837 @@
+﻿2026-10-15T14:47:04.5737410Z Current runner version: '2.337.0'
+2026-10-15T14:47:04.5763127Z ##[group]Runner Image Provisioner
+2026-10-15T14:47:04.5763979Z Hosted Compute Agent
+2026-10-15T14:47:04.5764626Z Version: 20261012.601
+2026-10-15T14:47:04.5765274Z Commit: f3dc54e1fb89da6852db922499a0233137369e1d
+2026-10-15T14:47:04.5766000Z Build Date: 2026-10-12T17:48:21Z
+2026-10-15T14:47:04.5766766Z Worker ID: {c008cbed-c508-40d3-b4e5-d9aa00f3695e}
+2026-10-15T14:47:04.5767896Z Region: westus
+2026-10-15T14:47:04.5768435Z Cloud: Azure
+2026-10-15T14:47:04.5769079Z ##[endgroup]
+2026-10-15T14:47:04.5770891Z ##[group]Operating System
+2026-10-15T14:47:04.5771743Z Ubuntu
+2026-10-15T14:47:04.5772258Z 24.04.5
+2026-10-15T14:47:04.5772745Z LTS
+2026-10-15T14:47:04.5773311Z ##[endgroup]
+2026-10-15T14:47:04.5773884Z ##[group]Runner Image
+2026-10-15T14:47:04.5774537Z Image: ubuntu-24.04
+2026-10-15T14:47:04.5775116Z Version: 20261012.334.1
+2026-10-15T14:47:04.5776406Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261012.334/images/ubuntu/Ubuntu2404-Readme.md
+2026-10-15T14:47:04.5778189Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261012.334
+2026-10-15T14:47:04.5779226Z ##[endgroup]
+2026-10-15T14:47:04.5780327Z ##[group]GITHUB_TOKEN Permissions
+2026-10-15T14:47:04.5782244Z Contents: read
+2026-10-15T14:47:04.5782862Z Metadata: read
+2026-10-15T14:47:04.5783468Z ##[endgroup]
+2026-10-15T14:47:04.5785537Z Secret source: Actions
+2026-10-15T14:47:04.5786440Z Cache mode: write
+2026-10-15T14:47:04.5787422Z Prepare workflow directory
+2026-10-15T14:47:04.6230686Z Prepare all required actions
+2026-10-15T14:47:04.6289937Z Getting action download info
+2026-10-15T14:47:05.0105234Z Download action repository 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-10-15T14:47:05.1293127Z Download action repository 'actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e' (SHA:b7ad1dad31e06c5925ef5d2fc7ad053ef454303e)
+2026-10-15T14:47:05.7078221Z Complete job name: e2e
+2026-10-15T14:47:05.7844692Z ##[group]Run actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+2026-10-15T14:47:05.7845780Z with:
+2026-10-15T14:47:05.7846238Z   persist-credentials: false
+2026-10-15T14:47:05.7846766Z   repository: Hazmi35/turnfleet
+2026-10-15T14:47:05.7850705Z   token: ***
+2026-10-15T14:47:05.7851139Z   ssh-strict: true
+2026-10-15T14:47:05.7851583Z   ssh-user: git
+2026-10-15T14:47:05.7851998Z   clean: true
+2026-10-15T14:47:05.7852437Z   sparse-checkout-cone-mode: true
+2026-10-15T14:47:05.7852952Z   fetch-depth: 1
+2026-10-15T14:47:05.7853381Z   fetch-tags: false
+2026-10-15T14:47:05.7853820Z   show-progress: true
+2026-10-15T14:47:05.7854258Z   lfs: false
+2026-10-15T14:47:05.7854671Z   submodules: false
+2026-10-15T14:47:05.7855112Z   set-safe-directory: true
+2026-10-15T14:47:05.7855618Z   allow-unsafe-pr-checkout: false
+2026-10-15T14:47:05.7856378Z env:
+2026-10-15T14:47:05.7856790Z   GO_VERSION: 1.27.2
+2026-10-15T14:47:05.7857474Z   KIND_VERSION: v0.33.0
+2026-10-15T14:47:05.7858299Z   KIND_LINUX_AMD64_SHA256: aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
+2026-10-15T14:47:05.7859145Z ##[endgroup]
+2026-10-15T14:47:05.8853716Z Syncing repository: Hazmi35/turnfleet
+2026-10-15T14:47:05.8855524Z ##[group]Getting Git version info
+2026-10-15T14:47:05.8856264Z Working directory is '/home/runner/work/turnfleet/turnfleet'
+2026-10-15T14:47:05.8857734Z [command]/usr/bin/git version
+2026-10-15T14:47:05.8935524Z git version 2.55.0
+2026-10-15T14:47:05.8969972Z ##[endgroup]
+2026-10-15T14:47:05.8976758Z Temporarily overriding HOME='/home/runner/work/_temp/ef436abd-c81d-457a-aa79-f0b4dd2d207f' before making global git config changes
+2026-10-15T14:47:05.8979368Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-15T14:47:05.8981300Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/turnfleet/turnfleet
+2026-10-15T14:47:05.9032632Z Deleting the contents of '/home/runner/work/turnfleet/turnfleet'
+2026-10-15T14:47:05.9036124Z ##[group]Determining repository object format
+2026-10-15T14:47:05.9037841Z ##[endgroup]
+2026-10-15T14:47:05.9039138Z ##[group]Initializing the repository
+2026-10-15T14:47:05.9042234Z [command]/usr/bin/git init /home/runner/work/turnfleet/turnfleet
+2026-10-15T14:47:05.9166163Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-15T14:47:05.9168059Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-15T14:47:05.9169598Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-15T14:47:05.9170795Z hint: call:
+2026-10-15T14:47:05.9171420Z hint:
+2026-10-15T14:47:05.9172219Z hint: 	git config --global init.defaultBranch <name>
+2026-10-15T14:47:05.9173276Z hint:
+2026-10-15T14:47:05.9174236Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-15T14:47:05.9175747Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-15T14:47:05.9176948Z hint:
+2026-10-15T14:47:05.9177858Z hint: 	git branch -m <name>
+2026-10-15T14:47:05.9178720Z hint:
+2026-10-15T14:47:05.9179775Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-15T14:47:05.9181475Z Initialized empty Git repository in /home/runner/work/turnfleet/turnfleet/.git/
+2026-10-15T14:47:05.9184199Z [command]/usr/bin/git remote add origin https://github.com/Hazmi35/turnfleet
+2026-10-15T14:47:05.9245156Z ##[endgroup]
+2026-10-15T14:47:05.9245946Z ##[group]Disabling automatic garbage collection
+2026-10-15T14:47:05.9252582Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-15T14:47:05.9288619Z ##[endgroup]
+2026-10-15T14:47:05.9289982Z ##[group]Setting up auth
+2026-10-15T14:47:05.9290930Z Removing SSH command configuration
+2026-10-15T14:47:05.9295787Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-15T14:47:05.9330595Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-15T14:47:05.9720303Z Removing HTTP extra header
+2026-10-15T14:47:05.9725871Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-15T14:47:05.9763782Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-15T14:47:05.9983458Z Removing includeIf entries pointing to credentials config files
+2026-10-15T14:47:05.9990212Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-15T14:47:06.0024666Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-15T14:47:06.0249947Z [command]/usr/bin/git config --file /home/runner/work/_temp/git-credentials-223a9fb7-318e-4bcb-9ed1-e61942bdcad5.config http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-15T14:47:06.0289211Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/turnfleet/turnfleet/.git.path /home/runner/work/_temp/git-credentials-223a9fb7-318e-4bcb-9ed1-e61942bdcad5.config
+2026-10-15T14:47:06.0323139Z [command]/usr/bin/git config --local includeIf.gitdir:/home/runner/work/turnfleet/turnfleet/.git/worktrees/*.path /home/runner/work/_temp/git-credentials-223a9fb7-318e-4bcb-9ed1-e61942bdcad5.config
+2026-10-15T14:47:06.0360852Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-223a9fb7-318e-4bcb-9ed1-e61942bdcad5.config
+2026-10-15T14:47:06.0396947Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-223a9fb7-318e-4bcb-9ed1-e61942bdcad5.config
+2026-10-15T14:47:06.0427444Z ##[endgroup]
+2026-10-15T14:47:06.0428674Z ##[group]Fetching the repository
+2026-10-15T14:47:06.0433851Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +8f07154f4524ed0812cc84caf486327f1b9d19cc:refs/remotes/pull/62/merge
+2026-10-15T14:47:06.5592073Z From https://github.com/Hazmi35/turnfleet
+2026-10-15T14:47:06.5594074Z  * [new ref]         8f07154f4524ed0812cc84caf486327f1b9d19cc -> pull/62/merge
+2026-10-15T14:47:06.5598613Z ##[endgroup]
+2026-10-15T14:47:06.5600629Z ##[group]Determining the checkout info
+2026-10-15T14:47:06.5602783Z ##[endgroup]
+2026-10-15T14:47:06.5606183Z [command]/usr/bin/git sparse-checkout disable
+2026-10-15T14:47:06.5671834Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-15T14:47:06.5704623Z ##[group]Checking out the ref
+2026-10-15T14:47:06.5708500Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/62/merge
+2026-10-15T14:47:06.5975764Z Note: switching to 'refs/remotes/pull/62/merge'.
+2026-10-15T14:47:06.5977322Z 
+2026-10-15T14:47:06.5978138Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-10-15T14:47:06.5979974Z changes and commit them, and you can discard any commits you make in this
+2026-10-15T14:47:06.5981958Z state without impacting any branches by switching back to a branch.
+2026-10-15T14:47:06.5983913Z 
+2026-10-15T14:47:06.5985159Z If you want to create a new branch to retain commits you create, you may
+2026-10-15T14:47:06.5988406Z do so (now or later) by using -c with the switch command. Example:
+2026-10-15T14:47:06.5990165Z 
+2026-10-15T14:47:06.5990939Z   git switch -c <new-branch-name>
+2026-10-15T14:47:06.5992208Z 
+2026-10-15T14:47:06.5992935Z Or undo this operation with:
+2026-10-15T14:47:06.5994060Z 
+2026-10-15T14:47:06.5994691Z   git switch -
+2026-10-15T14:47:06.5995574Z 
+2026-10-15T14:47:06.5996923Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-10-15T14:47:06.5999167Z 
+2026-10-15T14:47:06.6001520Z HEAD is now at 8f07154 Merge 5a1a5cea909b9098b0b91b0829d35b8488be7575 into 9ba019336cc8e4ad775e3403f1dbbb9aa0e69b35
+2026-10-15T14:47:06.6006942Z ##[endgroup]
+2026-10-15T14:47:06.6036854Z [command]/usr/bin/git log -1 --format=%H
+2026-10-15T14:47:06.6066422Z 8f07154f4524ed0812cc84caf486327f1b9d19cc
+2026-10-15T14:47:06.6079024Z ##[group]Removing auth
+2026-10-15T14:47:06.6080937Z Removing SSH command configuration
+2026-10-15T14:47:06.6083846Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-15T14:47:06.6121511Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-15T14:47:06.6345056Z Removing HTTP extra header
+2026-10-15T14:47:06.6348283Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-15T14:47:06.6386480Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-15T14:47:06.6616263Z Removing includeIf entries pointing to credentials config files
+2026-10-15T14:47:06.6618906Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-15T14:47:06.6648323Z includeif.gitdir:/home/runner/work/turnfleet/turnfleet/.git.path
+2026-10-15T14:47:06.6651802Z includeif.gitdir:/home/runner/work/turnfleet/turnfleet/.git/worktrees/*.path
+2026-10-15T14:47:06.6654877Z includeif.gitdir:/github/workspace/.git.path
+2026-10-15T14:47:06.6657739Z includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-10-15T14:47:06.6661860Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/turnfleet/turnfleet/.git.path
+2026-10-15T14:47:06.6685286Z /home/runner/work/_temp/git-credentials-223a9fb7-318e-4bcb-9ed1-e61942bdcad5.config
+2026-10-15T14:47:06.6696562Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/turnfleet/turnfleet/.git.path \/home\/runner\/work\/_temp\/git\-credentials\-223a9fb7\-318e\-4bcb\-9ed1\-e61942bdcad5\.config
+2026-10-15T14:47:06.6773615Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/home/runner/work/turnfleet/turnfleet/.git/worktrees/*.path
+2026-10-15T14:47:06.6783236Z /home/runner/work/_temp/git-credentials-223a9fb7-318e-4bcb-9ed1-e61942bdcad5.config
+2026-10-15T14:47:06.6794156Z [command]/usr/bin/git config --local --unset includeif.gitdir:/home/runner/work/turnfleet/turnfleet/.git/worktrees/*.path \/home\/runner\/work\/_temp\/git\-credentials\-223a9fb7\-318e\-4bcb\-9ed1\-e61942bdcad5\.config
+2026-10-15T14:47:06.6829854Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git.path
+2026-10-15T14:47:06.6859660Z /github/runner_temp/git-credentials-223a9fb7-318e-4bcb-9ed1-e61942bdcad5.config
+2026-10-15T14:47:06.6884743Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git.path \/github\/runner_temp\/git\-credentials\-223a9fb7\-318e\-4bcb\-9ed1\-e61942bdcad5\.config
+2026-10-15T14:47:06.6910844Z [command]/usr/bin/git config --local --get-all includeif.gitdir:/github/workspace/.git/worktrees/*.path
+2026-10-15T14:47:06.6941885Z /github/runner_temp/git-credentials-223a9fb7-318e-4bcb-9ed1-e61942bdcad5.config
+2026-10-15T14:47:06.6964965Z [command]/usr/bin/git config --local --unset includeif.gitdir:/github/workspace/.git/worktrees/*.path \/github\/runner_temp\/git\-credentials\-223a9fb7\-318e\-4bcb\-9ed1\-e61942bdcad5\.config
+2026-10-15T14:47:06.7005527Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-15T14:47:06.7253818Z Removing credentials config '/home/runner/work/_temp/git-credentials-223a9fb7-318e-4bcb-9ed1-e61942bdcad5.config'
+2026-10-15T14:47:06.7264359Z ##[endgroup]
+2026-10-15T14:47:06.7714761Z ##[group]Run actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+2026-10-15T14:47:06.7716319Z with:
+2026-10-15T14:47:06.7717421Z   go-version: 1.27.2
+2026-10-15T14:47:06.7718306Z   cache: true
+2026-10-15T14:47:06.7719130Z   check-latest: false
+2026-10-15T14:47:06.7728206Z   token: ***
+2026-10-15T14:47:06.7728988Z env:
+2026-10-15T14:47:06.7729728Z   GO_VERSION: 1.27.2
+2026-10-15T14:47:06.7730593Z   KIND_VERSION: v0.33.0
+2026-10-15T14:47:06.7732159Z   KIND_LINUX_AMD64_SHA256: aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
+2026-10-15T14:47:06.7733908Z ##[endgroup]
+2026-10-15T14:47:06.8888858Z Setup go version spec 1.27.2
+2026-10-15T14:47:06.8899968Z Attempting to download 1.27.2...
+2026-10-15T14:47:07.5519947Z matching 1.27.2...
+2026-10-15T14:47:07.5550305Z Acquiring 1.27.2 from https://github.com/actions/go-versions/releases/download/1.27.2-37875086547/go-1.27.2-linux-x64.tar.gz
+2026-10-15T14:47:08.1290684Z Extracting Go...
+2026-10-15T14:47:08.1424783Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/f91f57fb-62fa-4923-8d2e-04706f75ec0d -f /home/runner/work/_temp/f597b7b3-bb56-49a7-9620-fae08543b578
+2026-10-15T14:47:09.8724267Z Successfully extracted go to /home/runner/work/_temp/f91f57fb-62fa-4923-8d2e-04706f75ec0d
+2026-10-15T14:47:09.8725251Z Adding to the cache ...
+2026-10-15T14:47:15.7659862Z Successfully cached go to /opt/hostedtoolcache/go/1.27.2/x64
+2026-10-15T14:47:15.7662614Z Added go to the path
+2026-10-15T14:47:15.7665153Z Successfully set up Go version 1.27.2
+2026-10-15T14:47:15.7871750Z [command]/opt/hostedtoolcache/go/1.27.2/x64/bin/go env GOMODCACHE
+2026-10-15T14:47:15.7904586Z [command]/opt/hostedtoolcache/go/1.27.2/x64/bin/go env GOCACHE
+2026-10-15T14:47:15.7959244Z /home/runner/go/pkg/mod
+2026-10-15T14:47:15.7965317Z /home/runner/.cache/go-build
+2026-10-15T14:47:16.0854343Z Cache hit for: setup-go-Linux-x64-ubuntu24-go-1.27.2-b928772b3ed6736c9b4923dfa067fe49e421716b9d0f3ab71728557d65b67e5f
+2026-10-15T14:47:17.3786811Z Received 0 of 1324439777 (0.0%), 0.0 MBs/sec
+2026-10-15T14:47:18.3785175Z Received 125829120 of 1324439777 (9.5%), 60.0 MBs/sec
+2026-10-15T14:47:19.3784605Z Received 239075328 of 1324439777 (18.1%), 76.0 MBs/sec
+2026-10-15T14:47:20.3784838Z Received 352321536 of 1324439777 (26.6%), 84.0 MBs/sec
+2026-10-15T14:47:21.3784434Z Received 457179136 of 1324439777 (34.5%), 87.2 MBs/sec
+2026-10-15T14:47:22.3792280Z Received 562036736 of 1324439777 (42.4%), 89.3 MBs/sec
+2026-10-15T14:47:23.3801724Z Received 666894336 of 1324439777 (50.4%), 90.8 MBs/sec
+2026-10-15T14:47:24.3804457Z Received 742391808 of 1324439777 (56.1%), 88.5 MBs/sec
+2026-10-15T14:47:25.3806581Z Received 805306368 of 1324439777 (60.8%), 85.3 MBs/sec
+2026-10-15T14:47:26.3814462Z Received 935329792 of 1324439777 (70.6%), 89.2 MBs/sec
+2026-10-15T14:47:27.3815097Z Received 985661440 of 1324439777 (74.4%), 85.4 MBs/sec
+2026-10-15T14:47:28.3813869Z Received 1107296256 of 1324439777 (83.6%), 88.0 MBs/sec
+2026-10-15T14:47:29.3813343Z Received 1212153856 of 1324439777 (91.5%), 88.9 MBs/sec
+2026-10-15T14:47:30.3821310Z Received 1320245473 of 1324439777 (99.7%), 89.9 MBs/sec
+2026-10-15T14:47:30.4976838Z Received 1324439777 of 1324439777 (100.0%), 89.5 MBs/sec
+2026-10-15T14:47:30.4978038Z Cache Size: ~1263 MB (1324439777 B)
+2026-10-15T14:47:30.5042624Z [command]/usr/bin/tar -xf /home/runner/work/_temp/089c9112-c29a-4ab9-b4bb-e9ca46d8167d/cache.tzst -P -C /home/runner/work/turnfleet/turnfleet --use-compress-program unzstd
+2026-10-15T14:47:44.2012894Z Cache restored successfully
+2026-10-15T14:47:44.7281445Z Cache restored from key: setup-go-Linux-x64-ubuntu24-go-1.27.2-b928772b3ed6736c9b4923dfa067fe49e421716b9d0f3ab71728557d65b67e5f
+2026-10-15T14:47:44.7303988Z go version go1.27.2 linux/amd64
+2026-10-15T14:47:44.7304193Z 
+2026-10-15T14:47:44.7304494Z ##[group]go env
+2026-10-15T14:47:44.9106014Z AR='ar'
+2026-10-15T14:47:44.9106419Z CC='gcc'
+2026-10-15T14:47:44.9106795Z CGO_CFLAGS='-O2 -g'
+2026-10-15T14:47:44.9107395Z CGO_CPPFLAGS=''
+2026-10-15T14:47:44.9108099Z CGO_CXXFLAGS='-O2 -g'
+2026-10-15T14:47:44.9108403Z CGO_ENABLED='1'
+2026-10-15T14:47:44.9108661Z CGO_FFLAGS='-O2 -g'
+2026-10-15T14:47:44.9108937Z CGO_LDFLAGS='-O2 -g'
+2026-10-15T14:47:44.9109192Z CXX='g++'
+2026-10-15T14:47:44.9109441Z GCCGO='gccgo'
+2026-10-15T14:47:44.9109687Z GO111MODULE=''
+2026-10-15T14:47:44.9109924Z GOAMD64='v1'
+2026-10-15T14:47:44.9110164Z GOARCH='amd64'
+2026-10-15T14:47:44.9110408Z GOAUTH='netrc'
+2026-10-15T14:47:44.9110668Z GOBIN='/home/runner/go/bin'
+2026-10-15T14:47:44.9110990Z GOCACHE='/home/runner/.cache/go-build'
+2026-10-15T14:47:44.9111322Z GOCACHEPROG=''
+2026-10-15T14:47:44.9111565Z GODEBUG=''
+2026-10-15T14:47:44.9111827Z GOENV='/home/runner/.config/go/env'
+2026-10-15T14:47:44.9112136Z GOEXE=''
+2026-10-15T14:47:44.9112365Z GOEXPERIMENT=''
+2026-10-15T14:47:44.9112611Z GOFIPS140='off'
+2026-10-15T14:47:44.9112848Z GOFLAGS=''
+2026-10-15T14:47:44.9113722Z GOGCCFLAGS='-fPIC -m64 -pthread -Wl,--no-gc-sections -fmessage-length=0 -ffile-prefix-map=/tmp/go-build3599008450=/tmp/go-build -gno-record-gcc-switches'
+2026-10-15T14:47:44.9114562Z GOHOSTARCH='amd64'
+2026-10-15T14:47:44.9114819Z GOHOSTOS='linux'
+2026-10-15T14:47:44.9115076Z GOINSECURE=''
+2026-10-15T14:47:44.9115428Z GOMOD='/home/runner/work/turnfleet/turnfleet/go.mod'
+2026-10-15T14:47:44.9115819Z GOMODCACHE='/home/runner/go/pkg/mod'
+2026-10-15T14:47:44.9116116Z GONOPROXY=''
+2026-10-15T14:47:44.9116332Z GONOSUMDB=''
+2026-10-15T14:47:44.9116553Z GOOS='linux'
+2026-10-15T14:47:44.9116778Z GOPACKAGESDRIVER=''
+2026-10-15T14:47:44.9117049Z GOPATH='/home/runner/go'
+2026-10-15T14:47:44.9117559Z GOPRIVATE=''
+2026-10-15T14:47:44.9117860Z GOPROXY='https://proxy.golang.org,direct'
+2026-10-15T14:47:44.9118229Z GOROOT='/opt/hostedtoolcache/go/1.27.2/x64'
+2026-10-15T14:47:44.9118564Z GOSUMDB='sum.golang.org'
+2026-10-15T14:47:44.9118824Z GOTELEMETRY='local'
+2026-10-15T14:47:44.9119120Z GOTELEMETRYDIR='/home/runner/.config/go/telemetry'
+2026-10-15T14:47:44.9119468Z GOTMPDIR=''
+2026-10-15T14:47:44.9119687Z GOTOOLCHAIN='local'
+2026-10-15T14:47:44.9120054Z GOTOOLDIR='/opt/hostedtoolcache/go/1.27.2/x64/pkg/tool/linux_amd64'
+2026-10-15T14:47:44.9120474Z GOVCS=''
+2026-10-15T14:47:44.9120696Z GOVERSION='go1.27.2'
+2026-10-15T14:47:44.9120932Z GOWORK=''
+2026-10-15T14:47:44.9121338Z PKG_CONFIG='pkg-config'
+2026-10-15T14:47:44.9121501Z 
+2026-10-15T14:47:44.9121884Z ##[endgroup]
+2026-10-15T14:47:44.9744319Z ##[group]Run set -euo pipefail
+2026-10-15T14:47:44.9744857Z [36;1mset -euo pipefail[0m
+2026-10-15T14:47:44.9745612Z [36;1mcurl -fsSLo kind "https://kind.sigs.k8s.io/dl/${KIND_VERSION}/kind-linux-amd64"[0m
+2026-10-15T14:47:44.9746618Z [36;1mecho "${KIND_LINUX_AMD64_SHA256}  kind" | sha256sum --check --strict -[0m
+2026-10-15T14:47:44.9747551Z [36;1mchmod +x kind[0m
+2026-10-15T14:47:44.9748033Z [36;1msudo install -m 0755 kind /usr/local/bin/kind[0m
+2026-10-15T14:47:44.9748581Z [36;1mrm -f kind[0m
+2026-10-15T14:47:44.9748959Z [36;1mkind version[0m
+2026-10-15T14:47:45.4245756Z shell: /usr/bin/bash -e {0}
+2026-10-15T14:47:45.4246308Z env:
+2026-10-15T14:47:45.4246661Z   GO_VERSION: 1.27.2
+2026-10-15T14:47:45.4247045Z   KIND_VERSION: v0.33.0
+2026-10-15T14:47:45.4248058Z   KIND_LINUX_AMD64_SHA256: aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
+2026-10-15T14:47:45.4248874Z   GOTOOLCHAIN: local
+2026-10-15T14:47:45.4249266Z ##[endgroup]
+2026-10-15T14:47:45.9806692Z kind: OK
+2026-10-15T14:47:46.1247425Z kind v0.33.0 go1.26.7 linux/amd64
+2026-10-15T14:47:46.2271598Z ##[group]Run make test-e2e
+2026-10-15T14:47:46.2271910Z [36;1mmake test-e2e[0m
+2026-10-15T14:47:46.2335659Z shell: /usr/bin/bash -e {0}
+2026-10-15T14:47:46.2335928Z env:
+2026-10-15T14:47:46.2336133Z   GO_VERSION: 1.27.2
+2026-10-15T14:47:46.2336369Z   KIND_VERSION: v0.33.0
+2026-10-15T14:47:46.2336809Z   KIND_LINUX_AMD64_SHA256: aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
+2026-10-15T14:47:46.2337668Z   GOTOOLCHAIN: local
+2026-10-15T14:47:46.2337904Z ##[endgroup]
+2026-10-15T14:47:47.0798298Z No kind clusters found.
+2026-10-15T14:47:47.3669266Z Creating cluster "turnfleet" ...
+2026-10-15T14:47:47.3670314Z  • Ensuring node image (kindest/node:v1.37.0) 🖼️  ...
+2026-10-15T14:47:55.9584160Z  ✓ Ensuring node image (kindest/node:v1.37.0) 🖼️
+2026-10-15T14:47:55.9584719Z  • Preparing nodes 📦 📦 📦 📦   ...
+2026-10-15T14:48:01.9902722Z  ✓ Preparing nodes 📦 📦 📦 📦 
+2026-10-15T14:48:02.0623367Z  • Writing configuration 📜  ...
+2026-10-15T14:48:02.4826169Z  ✓ Writing configuration 📜
+2026-10-15T14:48:02.4826775Z  • Starting control-plane 🕹️  ...
+2026-10-15T14:48:10.4365536Z  ✓ Starting control-plane 🕹️
+2026-10-15T14:48:10.4366194Z  • Installing CNI 🔌  ...
+2026-10-15T14:48:10.8390764Z  ✓ Installing CNI 🔌
+2026-10-15T14:48:10.8391233Z  • Installing StorageClass 💾  ...
+2026-10-15T14:48:11.2484271Z  ✓ Installing StorageClass 💾
+2026-10-15T14:48:11.3560678Z  • Joining worker nodes 🚜  ...
+2026-10-15T14:48:22.2941522Z  ✓ Joining worker nodes 🚜
+2026-10-15T14:48:22.2942266Z  • Waiting ≤ 5m0s for control-plane = Ready ⏳  ...
+2026-10-15T14:48:29.0684034Z  ✓ Waiting ≤ 5m0s for control-plane = Ready ⏳
+2026-10-15T14:48:29.0684835Z  • Ready after 7s 💚
+2026-10-15T14:48:29.3373256Z Set kubectl context to "kind-turnfleet"
+2026-10-15T14:48:29.3373860Z You can now use your cluster with:
+2026-10-15T14:48:29.3374215Z 
+2026-10-15T14:48:29.3374452Z kubectl cluster-info --context kind-turnfleet
+2026-10-15T14:48:29.3374832Z 
+2026-10-15T14:48:29.3375762Z Not sure what to do next? 😅  Check out https://kind.sigs.k8s.io/docs/user/quick-start/
+2026-10-15T14:48:29.3892891Z docker build \
+2026-10-15T14:48:29.3895635Z 	--build-arg GO_IMAGE=golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61 --build-arg RUNTIME_IMAGE=gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab \
+2026-10-15T14:48:29.3898917Z 	--build-arg LDFLAGS="-s -w -X github.com/Hazmi35/turnfleet/internal/version.version=8f07154 -X github.com/Hazmi35/turnfleet/internal/version.commit=8f07154 -X github.com/Hazmi35/turnfleet/internal/version.date=2026-10-15T14:48:29Z" \
+2026-10-15T14:48:29.3900186Z 	-t ghcr.io/hazmi35/turnfleet-controller:dev -f Dockerfile .
+2026-10-15T14:48:30.0510437Z #0 building with "default" instance using docker driver
+2026-10-15T14:48:30.0511308Z 
+2026-10-15T14:48:30.0511580Z #1 [internal] load build definition from Dockerfile
+2026-10-15T14:48:30.0512213Z #1 transferring dockerfile: 2.33kB done
+2026-10-15T14:48:30.0513348Z #1 WARN: InvalidDefaultArgInFrom: Default value for ARG ${GO_IMAGE} results in empty or invalid base image name (line 8)
+2026-10-15T14:48:30.0514956Z #1 WARN: InvalidDefaultArgInFrom: Default value for ARG ${RUNTIME_IMAGE} results in empty or invalid base image name (line 31)
+2026-10-15T14:48:30.0515976Z #1 DONE 0.0s
+2026-10-15T14:48:30.0516198Z 
+2026-10-15T14:48:30.0517304Z #2 [internal] load metadata for gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
+2026-10-15T14:48:30.2753480Z #2 ...
+2026-10-15T14:48:30.2753792Z 
+2026-10-15T14:48:30.2754159Z #3 [auth] library/golang:pull token for registry-1.docker.io
+2026-10-15T14:48:30.2754777Z #3 DONE 0.0s
+2026-10-15T14:48:30.4248953Z 
+2026-10-15T14:48:30.4249836Z #4 [internal] load metadata for docker.io/library/golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61
+2026-10-15T14:48:30.4705437Z #4 ...
+2026-10-15T14:48:30.4706424Z 
+2026-10-15T14:48:30.4708614Z #2 [internal] load metadata for gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
+2026-10-15T14:48:30.4709860Z #2 DONE 0.6s
+2026-10-15T14:48:30.6210495Z 
+2026-10-15T14:48:30.6211753Z #4 [internal] load metadata for docker.io/library/golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61
+2026-10-15T14:48:30.7812686Z #4 DONE 0.9s
+2026-10-15T14:48:30.9085912Z 
+2026-10-15T14:48:30.9086504Z #5 [internal] load .dockerignore
+2026-10-15T14:48:30.9087352Z #5 transferring context: 685B done
+2026-10-15T14:48:30.9087790Z #5 DONE 0.0s
+2026-10-15T14:48:30.9087923Z 
+2026-10-15T14:48:30.9088032Z #6 [internal] load build context
+2026-10-15T14:48:30.9088325Z #6 transferring context: 398.06kB 0.0s done
+2026-10-15T14:48:30.9088605Z #6 DONE 0.0s
+2026-10-15T14:48:30.9088743Z 
+2026-10-15T14:48:30.9089629Z #7 [stage-1 1/2] FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
+2026-10-15T14:48:30.9090588Z #7 resolve gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab done
+2026-10-15T14:48:30.9091395Z #7 sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab 1.51kB / 1.51kB done
+2026-10-15T14:48:30.9092066Z #7 sha256:12aa113e298cbae388b298c0dc163fa1547beba948153b23eb9094e16a07a770 2.73kB / 2.73kB done
+2026-10-15T14:48:30.9092722Z #7 sha256:52dcfbabb7457ea47c82f6e13af8c8a4a1d9f7b0145142b3ecab20f2b888411d 2.67kB / 2.67kB done
+2026-10-15T14:48:30.9093177Z #7 DONE 0.1s
+2026-10-15T14:48:30.9093292Z 
+2026-10-15T14:48:30.9093725Z #8 [builder 1/6] FROM docker.io/library/golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61
+2026-10-15T14:48:30.9094644Z #8 resolve docker.io/library/golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61 done
+2026-10-15T14:48:30.9095421Z #8 sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61 6.53kB / 6.53kB done
+2026-10-15T14:48:30.9096074Z #8 sha256:8cb71386cfcfc55b27b559f73c6d5c0cdcb93b83be8281314116e271cc42cea6 8.39MB / 48.52MB 0.1s
+2026-10-15T14:48:30.9096733Z #8 sha256:a4edf9c328e814bd91b20c8e2211065489ebf15a16c7663d68a880660dfc897d 0B / 23.87MB 0.1s
+2026-10-15T14:48:30.9097732Z #8 sha256:55395706e9703db746cc507abfc4eb2aea75918f8a8024e4848e2cb81004f5ad 2.32kB / 2.32kB done
+2026-10-15T14:48:30.9098430Z #8 sha256:ee4851781507a617e5a5e527b3edeebc0f803385e9a47b380c1ed58fe88e60e6 3.06kB / 3.06kB done
+2026-10-15T14:48:30.9099082Z #8 sha256:c6c71fff0869aa9bd48cf80d66e30b83adc9a3fe5e77dd9aaf266282c6ec64ff 0B / 66.72MB 0.1s
+2026-10-15T14:48:31.1026009Z #8 sha256:8cb71386cfcfc55b27b559f73c6d5c0cdcb93b83be8281314116e271cc42cea6 48.52MB / 48.52MB 0.3s done
+2026-10-15T14:48:31.1027990Z #8 sha256:a4edf9c328e814bd91b20c8e2211065489ebf15a16c7663d68a880660dfc897d 23.87MB / 23.87MB 0.3s done
+2026-10-15T14:48:31.1030460Z #8 sha256:c6c71fff0869aa9bd48cf80d66e30b83adc9a3fe5e77dd9aaf266282c6ec64ff 24.12MB / 66.72MB 0.3s
+2026-10-15T14:48:31.1032018Z #8 sha256:e27d95d86248184505d1806dbe46f052fede7d3924bce88bd3bf570b77ae367c 0B / 92.58MB 0.3s
+2026-10-15T14:48:31.1033495Z #8 sha256:b2b6413ae8f393d11d32262c8dc6bd053dbaea3d074f95edd5605d3eb116e3c2 0B / 71.15MB 0.3s
+2026-10-15T14:48:31.2037489Z #8 sha256:c6c71fff0869aa9bd48cf80d66e30b83adc9a3fe5e77dd9aaf266282c6ec64ff 48.23MB / 66.72MB 0.4s
+2026-10-15T14:48:31.2040226Z #8 sha256:e27d95d86248184505d1806dbe46f052fede7d3924bce88bd3bf570b77ae367c 13.63MB / 92.58MB 0.4s
+2026-10-15T14:48:31.2041827Z #8 sha256:b2b6413ae8f393d11d32262c8dc6bd053dbaea3d074f95edd5605d3eb116e3c2 6.29MB / 71.15MB 0.4s
+2026-10-15T14:48:31.2043398Z #8 extracting sha256:8cb71386cfcfc55b27b559f73c6d5c0cdcb93b83be8281314116e271cc42cea6
+2026-10-15T14:48:31.3491484Z #8 sha256:c6c71fff0869aa9bd48cf80d66e30b83adc9a3fe5e77dd9aaf266282c6ec64ff 66.72MB / 66.72MB 0.5s done
+2026-10-15T14:48:31.3493472Z #8 sha256:e27d95d86248184505d1806dbe46f052fede7d3924bce88bd3bf570b77ae367c 47.19MB / 92.58MB 0.5s
+2026-10-15T14:48:31.3495162Z #8 sha256:b2b6413ae8f393d11d32262c8dc6bd053dbaea3d074f95edd5605d3eb116e3c2 27.26MB / 71.15MB 0.5s
+2026-10-15T14:48:31.3496675Z #8 sha256:018c58ecdb70412cf84e606f54c9a6eb423539dec826df5793442c42cff872a4 0B / 127B 0.5s
+2026-10-15T14:48:31.4694773Z #8 sha256:e27d95d86248184505d1806dbe46f052fede7d3924bce88bd3bf570b77ae367c 92.58MB / 92.58MB 0.6s
+2026-10-15T14:48:31.4715224Z #8 sha256:b2b6413ae8f393d11d32262c8dc6bd053dbaea3d074f95edd5605d3eb116e3c2 46.14MB / 71.15MB 0.6s
+2026-10-15T14:48:31.4716805Z #8 sha256:018c58ecdb70412cf84e606f54c9a6eb423539dec826df5793442c42cff872a4 127B / 127B 0.6s done
+2026-10-15T14:48:31.4718436Z #8 sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1 0B / 32B 0.6s
+2026-10-15T14:48:31.5705846Z #8 sha256:e27d95d86248184505d1806dbe46f052fede7d3924bce88bd3bf570b77ae367c 92.58MB / 92.58MB 0.6s done
+2026-10-15T14:48:31.5708023Z #8 sha256:b2b6413ae8f393d11d32262c8dc6bd053dbaea3d074f95edd5605d3eb116e3c2 71.15MB / 71.15MB 0.7s
+2026-10-15T14:48:31.5709624Z #8 sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1 32B / 32B 0.6s done
+2026-10-15T14:48:31.6838272Z #8 sha256:b2b6413ae8f393d11d32262c8dc6bd053dbaea3d074f95edd5605d3eb116e3c2 71.15MB / 71.15MB 0.8s done
+2026-10-15T14:48:33.0614226Z #8 extracting sha256:8cb71386cfcfc55b27b559f73c6d5c0cdcb93b83be8281314116e271cc42cea6 1.9s done
+2026-10-15T14:48:33.2266536Z #8 extracting sha256:a4edf9c328e814bd91b20c8e2211065489ebf15a16c7663d68a880660dfc897d 0.1s
+2026-10-15T14:48:33.8067086Z #8 extracting sha256:a4edf9c328e814bd91b20c8e2211065489ebf15a16c7663d68a880660dfc897d 0.5s done
+2026-10-15T14:48:34.6955969Z #8 extracting sha256:c6c71fff0869aa9bd48cf80d66e30b83adc9a3fe5e77dd9aaf266282c6ec64ff
+2026-10-15T14:48:37.3255514Z #8 extracting sha256:c6c71fff0869aa9bd48cf80d66e30b83adc9a3fe5e77dd9aaf266282c6ec64ff 2.5s done
+2026-10-15T14:48:37.4870468Z #8 extracting sha256:e27d95d86248184505d1806dbe46f052fede7d3924bce88bd3bf570b77ae367c
+2026-10-15T14:48:39.4316242Z #8 extracting sha256:e27d95d86248184505d1806dbe46f052fede7d3924bce88bd3bf570b77ae367c 1.9s done
+2026-10-15T14:48:39.8438283Z #8 extracting sha256:b2b6413ae8f393d11d32262c8dc6bd053dbaea3d074f95edd5605d3eb116e3c2
+2026-10-15T14:48:44.7635038Z #8 extracting sha256:b2b6413ae8f393d11d32262c8dc6bd053dbaea3d074f95edd5605d3eb116e3c2 4.9s done
+2026-10-15T14:48:45.4694633Z #8 extracting sha256:018c58ecdb70412cf84e606f54c9a6eb423539dec826df5793442c42cff872a4
+2026-10-15T14:48:45.6803386Z #8 extracting sha256:018c58ecdb70412cf84e606f54c9a6eb423539dec826df5793442c42cff872a4 done
+2026-10-15T14:48:45.6804464Z #8 extracting sha256:4f4fb700ef54461cfa02571ae0db9a0dc1e0cdb5577484a6d75e68dc38e8acc1 done
+2026-10-15T14:48:45.6805108Z #8 DONE 14.7s
+2026-10-15T14:48:45.6805459Z 
+2026-10-15T14:48:45.6805812Z #9 [builder 2/6] WORKDIR /workspace
+2026-10-15T14:48:45.6806320Z #9 DONE 0.0s
+2026-10-15T14:48:45.6806783Z 
+2026-10-15T14:48:45.6806907Z #10 [builder 3/6] COPY go.mod go.sum ./
+2026-10-15T14:48:45.6807613Z #10 DONE 0.0s
+2026-10-15T14:48:45.6807870Z 
+2026-10-15T14:48:45.6808278Z #11 [builder 4/6] RUN --mount=type=cache,target=/go/pkg/mod go mod download
+2026-10-15T14:48:50.5339153Z #11 DONE 5.0s
+2026-10-15T14:48:50.7188998Z 
+2026-10-15T14:48:50.7189480Z #12 [builder 5/6] COPY . .
+2026-10-15T14:48:50.7190007Z #12 DONE 0.0s
+2026-10-15T14:48:50.7190213Z 
+2026-10-15T14:48:50.7192947Z #13 [builder 6/6] RUN --mount=type=cache,target=/root/.cache/go-build     CGO_ENABLED=0 GOOS=linux GOARCH=amd64     go build -trimpath -ldflags "-s -w -X github.com/Hazmi35/turnfleet/internal/version.version=8f07154 -X github.com/Hazmi35/turnfleet/internal/version.commit=8f07154 -X github.com/Hazmi35/turnfleet/internal/version.date=2026-10-15T14:48:29Z" -o /out/turnfleet-controller ./cmd/turnfleet-controller
+2026-10-15T14:48:50.7195958Z #13 0.136 go: downloading k8s.io/apimachinery v0.37.1
+2026-10-15T14:48:50.8692918Z #13 0.136 go: downloading k8s.io/client-go v0.37.1
+2026-10-15T14:48:51.2060514Z #13 0.623 go: downloading sigs.k8s.io/controller-runtime v0.25.2
+2026-10-15T14:48:51.3731336Z #13 0.790 go: downloading k8s.io/api v0.37.1
+2026-10-15T14:48:51.8086626Z #13 1.226 go: downloading k8s.io/klog/v2 v2.140.0
+2026-10-15T14:48:51.9180785Z #13 1.226 go: downloading k8s.io/kube-openapi v0.0.0-20260721132016-d427ff9ee9ad
+2026-10-15T14:48:51.9181640Z #13 1.238 go: downloading sigs.k8s.io/structured-merge-diff/v6 v6.4.2
+2026-10-15T14:48:51.9182582Z #13 1.336 go: downloading github.com/go-logr/logr v1.4.4
+2026-10-15T14:48:52.0592682Z #13 1.354 go: downloading github.com/go-logr/zapr v1.3.0
+2026-10-15T14:48:52.0593414Z #13 1.390 go: downloading go.uber.org/zap v1.27.1
+2026-10-15T14:48:52.0593787Z #13 1.477 go: downloading k8s.io/apiserver v0.37.0
+2026-10-15T14:48:52.4685953Z #13 1.885 go: downloading github.com/prometheus/client_golang v1.25.0
+2026-10-15T14:48:52.5723376Z #13 1.886 go: downloading gomodules.xyz/jsonpatch/v2 v2.4.0
+2026-10-15T14:48:52.5724306Z #13 1.888 go: downloading k8s.io/utils v0.0.0-20260626114624-be93311217bd
+2026-10-15T14:48:52.5724906Z #13 1.889 go: downloading sigs.k8s.io/randfill v1.0.0
+2026-10-15T14:48:52.5725339Z #13 1.952 go: downloading github.com/evanphx/json-patch/v5 v5.9.11
+2026-10-15T14:48:52.5725802Z #13 1.986 go: downloading github.com/prometheus/client_model v0.6.3
+2026-10-15T14:48:52.5726228Z #13 1.990 go: downloading github.com/prometheus/common v0.72.1
+2026-10-15T14:48:52.6873354Z #13 2.005 go: downloading github.com/pion/logging v0.2.4
+2026-10-15T14:48:52.6874033Z #13 2.032 go: downloading github.com/pion/stun/v4 v4.0.1
+2026-10-15T14:48:52.6874437Z #13 2.052 go: downloading github.com/pion/turn/v5 v5.1.2
+2026-10-15T14:48:52.6874798Z #13 2.067 go: downloading gopkg.in/inf.v0 v0.9.1
+2026-10-15T14:48:52.6875240Z #13 2.105 go: downloading sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730
+2026-10-15T14:48:52.8562343Z #13 2.111 go: downloading github.com/json-iterator/go v1.1.12
+2026-10-15T14:48:52.8563367Z #13 2.113 go: downloading go.yaml.in/yaml/v2 v2.4.4
+2026-10-15T14:48:52.8564209Z #13 2.140 go: downloading go.uber.org/multierr v1.11.0
+2026-10-15T14:48:52.8565118Z #13 2.164 go: downloading k8s.io/component-base v0.37.0
+2026-10-15T14:48:52.8566621Z #13 2.167 go: downloading github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
+2026-10-15T14:48:52.8569375Z #13 2.181 go: downloading golang.org/x/net v0.61.0
+2026-10-15T14:48:52.8571610Z #13 2.273 go: downloading github.com/fsnotify/fsnotify v1.9.0
+2026-10-15T14:48:53.0580647Z #13 2.275 go: downloading github.com/beorn7/perks v1.0.1
+2026-10-15T14:48:53.0581658Z #13 2.276 go: downloading github.com/cespare/xxhash/v2 v2.3.0
+2026-10-15T14:48:53.0582422Z #13 2.325 go: downloading github.com/prometheus/procfs v0.22.0
+2026-10-15T14:48:53.0583352Z #13 2.326 go: downloading google.golang.org/protobuf v1.36.12
+2026-10-15T14:48:53.2053665Z #13 2.622 go: downloading golang.org/x/oauth2 v0.37.0
+2026-10-15T14:48:53.3253928Z #13 2.623 go: downloading k8s.io/apiextensions-apiserver v0.37.0
+2026-10-15T14:48:53.3255164Z #13 2.623 go: downloading golang.org/x/time v0.15.0
+2026-10-15T14:48:53.3255890Z #13 2.632 go: downloading github.com/pion/dtls/v3 v3.1.9
+2026-10-15T14:48:53.3256666Z #13 2.671 go: downloading github.com/pion/transport/v5 v5.0.0
+2026-10-15T14:48:53.3257677Z #13 2.743 go: downloading github.com/fxamacker/cbor/v2 v2.9.1
+2026-10-15T14:48:53.4427640Z #13 2.744 go: downloading github.com/pion/randutil v0.1.0
+2026-10-15T14:48:53.4428959Z #13 2.779 go: downloading github.com/spf13/pflag v1.0.10
+2026-10-15T14:48:53.4429611Z #13 2.792 go: downloading golang.org/x/term v0.47.0
+2026-10-15T14:48:53.4430224Z #13 2.812 go: downloading golang.org/x/sync v0.24.0
+2026-10-15T14:48:53.4430733Z #13 2.821 go: downloading github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
+2026-10-15T14:48:53.4431347Z #13 2.837 go: downloading github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee
+2026-10-15T14:48:53.4431820Z #13 2.841 go: downloading k8s.io/streaming v0.37.1
+2026-10-15T14:48:53.4432248Z #13 2.860 go: downloading github.com/go-openapi/jsonreference v1.0.0
+2026-10-15T14:48:53.6475195Z #13 2.869 go: downloading github.com/go-openapi/swag v0.27.1
+2026-10-15T14:48:53.6476027Z #13 2.887 go: downloading github.com/google/gnostic-models v0.7.1
+2026-10-15T14:48:53.6476755Z #13 2.892 go: downloading github.com/blang/semver/v4 v4.0.0
+2026-10-15T14:48:53.6478129Z #13 2.910 go: downloading go.opentelemetry.io/otel/trace v1.45.0
+2026-10-15T14:48:53.6478989Z #13 2.922 go: downloading github.com/google/cel-go v0.29.2
+2026-10-15T14:48:53.6479659Z #13 2.941 go: downloading go.opentelemetry.io/otel v1.45.0
+2026-10-15T14:48:53.6480295Z #13 3.064 go: downloading sigs.k8s.io/yaml v1.6.0
+2026-10-15T14:48:53.7690927Z #13 3.064 go: downloading go.yaml.in/yaml/v3 v3.0.5
+2026-10-15T14:48:53.7691635Z #13 3.065 go: downloading golang.org/x/sys v0.49.0
+2026-10-15T14:48:53.7692242Z #13 3.123 go: downloading github.com/google/uuid v1.6.0
+2026-10-15T14:48:53.7692932Z #13 3.124 go: downloading github.com/wlynxg/anet v0.0.5
+2026-10-15T14:48:53.7693562Z #13 3.186 go: downloading github.com/x448/float16 v0.8.4
+2026-10-15T14:48:53.9212605Z #13 3.237 go: downloading gopkg.in/evanphx/json-patch.v4 v4.13.0
+2026-10-15T14:48:53.9214273Z #13 3.249 go: downloading github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
+2026-10-15T14:48:53.9215576Z #13 3.285 go: downloading github.com/go-openapi/jsonpointer v1.0.0
+2026-10-15T14:48:53.9216904Z #13 3.339 go: downloading github.com/go-openapi/swag/cmdutils v0.27.1
+2026-10-15T14:48:54.0279151Z #13 3.341 go: downloading github.com/go-openapi/swag/conv v0.27.1
+2026-10-15T14:48:54.0280399Z #13 3.341 go: downloading github.com/go-openapi/swag/fileutils v0.27.1
+2026-10-15T14:48:54.0281035Z #13 3.382 go: downloading github.com/go-openapi/swag/jsonutils v0.27.1
+2026-10-15T14:48:54.0281619Z #13 3.388 go: downloading github.com/go-openapi/swag/loading v0.27.1
+2026-10-15T14:48:54.0282146Z #13 3.389 go: downloading github.com/go-openapi/swag/mangling v0.27.1
+2026-10-15T14:48:54.0283077Z #13 3.402 go: downloading github.com/go-openapi/swag/netutils v0.27.1
+2026-10-15T14:48:54.0283719Z #13 3.435 go: downloading github.com/go-openapi/swag/stringutils v0.27.1
+2026-10-15T14:48:54.0284303Z #13 3.436 go: downloading github.com/go-openapi/swag/typeutils v0.27.1
+2026-10-15T14:48:54.0284871Z #13 3.437 go: downloading github.com/go-openapi/swag/yamlutils v0.27.1
+2026-10-15T14:48:54.0285354Z #13 3.446 go: downloading cel.dev/expr v0.25.2
+2026-10-15T14:48:54.1380814Z #13 3.480 go: downloading google.golang.org/genproto/googleapis/api v0.0.0-20260803160001-6ac0973c030d
+2026-10-15T14:48:54.1382524Z #13 3.483 go: downloading github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
+2026-10-15T14:48:54.1383655Z #13 3.483 go: downloading golang.org/x/text v0.43.0
+2026-10-15T14:48:54.1384592Z #13 3.555 go: downloading golang.org/x/crypto v0.58.0
+2026-10-15T14:48:54.3456195Z #13 3.763 go: downloading google.golang.org/grpc v1.83.2
+2026-10-15T14:48:54.5694770Z #13 3.987 go: downloading sigs.k8s.io/apiserver-network-proxy/konnectivity-client v0.36.0
+2026-10-15T14:48:54.7014728Z #13 3.987 go: downloading go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.69.0
+2026-10-15T14:48:54.7016683Z #13 4.038 go: downloading go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.45.0
+2026-10-15T14:48:54.7018411Z #13 4.045 go: downloading go.opentelemetry.io/otel/sdk v1.45.0
+2026-10-15T14:48:54.7019683Z #13 4.075 go: downloading go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.45.0
+2026-10-15T14:48:54.7020941Z #13 4.119 go: downloading github.com/antlr4-go/antlr/v4 v4.13.1
+2026-10-15T14:48:54.8026555Z #13 4.126 go: downloading google.golang.org/genproto/googleapis/rpc v0.0.0-20260803160001-6ac0973c030d
+2026-10-15T14:48:54.8027887Z #13 4.173 go: downloading github.com/felixge/httpsnoop v1.0.4
+2026-10-15T14:48:54.8028696Z #13 4.173 go: downloading go.opentelemetry.io/otel/metric v1.45.0
+2026-10-15T14:48:54.8029512Z #13 4.180 go: downloading go.opentelemetry.io/proto/otlp v1.11.0
+2026-10-15T14:48:54.8030470Z #13 4.220 go: downloading github.com/spf13/cobra v1.10.2
+2026-10-15T14:48:55.0194942Z #13 4.223 go: downloading github.com/emicklei/go-restful/v3 v3.13.0
+2026-10-15T14:48:55.0195513Z #13 4.233 go: downloading github.com/go-logr/stdr v1.2.2
+2026-10-15T14:48:55.0195934Z #13 4.233 go: downloading go.opentelemetry.io/auto/sdk v1.2.1
+2026-10-15T14:48:55.0196368Z #13 4.282 go: downloading github.com/go-openapi/swag/pools v0.27.1
+2026-10-15T14:48:55.0196831Z #13 4.282 go: downloading golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f
+2026-10-15T14:48:55.0197608Z #13 4.285 go: downloading github.com/cenkalti/backoff/v5 v5.0.3
+2026-10-15T14:48:55.0198085Z #13 4.286 go: downloading github.com/grpc-ecosystem/grpc-gateway/v2 v2.29.0
+2026-10-15T14:50:29.3836433Z #13 DONE 98.8s
+2026-10-15T14:50:29.5338227Z 
+2026-10-15T14:50:29.5339019Z #14 [stage-1 2/2] COPY --from=builder /out/turnfleet-controller /turnfleet-controller
+2026-10-15T14:50:29.5339833Z #14 DONE 0.1s
+2026-10-15T14:50:29.6857310Z 
+2026-10-15T14:50:29.6857955Z #15 exporting to image
+2026-10-15T14:50:29.6858453Z #15 exporting layers
+2026-10-15T14:50:30.0038647Z #15 exporting layers 0.5s done
+2026-10-15T14:50:30.0227956Z #15 writing image sha256:d7275b29b39b9bf7e5571fd0cf8131a4f9a10e5e11093a7eef4fc683a7b5cfe0 done
+2026-10-15T14:50:30.0228778Z #15 naming to ghcr.io/hazmi35/turnfleet-controller:dev done
+2026-10-15T14:50:30.0231525Z #15 DONE 0.5s
+2026-10-15T14:50:30.0231752Z 
+2026-10-15T14:50:30.0232369Z  [33m2 warnings found (use docker --debug to expand):
+2026-10-15T14:50:30.0233315Z [0m - InvalidDefaultArgInFrom: Default value for ARG ${GO_IMAGE} results in empty or invalid base image name (line 8)
+2026-10-15T14:50:30.0234356Z  - InvalidDefaultArgInFrom: Default value for ARG ${RUNTIME_IMAGE} results in empty or invalid base image name (line 31)
+2026-10-15T14:50:30.0281115Z docker build \
+2026-10-15T14:50:30.0282737Z 	--build-arg GO_IMAGE=golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61 --build-arg RUNTIME_IMAGE=gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab \
+2026-10-15T14:50:30.0286334Z 	--build-arg LDFLAGS="-s -w -X github.com/Hazmi35/turnfleet/internal/version.version=8f07154 -X github.com/Hazmi35/turnfleet/internal/version.commit=8f07154 -X github.com/Hazmi35/turnfleet/internal/version.date=2026-10-15T14:48:29Z" \
+2026-10-15T14:50:30.0314777Z 	-t ghcr.io/hazmi35/turnfleet-probe:dev -f Dockerfile.probe .
+2026-10-15T14:50:30.2895258Z #0 building with "default" instance using docker driver
+2026-10-15T14:50:30.2895778Z 
+2026-10-15T14:50:30.2896115Z #1 [internal] load build definition from Dockerfile.probe
+2026-10-15T14:50:30.2896790Z #1 transferring dockerfile: 1.87kB done
+2026-10-15T14:50:30.2898116Z #1 WARN: InvalidDefaultArgInFrom: Default value for ARG ${GO_IMAGE} results in empty or invalid base image name (line 10)
+2026-10-15T14:50:30.2899685Z #1 WARN: InvalidDefaultArgInFrom: Default value for ARG ${RUNTIME_IMAGE} results in empty or invalid base image name (line 25)
+2026-10-15T14:50:30.2901183Z #1 DONE 0.0s
+2026-10-15T14:50:30.2901394Z 
+2026-10-15T14:50:30.2902328Z #2 [internal] load metadata for docker.io/library/golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61
+2026-10-15T14:50:30.2903549Z #2 DONE 0.0s
+2026-10-15T14:50:30.2903777Z 
+2026-10-15T14:50:30.2904531Z #3 [internal] load metadata for gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
+2026-10-15T14:50:30.2905320Z #3 DONE 0.1s
+2026-10-15T14:50:30.4339177Z 
+2026-10-15T14:50:30.4339724Z #4 [internal] load .dockerignore
+2026-10-15T14:50:30.4340189Z #4 transferring context: 685B done
+2026-10-15T14:50:30.4340460Z #4 DONE 0.0s
+2026-10-15T14:50:30.4340582Z 
+2026-10-15T14:50:30.4341212Z #5 [builder 1/6] FROM docker.io/library/golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61
+2026-10-15T14:50:30.4341830Z #5 DONE 0.0s
+2026-10-15T14:50:30.4341945Z 
+2026-10-15T14:50:30.4345359Z #6 [stage-1 1/2] FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
+2026-10-15T14:50:30.4346057Z #6 CACHED
+2026-10-15T14:50:30.4346177Z 
+2026-10-15T14:50:30.4346286Z #7 [internal] load build context
+2026-10-15T14:50:30.4346573Z #7 transferring context: 3.17kB done
+2026-10-15T14:50:30.4346834Z #7 DONE 0.0s
+2026-10-15T14:50:30.4346955Z 
+2026-10-15T14:50:30.4347062Z #8 [builder 2/6] WORKDIR /workspace
+2026-10-15T14:50:30.4347593Z #8 CACHED
+2026-10-15T14:50:30.4347707Z 
+2026-10-15T14:50:30.4347937Z #9 [builder 4/6] RUN --mount=type=cache,target=/go/pkg/mod go mod download
+2026-10-15T14:50:30.4348313Z #9 CACHED
+2026-10-15T14:50:30.4348421Z 
+2026-10-15T14:50:30.4348533Z #10 [builder 3/6] COPY go.mod go.sum ./
+2026-10-15T14:50:30.4348797Z #10 CACHED
+2026-10-15T14:50:30.4348906Z 
+2026-10-15T14:50:30.4349006Z #11 [builder 5/6] COPY . .
+2026-10-15T14:50:30.4349231Z #11 CACHED
+2026-10-15T14:50:30.4349348Z 
+2026-10-15T14:50:30.4351362Z #12 [builder 6/6] RUN --mount=type=cache,target=/root/.cache/go-build     CGO_ENABLED=0 GOOS=linux GOARCH=amd64     go build -trimpath -ldflags "-s -w -X github.com/Hazmi35/turnfleet/internal/version.version=8f07154 -X github.com/Hazmi35/turnfleet/internal/version.commit=8f07154 -X github.com/Hazmi35/turnfleet/internal/version.date=2026-10-15T14:48:29Z" -o /out/turnfleet-probe ./cmd/turnfleet-probe
+2026-10-15T14:50:30.4353069Z #12 0.123 go: downloading k8s.io/api v0.37.1
+2026-10-15T14:50:30.4353412Z #12 0.123 go: downloading k8s.io/apimachinery v0.37.1
+2026-10-15T14:50:30.9278175Z #12 0.617 go: downloading k8s.io/client-go v0.37.1
+2026-10-15T14:50:31.0834140Z #12 0.622 go: downloading sigs.k8s.io/controller-runtime v0.25.2
+2026-10-15T14:50:31.1284907Z #12 0.818 go: downloading github.com/pion/logging v0.2.4
+2026-10-15T14:50:31.2636440Z #12 0.819 go: downloading github.com/pion/stun/v4 v4.0.1
+2026-10-15T14:50:31.2638847Z #12 0.866 go: downloading github.com/pion/turn/v5 v5.1.2
+2026-10-15T14:50:31.2640472Z #12 0.897 go: downloading k8s.io/utils v0.0.0-20260626114624-be93311217bd
+2026-10-15T14:50:31.2641898Z #12 0.953 go: downloading sigs.k8s.io/randfill v1.0.0
+2026-10-15T14:50:31.3649554Z #12 0.987 go: downloading k8s.io/klog/v2 v2.140.0
+2026-10-15T14:50:31.3650715Z #12 1.000 go: downloading k8s.io/kube-openapi v0.0.0-20260721132016-d427ff9ee9ad
+2026-10-15T14:50:31.3651971Z #12 1.053 go: downloading sigs.k8s.io/structured-merge-diff/v6 v6.4.2
+2026-10-15T14:50:31.5265969Z #12 1.153 go: downloading github.com/evanphx/json-patch/v5 v5.9.11
+2026-10-15T14:50:31.5268044Z #12 1.216 go: downloading github.com/go-logr/logr v1.4.4
+2026-10-15T14:50:31.6467660Z #12 1.277 go: downloading github.com/prometheus/client_golang v1.25.0
+2026-10-15T14:50:31.6468621Z #12 1.336 go: downloading github.com/pion/dtls/v3 v3.1.9
+2026-10-15T14:50:31.6469242Z #12 1.336 go: downloading github.com/pion/transport/v5 v5.0.0
+2026-10-15T14:50:31.7675327Z #12 1.406 go: downloading gopkg.in/inf.v0 v0.9.1
+2026-10-15T14:50:31.7678438Z #12 1.407 go: downloading sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730
+2026-10-15T14:50:31.7679421Z #12 1.408 go: downloading github.com/pion/randutil v0.1.0
+2026-10-15T14:50:31.7680296Z #12 1.457 go: downloading github.com/json-iterator/go v1.1.12
+2026-10-15T14:50:31.8973603Z #12 1.458 go: downloading go.yaml.in/yaml/v2 v2.4.4
+2026-10-15T14:50:31.8974956Z #12 1.460 go: downloading github.com/spf13/pflag v1.0.10
+2026-10-15T14:50:31.8983873Z #12 1.463 go: downloading golang.org/x/term v0.47.0
+2026-10-15T14:50:31.8984993Z #12 1.513 go: downloading github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822
+2026-10-15T14:50:31.8985989Z #12 1.514 go: downloading golang.org/x/net v0.61.0
+2026-10-15T14:50:31.8986844Z #12 1.541 go: downloading github.com/beorn7/perks v1.0.1
+2026-10-15T14:50:31.8988088Z #12 1.542 go: downloading github.com/cespare/xxhash/v2 v2.3.0
+2026-10-15T14:50:31.8989310Z #12 1.557 go: downloading github.com/prometheus/client_model v0.6.3
+2026-10-15T14:50:31.8990851Z #12 1.587 go: downloading github.com/prometheus/common v0.72.1
+2026-10-15T14:50:32.0337134Z #12 1.605 go: downloading github.com/prometheus/procfs v0.22.0
+2026-10-15T14:50:32.0339298Z #12 1.669 go: downloading google.golang.org/protobuf v1.36.12
+2026-10-15T14:50:32.0340643Z #12 1.723 go: downloading github.com/wlynxg/anet v0.0.5
+2026-10-15T14:50:32.1346811Z #12 1.759 go: downloading github.com/fxamacker/cbor/v2 v2.9.1
+2026-10-15T14:50:32.1347703Z #12 1.824 go: downloading golang.org/x/sys v0.49.0
+2026-10-15T14:50:32.2641185Z #12 1.833 go: downloading sigs.k8s.io/yaml v1.6.0
+2026-10-15T14:50:32.2642403Z #12 1.887 go: downloading github.com/google/gnostic-models v0.7.1
+2026-10-15T14:50:32.2643542Z #12 1.953 go: downloading go.yaml.in/yaml/v3 v3.0.5
+2026-10-15T14:50:32.3729724Z #12 1.976 go: downloading github.com/go-openapi/jsonreference v1.0.0
+2026-10-15T14:50:32.3730984Z #12 1.977 go: downloading github.com/go-openapi/swag v0.27.1
+2026-10-15T14:50:32.3732248Z #12 2.011 go: downloading golang.org/x/oauth2 v0.37.0
+2026-10-15T14:50:32.3733157Z #12 2.030 go: downloading golang.org/x/time v0.15.0
+2026-10-15T14:50:32.3734333Z #12 2.037 go: downloading github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
+2026-10-15T14:50:32.3735661Z #12 2.062 go: downloading github.com/modern-go/reflect2 v1.0.3-0.20250322232337-35a7c28c31ee
+2026-10-15T14:50:32.4884924Z #12 2.078 go: downloading github.com/x448/float16 v0.8.4
+2026-10-15T14:50:32.4885723Z #12 2.078 go: downloading golang.org/x/crypto v0.58.0
+2026-10-15T14:50:32.4886571Z #12 2.084 go: downloading github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
+2026-10-15T14:50:32.4887973Z #12 2.112 go: downloading github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
+2026-10-15T14:50:32.4888900Z #12 2.124 go: downloading github.com/go-openapi/jsonpointer v1.0.0
+2026-10-15T14:50:32.4889689Z #12 2.156 go: downloading github.com/go-openapi/swag/cmdutils v0.27.1
+2026-10-15T14:50:32.4890473Z #12 2.177 go: downloading github.com/go-openapi/swag/conv v0.27.1
+2026-10-15T14:50:32.6056144Z #12 2.178 go: downloading github.com/go-openapi/swag/fileutils v0.27.1
+2026-10-15T14:50:32.6057591Z #12 2.202 go: downloading github.com/go-openapi/swag/jsonutils v0.27.1
+2026-10-15T14:50:32.6058489Z #12 2.223 go: downloading github.com/go-openapi/swag/loading v0.27.1
+2026-10-15T14:50:32.6058984Z #12 2.224 go: downloading github.com/go-openapi/swag/mangling v0.27.1
+2026-10-15T14:50:32.6059443Z #12 2.251 go: downloading github.com/go-openapi/swag/netutils v0.27.1
+2026-10-15T14:50:32.6059899Z #12 2.254 go: downloading github.com/go-openapi/swag/stringutils v0.27.1
+2026-10-15T14:50:32.6060398Z #12 2.269 go: downloading github.com/go-openapi/swag/typeutils v0.27.1
+2026-10-15T14:50:32.6061243Z #12 2.270 go: downloading github.com/go-openapi/swag/yamlutils v0.27.1
+2026-10-15T14:50:32.6061956Z #12 2.295 go: downloading golang.org/x/text v0.43.0
+2026-10-15T14:50:32.7384873Z #12 2.319 go: downloading github.com/google/uuid v1.6.0
+2026-10-15T14:50:32.7386200Z #12 2.371 go: downloading github.com/emicklei/go-restful/v3 v3.13.0
+2026-10-15T14:50:32.7388928Z #12 2.428 go: downloading gopkg.in/evanphx/json-patch.v4 v4.13.0
+2026-10-15T14:50:32.9371812Z #12 2.476 go: downloading github.com/go-openapi/swag/pools v0.27.1
+2026-10-15T14:50:35.1294788Z #12 DONE 4.8s
+2026-10-15T14:50:35.3676338Z 
+2026-10-15T14:50:35.3677032Z #13 [stage-1 2/2] COPY --from=builder /out/turnfleet-probe /turnfleet-probe
+2026-10-15T14:50:35.3677792Z #13 DONE 0.1s
+2026-10-15T14:50:35.3677928Z 
+2026-10-15T14:50:35.3678041Z #14 exporting to image
+2026-10-15T14:50:35.3678304Z #14 exporting layers
+2026-10-15T14:50:36.0052818Z #14 exporting layers 0.8s done
+2026-10-15T14:50:36.0215926Z #14 writing image sha256:5282e95765562b5e0a5f2e0f8df050b00a077895b17ba49fbf2622c5458cc1fd done
+2026-10-15T14:50:36.0217934Z #14 naming to ghcr.io/hazmi35/turnfleet-probe:dev done
+2026-10-15T14:50:36.0218804Z #14 DONE 0.8s
+2026-10-15T14:50:36.0219275Z 
+2026-10-15T14:50:36.0220124Z  [33m2 warnings found (use docker --debug to expand):
+2026-10-15T14:50:36.0221677Z [0m - InvalidDefaultArgInFrom: Default value for ARG ${GO_IMAGE} results in empty or invalid base image name (line 10)
+2026-10-15T14:50:36.0224389Z  - InvalidDefaultArgInFrom: Default value for ARG ${RUNTIME_IMAGE} results in empty or invalid base image name (line 25)
+2026-10-15T14:50:36.0262059Z go tool controller-gen object:headerFile=hack/boilerplate.go.txt paths="./..."
+2026-10-15T14:50:37.8945234Z CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X github.com/Hazmi35/turnfleet/internal/version.version=8f07154 -X github.com/Hazmi35/turnfleet/internal/version.commit=8f07154 -X github.com/Hazmi35/turnfleet/internal/version.date=2026-10-15T14:50:37Z" -o bin/turnfleet-probe ./cmd/turnfleet-probe
+2026-10-15T14:51:52.4918524Z go tool controller-gen rbac:roleName=manager-role crd:generateEmbeddedObjectMeta=true webhook paths="./..." output:crd:artifacts:config=config/crd/bases
+2026-10-15T14:51:53.5640888Z # The chart ships the same CRDs from crds/. Helm reads that directory when it
+2026-10-15T14:51:53.5664294Z # installs, never when it renders, so a stale copy would install an old API
+2026-10-15T14:51:53.5685768Z # without any template showing it.
+2026-10-15T14:51:53.5706044Z make helm-crds
+2026-10-15T14:51:53.5738154Z make[1]: Entering directory '/home/runner/work/turnfleet/turnfleet'
+2026-10-15T14:51:53.5804569Z rm -f charts/turnfleet/crds/*.yaml
+2026-10-15T14:51:53.5838532Z cp config/crd/bases/*.yaml charts/turnfleet/crds/
+2026-10-15T14:51:53.5884337Z make[1]: Leaving directory '/home/runner/work/turnfleet/turnfleet'
+2026-10-15T14:51:53.5886166Z go tool kustomize build config/crd | kubectl --context kind-turnfleet apply -f -
+2026-10-15T14:51:57.8224770Z customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev created
+2026-10-15T14:51:57.8269465Z make load-images
+2026-10-15T14:51:57.8318280Z make[1]: Entering directory '/home/runner/work/turnfleet/turnfleet'
+2026-10-15T14:51:57.8413632Z docker pull coturn/coturn:4.18.0-r0
+2026-10-15T14:51:58.7250707Z 4.18.0-r0: Pulling from coturn/coturn
+2026-10-15T14:51:58.9974366Z 2e19782d7109: Pulling fs layer
+2026-10-15T14:51:58.9974964Z 603afa840a83: Pulling fs layer
+2026-10-15T14:51:58.9975499Z 66c83ee8316c: Pulling fs layer
+2026-10-15T14:51:58.9975990Z 34c79ea33466: Pulling fs layer
+2026-10-15T14:51:58.9976496Z 34c79ea33466: Waiting
+2026-10-15T14:51:59.2238423Z 66c83ee8316c: Verifying Checksum
+2026-10-15T14:51:59.2241947Z 66c83ee8316c: Download complete
+2026-10-15T14:51:59.2593604Z 603afa840a83: Verifying Checksum
+2026-10-15T14:51:59.2594154Z 603afa840a83: Download complete
+2026-10-15T14:51:59.3117866Z 2e19782d7109: Verifying Checksum
+2026-10-15T14:51:59.3118791Z 2e19782d7109: Download complete
+2026-10-15T14:51:59.4410815Z 34c79ea33466: Verifying Checksum
+2026-10-15T14:51:59.4411322Z 34c79ea33466: Download complete
+2026-10-15T14:52:00.3276434Z 2e19782d7109: Pull complete
+2026-10-15T14:52:02.1199219Z 603afa840a83: Pull complete
+2026-10-15T14:52:02.1908569Z 66c83ee8316c: Pull complete
+2026-10-15T14:52:02.2256744Z 34c79ea33466: Pull complete
+2026-10-15T14:52:02.2292423Z Digest: sha256:bbefd3e1fdfdc0d58770fe01b581fd8b00d9f3a5580d00acb77cf719a6bc78e3
+2026-10-15T14:52:02.2303157Z Status: Downloaded newer image for coturn/coturn:4.18.0-r0
+2026-10-15T14:52:02.2309748Z docker.io/coturn/coturn:4.18.0-r0
+2026-10-15T14:52:02.2497559Z coturn image matches the pin: coturn/coturn@sha256:bbefd3e1fdfdc0d58770fe01b581fd8b00d9f3a5580d00acb77cf719a6bc78e3
+2026-10-15T14:52:02.2499106Z kind load docker-image coturn/coturn:4.18.0-r0 --name turnfleet
+2026-10-15T14:52:02.5124057Z Image: "coturn/coturn:4.18.0-r0" with ID "sha256:5b1932971b0573eb47c881ce1979b558ca6109b586ff5c79de7772ea37609f3c" not yet present on node "turnfleet-control-plane", loading...
+2026-10-15T14:52:02.6115125Z Image: "coturn/coturn:4.18.0-r0" with ID "sha256:5b1932971b0573eb47c881ce1979b558ca6109b586ff5c79de7772ea37609f3c" not yet present on node "turnfleet-worker", loading...
+2026-10-15T14:52:02.7104317Z Image: "coturn/coturn:4.18.0-r0" with ID "sha256:5b1932971b0573eb47c881ce1979b558ca6109b586ff5c79de7772ea37609f3c" not yet present on node "turnfleet-worker2", loading...
+2026-10-15T14:52:02.8135059Z Image: "coturn/coturn:4.18.0-r0" with ID "sha256:5b1932971b0573eb47c881ce1979b558ca6109b586ff5c79de7772ea37609f3c" not yet present on node "turnfleet-worker3", loading...
+2026-10-15T14:52:08.4924121Z kind load docker-image ghcr.io/hazmi35/turnfleet-controller:dev --name turnfleet
+2026-10-15T14:52:08.6961608Z Image: "ghcr.io/hazmi35/turnfleet-controller:dev" with ID "sha256:d7275b29b39b9bf7e5571fd0cf8131a4f9a10e5e11093a7eef4fc683a7b5cfe0" not yet present on node "turnfleet-control-plane", loading...
+2026-10-15T14:52:08.7991641Z Image: "ghcr.io/hazmi35/turnfleet-controller:dev" with ID "sha256:d7275b29b39b9bf7e5571fd0cf8131a4f9a10e5e11093a7eef4fc683a7b5cfe0" not yet present on node "turnfleet-worker", loading...
+2026-10-15T14:52:08.9029381Z Image: "ghcr.io/hazmi35/turnfleet-controller:dev" with ID "sha256:d7275b29b39b9bf7e5571fd0cf8131a4f9a10e5e11093a7eef4fc683a7b5cfe0" not yet present on node "turnfleet-worker2", loading...
+2026-10-15T14:52:09.0141820Z Image: "ghcr.io/hazmi35/turnfleet-controller:dev" with ID "sha256:d7275b29b39b9bf7e5571fd0cf8131a4f9a10e5e11093a7eef4fc683a7b5cfe0" not yet present on node "turnfleet-worker3", loading...
+2026-10-15T14:52:14.0379701Z kind load docker-image ghcr.io/hazmi35/turnfleet-probe:dev --name turnfleet
+2026-10-15T14:52:14.2372075Z Image: "ghcr.io/hazmi35/turnfleet-probe:dev" with ID "sha256:5282e95765562b5e0a5f2e0f8df050b00a077895b17ba49fbf2622c5458cc1fd" not yet present on node "turnfleet-control-plane", loading...
+2026-10-15T14:52:14.3338406Z Image: "ghcr.io/hazmi35/turnfleet-probe:dev" with ID "sha256:5282e95765562b5e0a5f2e0f8df050b00a077895b17ba49fbf2622c5458cc1fd" not yet present on node "turnfleet-worker", loading...
+2026-10-15T14:52:14.4335113Z Image: "ghcr.io/hazmi35/turnfleet-probe:dev" with ID "sha256:5282e95765562b5e0a5f2e0f8df050b00a077895b17ba49fbf2622c5458cc1fd" not yet present on node "turnfleet-worker2", loading...
+2026-10-15T14:52:14.5373459Z Image: "ghcr.io/hazmi35/turnfleet-probe:dev" with ID "sha256:5282e95765562b5e0a5f2e0f8df050b00a077895b17ba49fbf2622c5458cc1fd" not yet present on node "turnfleet-worker3", loading...
+2026-10-15T14:52:16.4400283Z make[1]: Leaving directory '/home/runner/work/turnfleet/turnfleet'
+2026-10-15T14:52:16.4401924Z make deploy KUSTOMIZE_OVERLAY=config/e2e
+2026-10-15T14:52:16.4436026Z make[1]: Entering directory '/home/runner/work/turnfleet/turnfleet'
+2026-10-15T14:52:16.4502842Z # The image is set on the cluster rather than in config/manager, so running
+2026-10-15T14:52:16.4523511Z # the target never leaves the working tree dirty.
+2026-10-15T14:52:16.4543858Z go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+2026-10-15T14:52:17.0955579Z namespace/turnfleet-system created
+2026-10-15T14:52:17.1319269Z customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+2026-10-15T14:52:17.1372340Z serviceaccount/turnfleet-controller-manager created
+2026-10-15T14:52:17.1431742Z role.rbac.authorization.k8s.io/turnfleet-leader-election-role created
+2026-10-15T14:52:17.1483081Z clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role created
+2026-10-15T14:52:17.1523783Z clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role created
+2026-10-15T14:52:17.1564756Z clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader created
+2026-10-15T14:52:17.1597856Z clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role created
+2026-10-15T14:52:17.1641669Z clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role created
+2026-10-15T14:52:17.1677988Z clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role created
+2026-10-15T14:52:17.1729484Z rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding created
+2026-10-15T14:52:17.1769719Z clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding created
+2026-10-15T14:52:17.1804858Z clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding created
+2026-10-15T14:52:17.1930211Z service/turnfleet-controller-manager-metrics-service created
+2026-10-15T14:52:17.2104369Z deployment.apps/turnfleet-controller-manager created
+2026-10-15T14:52:17.2153785Z kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+2026-10-15T14:52:17.3613283Z deployment.apps/turnfleet-controller-manager image updated
+2026-10-15T14:52:17.3653505Z # The tag is constant (dev), so a freshly loaded image needs a new pod:
+2026-10-15T14:52:17.3688779Z # without this, a running pod keeps the image it started with and the
+2026-10-15T14:52:17.3732544Z # cluster silently tests the previous build.
+2026-10-15T14:52:17.3770549Z kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+2026-10-15T14:52:17.4964178Z deployment.apps/turnfleet-controller-manager restarted
+2026-10-15T14:52:17.5001435Z make await-rollout
+2026-10-15T14:52:17.5049292Z make[2]: Entering directory '/home/runner/work/turnfleet/turnfleet'
+2026-10-15T14:52:17.7290620Z Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+2026-10-15T14:52:18.6809158Z Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+2026-10-15T14:52:28.7323017Z Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+2026-10-15T14:52:28.7795725Z Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+2026-10-15T14:52:28.8099415Z deployment "turnfleet-controller-manager" successfully rolled out
+2026-10-15T14:52:28.8150374Z make[2]: Leaving directory '/home/runner/work/turnfleet/turnfleet'
+2026-10-15T14:52:28.8152571Z make[1]: Leaving directory '/home/runner/work/turnfleet/turnfleet'
+2026-10-15T14:52:28.8156512Z KUBE_CONTEXT=kind-turnfleet KIND_CLUSTER=turnfleet COTURN_IMAGE="coturn/coturn:4.18.0-r0" \
+2026-10-15T14:52:28.8158163Z 	PROBE_BIN="/home/runner/work/turnfleet/turnfleet/bin/turnfleet-probe" PROBE_IMG="ghcr.io/hazmi35/turnfleet-probe:dev" \
+2026-10-15T14:52:28.8159725Z 	go test -tags=e2e -count=1 -timeout 30m ./test/e2e/
+2026-10-15T14:54:00.0190682Z ok  	github.com/Hazmi35/turnfleet/test/e2e	73.171s
+2026-10-15T14:54:00.1971506Z ##[group]Run make test-e2e-chart REUSE_IMAGES=1
+2026-10-15T14:54:00.1971893Z [36;1mmake test-e2e-chart REUSE_IMAGES=1[0m
+2026-10-15T14:54:00.2077862Z shell: /usr/bin/bash -e {0}
+2026-10-15T14:54:00.2078128Z env:
+2026-10-15T14:54:00.2078328Z   GO_VERSION: 1.27.2
+2026-10-15T14:54:00.2078563Z   KIND_VERSION: v0.33.0
+2026-10-15T14:54:00.2079002Z   KIND_LINUX_AMD64_SHA256: aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
+2026-10-15T14:54:00.2079480Z   GOTOOLCHAIN: local
+2026-10-15T14:54:00.2079705Z ##[endgroup]
+2026-10-15T14:54:00.2586372Z kind cluster turnfleet already exists
+2026-10-15T14:54:00.2589467Z go tool controller-gen object:headerFile=hack/boilerplate.go.txt paths="./..."
+2026-10-15T14:54:01.6436878Z CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X github.com/Hazmi35/turnfleet/internal/version.version=8f07154 -X github.com/Hazmi35/turnfleet/internal/version.commit=8f07154 -X github.com/Hazmi35/turnfleet/internal/version.date=2026-10-15T14:54:01Z" -o bin/turnfleet-probe ./cmd/turnfleet-probe
+2026-10-15T14:54:02.7105599Z REUSE_IMAGES=1: using the images test-e2e already built and loaded
+2026-10-15T14:54:02.7106902Z make undeploy KUSTOMIZE_OVERLAY=config/e2e
+2026-10-15T14:54:02.7137439Z make[1]: Entering directory '/home/runner/work/turnfleet/turnfleet'
+2026-10-15T14:54:02.7203276Z # Bounded: a pool deleted while the controller was down keeps its drain
+2026-10-15T14:54:02.7223302Z # finalizer, and `kubectl delete` waits on it — a wedged object must end the
+2026-10-15T14:54:02.7243908Z # command, not hold the cluster lock for tens of minutes.
+2026-10-15T14:54:02.7264085Z go tool kustomize build config/e2e | timeout 60 kubectl --context kind-turnfleet delete --ignore-not-found -f -
+2026-10-15T14:54:02.9296805Z namespace "turnfleet-system" deleted
+2026-10-15T14:54:02.9678693Z customresourcedefinition.apiextensions.k8s.io "turnpools.turnfleet.hzmi.dev" deleted
+2026-10-15T14:54:02.9721984Z serviceaccount "turnfleet-controller-manager" deleted from turnfleet-system namespace
+2026-10-15T14:54:02.9789082Z role.rbac.authorization.k8s.io "turnfleet-leader-election-role" deleted from turnfleet-system namespace
+2026-10-15T14:54:02.9858656Z clusterrole.rbac.authorization.k8s.io "turnfleet-manager-role" deleted
+2026-10-15T14:54:02.9906871Z clusterrole.rbac.authorization.k8s.io "turnfleet-metrics-auth-role" deleted
+2026-10-15T14:54:02.9978096Z clusterrole.rbac.authorization.k8s.io "turnfleet-metrics-reader" deleted
+2026-10-15T14:54:03.0017624Z clusterrole.rbac.authorization.k8s.io "turnfleet-turnpool-admin-role" deleted
+2026-10-15T14:54:03.0069793Z clusterrole.rbac.authorization.k8s.io "turnfleet-turnpool-editor-role" deleted
+2026-10-15T14:54:03.0094039Z clusterrole.rbac.authorization.k8s.io "turnfleet-turnpool-viewer-role" deleted
+2026-10-15T14:54:03.0126835Z rolebinding.rbac.authorization.k8s.io "turnfleet-leader-election-rolebinding" deleted from turnfleet-system namespace
+2026-10-15T14:54:03.0158134Z clusterrolebinding.rbac.authorization.k8s.io "turnfleet-manager-rolebinding" deleted
+2026-10-15T14:54:03.0187834Z clusterrolebinding.rbac.authorization.k8s.io "turnfleet-metrics-auth-rolebinding" deleted
+2026-10-15T14:54:03.0301067Z service "turnfleet-controller-manager-metrics-service" deleted from turnfleet-system namespace
+2026-10-15T14:54:03.0424162Z deployment.apps "turnfleet-controller-manager" deleted from turnfleet-system namespace
+2026-10-15T14:54:08.8845398Z make[1]: Leaving directory '/home/runner/work/turnfleet/turnfleet'
+2026-10-15T14:54:08.8848043Z make uninstall
+2026-10-15T14:54:08.8880255Z make[1]: Entering directory '/home/runner/work/turnfleet/turnfleet'
+2026-10-15T14:54:08.8951218Z go tool kustomize build config/crd | kubectl --context kind-turnfleet delete --ignore-not-found -f -
+2026-10-15T14:54:09.0883929Z make[1]: Leaving directory '/home/runner/work/turnfleet/turnfleet'
+2026-10-15T14:54:09.0885219Z make helm-install
+2026-10-15T14:54:09.0919050Z make[1]: Entering directory '/home/runner/work/turnfleet/turnfleet'
+2026-10-15T14:54:09.2567024Z helm-v4.3.0-linux-amd64.tar.gz: OK
+2026-10-15T14:54:09.7602464Z v4.3.0+gbec5b06
+2026-10-15T14:54:09.7633350Z # The image comes from the Makefile, the way `make deploy` sets it on the
+2026-10-15T14:54:09.7654294Z # cluster: the chart's own default is the release repository and the chart
+2026-10-15T14:54:09.7674834Z # version, which is not what a local kind cluster has loaded.
+2026-10-15T14:54:09.7696091Z /home/runner/work/turnfleet/turnfleet/bin/helm upgrade --install turnfleet charts/turnfleet \
+2026-10-15T14:54:09.7697413Z 	--kube-context kind-turnfleet \
+2026-10-15T14:54:09.7698088Z 	--namespace turnfleet-system --create-namespace \
+2026-10-15T14:54:09.7698996Z 	--set image.repository=ghcr.io/hazmi35/turnfleet-controller --set image.tag=dev \
+2026-10-15T14:54:09.7699891Z 	
+2026-10-15T14:54:09.8108137Z Release "turnfleet" does not exist. Installing it now.
+2026-10-15T14:54:10.1246654Z NAME: turnfleet
+2026-10-15T14:54:10.1257664Z LAST DEPLOYED: Thu Oct 15 14:54:09 2026
+2026-10-15T14:54:10.1258298Z NAMESPACE: turnfleet-system
+2026-10-15T14:54:10.1258810Z STATUS: deployed
+2026-10-15T14:54:10.1259168Z REVISION: 1
+2026-10-15T14:54:10.1259602Z DESCRIPTION: Install complete
+2026-10-15T14:54:10.1260041Z TEST SUITE: None
+2026-10-15T14:54:10.1282908Z # Same reason as `make deploy`: the tag is constant, so a freshly loaded
+2026-10-15T14:54:10.1328227Z # image needs a new pod.
+2026-10-15T14:54:10.1358172Z kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+2026-10-15T14:54:10.2465247Z deployment.apps/turnfleet-controller-manager restarted
+2026-10-15T14:54:10.2520983Z make await-rollout
+2026-10-15T14:54:10.2578955Z make[2]: Entering directory '/home/runner/work/turnfleet/turnfleet'
+2026-10-15T14:54:10.3838700Z Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+2026-10-15T14:54:20.8915858Z Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+2026-10-15T14:54:20.9357566Z Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+2026-10-15T14:54:20.9670955Z deployment "turnfleet-controller-manager" successfully rolled out
+2026-10-15T14:54:20.9723985Z make[2]: Leaving directory '/home/runner/work/turnfleet/turnfleet'
+2026-10-15T14:54:20.9725604Z make[1]: Leaving directory '/home/runner/work/turnfleet/turnfleet'
+2026-10-15T14:54:20.9730154Z KUBE_CONTEXT=kind-turnfleet KIND_CLUSTER=turnfleet COTURN_IMAGE="coturn/coturn:4.18.0-r0" \
+2026-10-15T14:54:20.9731538Z 	PROBE_BIN="/home/runner/work/turnfleet/turnfleet/bin/turnfleet-probe" \
+2026-10-15T14:54:20.9733127Z 	go test -tags=e2e -count=1 -timeout 15m -run TestProbeCLIFromTheHost ./test/e2e/
+2026-10-15T14:54:46.0436506Z ok  	github.com/Hazmi35/turnfleet/test/e2e	23.570s
+2026-10-15T14:54:46.0899202Z Post job cleanup.
+2026-10-15T14:54:46.3492008Z [command]/opt/hostedtoolcache/go/1.27.2/x64/bin/go env GOCACHE
+2026-10-15T14:54:46.3550834Z [command]/opt/hostedtoolcache/go/1.27.2/x64/bin/go env GOMODCACHE
+2026-10-15T14:54:46.3594745Z /home/runner/.cache/go-build
+2026-10-15T14:54:46.3618084Z /home/runner/go/pkg/mod
+2026-10-15T14:54:46.3635802Z Cache hit occurred on the primary key setup-go-Linux-x64-ubuntu24-go-1.27.2-b928772b3ed6736c9b4923dfa067fe49e421716b9d0f3ab71728557d65b67e5f, not saving cache.
+2026-10-15T14:54:46.3912228Z Post job cleanup.
+2026-10-15T14:54:46.4809565Z [command]/usr/bin/git version
+2026-10-15T14:54:46.4858653Z git version 2.55.0
+2026-10-15T14:54:46.4899610Z Temporarily overriding HOME='/home/runner/work/_temp/d2cb134e-b802-4cbe-94bd-05be79f8cc8d' before making global git config changes
+2026-10-15T14:54:46.4901104Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-15T14:54:46.4907453Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/turnfleet/turnfleet
+2026-10-15T14:54:46.4940062Z Removing SSH command configuration
+2026-10-15T14:54:46.4947035Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-15T14:54:46.4985641Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-15T14:54:46.5262942Z Removing HTTP extra header
+2026-10-15T14:54:46.5263988Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-15T14:54:46.5304180Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-15T14:54:46.5564669Z Removing includeIf entries pointing to credentials config files
+2026-10-15T14:54:46.5575523Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-15T14:54:46.5646100Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-15T14:54:46.6064641Z Cleaning up orphan processes

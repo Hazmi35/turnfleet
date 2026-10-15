@@ -131,3 +131,38 @@ Per-spec report: `baseline/ginkgo-webhook-before.json`.
 
 On this 2-vCPU box the two `docker build` invocations alone account for most of
 the 484 s; on CI they are 154 s of the 386 s.
+
+---
+
+## Session 2
+
+### CI: five runs of the e2e workflow on PR #62
+
+The branch was pushed and a draft PR opened so the wall times could be *measured*
+rather than derived. Five runs: the first push, then four `gh run rerun`s of the
+same run, one at a time (the workflow's concurrency group cancels an in-progress
+run on the same ref).
+
+| | before | after, five runs | median |
+|---|---|---|---|
+| e2e job wall | 10.12 min (run 38719831132); 12.15 min median of the 36 successful runs before | 7.65, 6.88, 7.55, 7.70, 6.67 min | **7.55 min** |
+| `make test-e2e` step | 386s | 373, 316, 366, 374, 310s | 366s |
+| `make test-e2e-chart` step | 174s | 45, 48, 47, 46, 45s | **46s** |
+| probe image build | 53s | 5, 5, 5, 6, 6s | **5s** |
+| controller image build | 101s | 122, 92, 119, 121, 94s | 119s |
+| host binary build | 62s (`make build`, both binaries) | 78, 48, 77, 76, 49s (`probe-bin`, probe only) | 76s |
+| `go test` in the suite step (package) | 67.7s | 67.8, 64.3, 66.0, 73.2, 67.9s | 67.8s |
+
+Raw: `ci-pr62-attempt{1..5}-steps.tsv` are GitHub's own step timings;
+`ci-pr62-attempt{1..5}.log` are the job logs the per-phase table is parsed from
+(the same markers `baseline/README.md` uses for run 38719831132 above).
+
+### Local, session 2
+
+| Measurement | Where |
+|---|---|
+| the requeue and idempotency specs, eight breaks each restored | `session2-requeue-breaks.txt` |
+| both e2e orders, three cycles each | `session2-e2e-orders.log` — 12/12 stages exit 0 |
+| rollout-flake hunt, 180 cycles (bare, after an image import, under CPU saturation, plus 40 whose intended node limits never applied) | `session2-flake-hunt.log`, `session2-flake-hunt-constrained.log` — 0 failures |
+| rollout-flake hunt, 20 cycles with the kind nodes at 0.4 CPU / 1.5 GiB, limits verified in force | `session2-flake-hunt-v6.log` — 0 failures |
+| the chart step's single spec with and without `REUSE_IMAGES` | `session2-chart-spec-timing.log` — 20.56/22.55/23.55s vs 19.55/23.56/20.56s, no difference |

@@ -1,0 +1,1347 @@
+### node container settings before
+/turnfleet-control-plane NanoCpus=0 Memory=0
+/turnfleet-worker NanoCpus=0 Memory=0
+/turnfleet-worker2 NanoCpus=0 Memory=0
+/turnfleet-worker3 NanoCpus=0 Memory=0
+### V4: 20 cycles with cpus=0.5 memory=2g
+### limits applied: cpus=0.5 memory=2g
+/turnfleet-control-plane NanoCpus=0 Memory=0
+/turnfleet-worker NanoCpus=0 Memory=0
+/turnfleet-worker2 NanoCpus=0 Memory=0
+/turnfleet-worker3 NanoCpus=0 Memory=0
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V4 cycle=1 ok seconds=13.3
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V4 cycle=2 ok seconds=13.6
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V4 cycle=3 ok seconds=13.1
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V4 cycle=4 ok seconds=12.7
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V4 cycle=5 ok seconds=12.5
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V4 cycle=6 ok seconds=13.2
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V4 cycle=7 ok seconds=13.3
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V4 cycle=8 ok seconds=13.5
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V4 cycle=9 ok seconds=13.2
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V4 cycle=10 ok seconds=13.0
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V4 cycle=11 ok seconds=13.5
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V4 cycle=12 ok seconds=13.2
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V4 cycle=13 ok seconds=12.6
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V4 cycle=14 ok seconds=13.2
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 0 out of 1 new replicas have been updated...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V4 cycle=15 ok seconds=12.7
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V4 cycle=16 ok seconds=12.5
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V4 cycle=17 ok seconds=13.2
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V4 cycle=18 ok seconds=13.2
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 0 out of 1 new replicas have been updated...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V4 cycle=19 ok seconds=12.6
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V4 cycle=20 ok seconds=13.2
+### V5: 20 cycles with cpus=0.3 memory=1.5g
+### limits applied: cpus=0.3 memory=1.5g
+/turnfleet-control-plane NanoCpus=0 Memory=0
+/turnfleet-worker NanoCpus=0 Memory=0
+/turnfleet-worker2 NanoCpus=0 Memory=0
+/turnfleet-worker3 NanoCpus=0 Memory=0
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V5 cycle=1 ok seconds=13.3
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 0 out of 1 new replicas have been updated...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V5 cycle=2 ok seconds=13.2
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V5 cycle=3 ok seconds=12.6
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V5 cycle=4 ok seconds=13.1
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V5 cycle=5 ok seconds=12.7
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V5 cycle=6 ok seconds=13.2
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V5 cycle=7 ok seconds=13.5
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V5 cycle=8 ok seconds=13.2
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V5 cycle=9 ok seconds=12.6
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V5 cycle=10 ok seconds=12.7
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V5 cycle=11 ok seconds=13.0
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V5 cycle=12 ok seconds=13.2
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V5 cycle=13 ok seconds=13.6
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment spec update to be observed...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 0 out of 1 new replicas have been updated...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V5 cycle=14 ok seconds=14.2
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V5 cycle=15 ok seconds=14.5
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V5 cycle=16 ok seconds=13.2
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 0 out of 1 new replicas have been updated...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V5 cycle=17 ok seconds=12.6
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V5 cycle=18 ok seconds=13.2
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V5 cycle=19 ok seconds=13.6
+# The image is set on the cluster rather than in config/manager, so running
+# the target never leaves the working tree dirty.
+go tool kustomize build config/e2e | kubectl --context kind-turnfleet apply -f -
+namespace/turnfleet-system unchanged
+customresourcedefinition.apiextensions.k8s.io/turnpools.turnfleet.hzmi.dev unchanged
+serviceaccount/turnfleet-controller-manager unchanged
+role.rbac.authorization.k8s.io/turnfleet-leader-election-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-manager-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-auth-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-metrics-reader unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-admin-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-editor-role unchanged
+clusterrole.rbac.authorization.k8s.io/turnfleet-turnpool-viewer-role unchanged
+rolebinding.rbac.authorization.k8s.io/turnfleet-leader-election-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-manager-rolebinding unchanged
+clusterrolebinding.rbac.authorization.k8s.io/turnfleet-metrics-auth-rolebinding unchanged
+service/turnfleet-controller-manager-metrics-service unchanged
+deployment.apps/turnfleet-controller-manager configured
+kubectl --context kind-turnfleet -n turnfleet-system set image deployment/turnfleet-controller-manager manager=ghcr.io/hazmi35/turnfleet-controller:dev
+deployment.apps/turnfleet-controller-manager image updated
+# The tag is constant (dev), so a freshly loaded image needs a new pod:
+# without this, a running pod keeps the image it started with and the
+# cluster silently tests the previous build.
+kubectl --context kind-turnfleet -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
+deployment.apps/turnfleet-controller-manager restarted
+make await-rollout
+make[1]: Entering directory '/home/hzmi/turnfleet'
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 0 out of 1 new replicas have been updated...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+Waiting for deployment "turnfleet-controller-manager" rollout to finish: 1 old replicas are pending termination...
+deployment "turnfleet-controller-manager" successfully rolled out
+make[1]: Leaving directory '/home/hzmi/turnfleet'
+V5 cycle=20 ok seconds=13.2
+### limits cleared
+### summary
+ALLDONE

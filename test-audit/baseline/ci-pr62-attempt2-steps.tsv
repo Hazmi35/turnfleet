@@ -1,0 +1,9 @@
+Set up job	2026-10-15T14:31:58Z	2026-10-15T14:31:59Z	success
+Check out the repository	2026-10-15T14:31:59Z	2026-10-15T14:32:00Z	success
+Set up Go	2026-10-15T14:32:00Z	2026-10-15T14:32:46Z	success
+Install kind	2026-10-15T14:32:46Z	2026-10-15T14:32:47Z	success
+Run the end-to-end suite	2026-10-15T14:32:47Z	2026-10-15T14:38:03Z	success
+Install the controller from the chart and probe a relay	2026-10-15T14:38:03Z	2026-10-15T14:38:51Z	success
+Post Set up Go	2026-10-15T14:38:51Z	2026-10-15T14:38:51Z	success
+Post Check out the repository	2026-10-15T14:38:51Z	2026-10-15T14:38:51Z	success
+Complete job	2026-10-15T14:38:51Z	2026-10-15T14:38:51Z	success
