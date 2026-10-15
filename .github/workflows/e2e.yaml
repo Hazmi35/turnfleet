@@ -81,4 +81,8 @@ jobs:
       # what config/ renders; this proves the install works on a real cluster.
       - name: Install the controller from the chart and probe a relay
         timeout-minutes: 30
-        run: make test-e2e-chart
+        # REUSE_IMAGES=1: the step above built these images from the same tree
+        # and loaded them into this cluster. Rebuilding them cost 137s of this
+        # step (measured in run 38719831132) for two images whose content is
+        # identical, and reloading them cost another 7s.
+        run: make test-e2e-chart REUSE_IMAGES=1
