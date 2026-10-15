@@ -174,6 +174,19 @@ The container's `/proc/net/tcp6` shows the listeners, and coturn's own log lines
 proves the deny list bites: coturn answers `403` to the permission, because
 `::1/128` is in the default IPv6 deny list.
 
+## Rejected approaches
+
+**One address spread over several nodes.** Cloud routing matches destination
+prefixes only, and a port-range front end is a load balancer — GCP: a forwarding
+rule per range, 50 ports per protocol on a shared internal VIP; AWS: 50 listeners
+per NLB, not adjustable; AWS Global Accelerator custom routing: no health checks
+or failover, immutable port map — so ADR 3 and ADR 4 exclude it and the
+peer-facing address stays off the node. A floating address or an anycast prefix
+is one address per slice, which is `ExternalIPPool` again; and per-flow ECMP
+hashes the peer's source port, so a NAT rebind moves one peer's flow onto a node
+that holds no allocation for it. See ADR 19. `PartitionedIP` remains the one way
+to put several relays on one address, and it keeps them on one node.
+
 ## Running out
 
 Exhaustion is visible in three places:
