@@ -71,7 +71,7 @@ func (r *TURNPoolReconciler) observeVantage(ctx context.Context, pool *turnfleet
 	case apierrors.IsNotFound(err):
 		return vantageObservation{}, nil
 	case err != nil:
-		return vantageObservation{}, fmt.Errorf("reading configmap %s/%s: %w", pool.Namespace, name, err)
+		return vantageObservation{}, fmt.Errorf("reading ConfigMap %s/%s: %w", pool.Namespace, name, err)
 	}
 
 	payload, err := vantage.Parse(configMap, configMap.Data, pool.Name)
@@ -97,7 +97,7 @@ func (r *TURNPoolReconciler) deleteVantageResult(ctx context.Context, pool *turn
 	name := vantage.ConfigMapName(pool.Name)
 	configMap := &corev1.ConfigMap{ObjectMeta: metav1.ObjectMeta{Namespace: pool.Namespace, Name: name}}
 	if err := r.Delete(ctx, configMap); err != nil && !apierrors.IsNotFound(err) {
-		return fmt.Errorf("deleting configmap %s/%s: %w", pool.Namespace, name, err)
+		return fmt.Errorf("deleting ConfigMap %s/%s: %w", pool.Namespace, name, err)
 	}
 	return nil
 }

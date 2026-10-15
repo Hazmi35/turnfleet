@@ -25,8 +25,8 @@ import (
 // Defaults applied by the defaulting webhook. They are constants rather than
 // literals so the controller, the renderer and the tests agree on one value.
 const (
-	// DefaultReplicas is not a thing: replicas is required, because the number
-	// of relays is the capacity decision.
+	// There is no DefaultReplicas: replicas is required, because the number of
+	// relays is the capacity decision.
 
 	// DefaultDrainTimeout bounds how long a draining relay keeps its
 	// allocations before its pod is deleted anyway.

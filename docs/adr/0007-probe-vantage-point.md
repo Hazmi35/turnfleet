@@ -11,7 +11,7 @@ readiness probe that only checks "is the TURN port open" does not catch it,
 because a port can be open and still be useless to the client that needs it.
 
 The strongest check available is a real `TURN Allocate` against the relay's
-listener with credentials derived from the shared secret, asserting that the
+listener, with credentials derived from the shared secret. It asserts that the
 returned `XOR-RELAYED-ADDRESS` matches the `(address, port range)` the relay is
 supposed to own. That catches wrong address, wrong range, bad secret, missing
 realm, and saturation (error 508).
@@ -35,8 +35,9 @@ Two vantage points, one implementation:
   `turnfleet_probe_success` / `turnfleet_probe_duration_seconds`.
 * `turnfleet-probe` exposes the same code as a CLI
   (`--uri`, `--secret-file`, `--expect-address`, `--expect-port-range`, JSON
-  output) so the authoritative check can be run from outside the cluster, from
-  a CI job or from a laptop, against the public address of a relay.
+  output). That makes the authoritative check runnable from outside the
+  cluster, from a CI job or from a laptop, against the public address of a
+  relay.
 
 The probe releases its allocation at the end of every check (`Refresh` with
 lifetime 0). Leaving it behind would consume exactly the capacity the probe is

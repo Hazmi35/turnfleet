@@ -115,13 +115,13 @@ func (r *TURNPoolReconciler) deleteSupersededConfigMap(ctx context.Context, pool
 	case apierrors.IsNotFound(err):
 		return nil
 	case err != nil:
-		return fmt.Errorf("reading the superseded configmap %s/%s: %w", pool.Namespace, name, err)
+		return fmt.Errorf("reading the superseded ConfigMap %s/%s: %w", pool.Namespace, name, err)
 	case !metav1.IsControlledBy(configMap, pool):
 		return nil
 	}
 
 	if err := r.Delete(ctx, configMap); err != nil && !apierrors.IsNotFound(err) {
-		return fmt.Errorf("deleting the superseded configmap %s/%s: %w", pool.Namespace, name, err)
+		return fmt.Errorf("deleting the superseded ConfigMap %s/%s: %w", pool.Namespace, name, err)
 	}
 	logf.FromContext(ctx).Info("deleted the relay configuration ConfigMap an earlier release wrote",
 		"pool", pool.Name, "namespace", pool.Namespace, "configmap", name)
@@ -528,7 +528,7 @@ func tlsSecretName(listeners []turnfleetv1alpha1.ListenerSpec) string {
 	return ""
 }
 
-// pullPolicy is IfNotPresent for every relay image. The validating webhook
+// relayImagePullPolicy is IfNotPresent for every relay image. The validating webhook
 // requires a digest, so the reference is immutable and a node that already has
 // the image never needs to resolve it again; a cluster that preloads the image
 // (kind, or an air-gapped registry mirror) therefore works without a pull.

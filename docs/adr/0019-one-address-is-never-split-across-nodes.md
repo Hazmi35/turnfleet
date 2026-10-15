@@ -9,9 +9,9 @@
 asked whether the same range can span nodes. Delivering `(address, port)` needs
 a layer that reads the destination port, and only two exist: the node the
 address is bound on (ADR 1), and a load balancer in the peer's data path, which
-ADR 3 and ADR 4 exclude. Cloud routing matches destination prefixes only; a
+ADR 3 and ADR 4 exclude. Cloud routing matches destination prefixes only. A
 shared cloud IP is bounded far below a relay range (GCP: 50 ports per protocol
-on an internal VIP; AWS: 50 listeners per NLB, not adjustable); and AWS Global
+on an internal VIP; AWS: 50 listeners per NLB, not adjustable). AWS Global
 Accelerator custom routing, the one product keyed on the destination port alone,
 does no health checks and no failover, has an immutable port mapping, is
 IPv4-only, and fronts the address itself. The remaining options are one address
@@ -65,8 +65,8 @@ address (#15). The alternatives are recorded as a rejected approach in
   <https://docs.aws.amazon.com/global-accelerator/latest/dg/about-custom-routing-guidelines.html>).
 * Anycast cannot express a port, and stateful transports "fail
   probabilistically, but possibly catastrophically" over it (RFC 7094), while
-  RFC 4786 §4.1 requires the routing decision to outlast the transaction — a
-  TURN allocation being exactly that long-lived state
+  RFC 4786 §4.1 requires the routing decision to outlast the transaction. A
+  TURN allocation is exactly that long-lived state
   (<https://www.rfc-editor.org/rfc/rfc7094.txt>,
   <https://www.rfc-editor.org/rfc/rfc4786.txt>).
 * coturn needs the relayed port preserved: "NAT must forward ports directly

@@ -276,7 +276,7 @@ func dial(ctx context.Context, endpoint Endpoint) (net.PacketConn, error) {
 	dialer := &net.Dialer{Timeout: DefaultTimeout}
 	switch endpoint.Transport {
 	case TransportUDP:
-		// An unconnected socket: the TURN client addresses the server itself with
+		// An unconnected socket: the TURN client addresses the relay itself with
 		// WriteTo, and a connected socket would reject every write but the first.
 		conn, err := net.ListenPacket(udpNetwork(endpoint.Host), ":0")
 		if err != nil {

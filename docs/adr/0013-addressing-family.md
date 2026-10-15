@@ -13,8 +13,8 @@ decision bound the node's IPv4 address.
 
 The addressing modes decide how many relays a node runs and where their
 addresses come from (ADR 1), but they said nothing about the family of those
-addresses. The obvious extension — one process per node listening on both
-families — does not fit the model: a relay is one process owning one
+addresses. The obvious extension, one process per node listening on both
+families, does not fit the model. A relay is one process owning one
 `(address, port range)` identity, its rendered configuration binds one relay
 address, and coturn's `-X`/`-E` mapping is defined per family ("that ip will be
 reported as relay IP address of all allocations of its own address family", from
@@ -44,9 +44,10 @@ addresses: `IPv4` (the default), `IPv6`, or `DualStack`.
   relays cannot reach is rejected, because it would read as policy while denying
   nothing.
 * The default peer deny list follows the family. An IPv6 pool gets the IPv6
-  ranges — unspecified, loopback, link-local `fe80::/10`, unique local
-  `fc00::/7`, multicast, and `::ffff:0:0/96`, the whole IPv4-mapped space, which
-  covers the metadata address in its mapped form `::ffff:169.254.169.254`. A
+  ranges: unspecified, loopback, link-local `fe80::/10`, unique local
+  `fc00::/7`, multicast, and `::ffff:0:0/96`. That last range is the whole
+  IPv4-mapped space, which covers the metadata address in its mapped form
+  `::ffff:169.254.169.254`. A
   `DualStack` pool gets both lists. Both the defaulting webhook and the
   controller's own fallback for a spec that never passed admission pick the list
   from `family`, so an IPv6 or `DualStack` pool gets the ranges its relays can
@@ -68,8 +69,8 @@ the relays it planned before, with the same identities.
   metrics ports: coturn's prometheus exporter does not bind the relay's own
   address, it binds every address on the node ("prometheus exporter server will
   listen on [::]:9641", verified against the pinned image). Metrics ports are
-  therefore offset per node, while listener ports stay offset per address — two
-  relays on one address cannot both bind one listening port, two relays on
+  therefore offset per node, while listener ports stay offset per address: two
+  relays on one address cannot both bind one listening port, while two relays on
   different addresses of one node can.
 * Two relays of one node also mean the required pod anti-affinity has to be
   relaxed for `DualStack`, the way `PartitionedIP` already relaxes it. The rule

@@ -24,8 +24,8 @@ The state machine, applied by the controller and observable in
    `<pool>-turn-uris` ConfigMap, so the credential issuer stops handing out
    URIs for it. This happens before any pod change.
 3. The pod is labelled `turnfleet.hzmi.dev/draining=true` and annotated with
-   the time the drain started. Readiness off the relay is the controller's own
-   `status.readyRelays`, which excludes a draining relay; a pod whose pool has a
+   the time the drain started. The relay's readiness is the controller's own
+   `status.readyRelays`, which excludes a draining relay. A pod whose pool has a
    TCP listener also carries a TCP readiness probe, and the drain does not fail
    that by itself.
 4. The controller waits for the relay's allocation count (from coturn metrics,
@@ -35,18 +35,18 @@ The state machine, applied by the controller and observable in
 
 Deletion of the TURNPool object is guarded by the finalizer
 `turnfleet.hzmi.dev/drain`, which runs the same sequence for every relay in the
-pool before the finalizer is removed. Pods carry an ordered graceful shutdown
-so that the coturn process itself has the chance to send `Refresh`-style
-teardown rather than being SIGKILLed.
+pool before the finalizer is removed. Pods carry an ordered graceful shutdown,
+so the coturn process itself has the chance to send `Refresh`-style teardown
+rather than being SIGKILLed.
 
-Node loss is the exception the timeout exists for: when the node is gone the
-allocations are already dead, the relay can never reach zero, and the wait ends
-at `drainTimeout`. In that case the status records the relay as drained with a
-message saying the wait timed out, instead of reporting a healthy pool.
+Node loss is the exception the timeout exists for: when the node is gone, the
+allocations are already dead and the relay can never reach zero, so the wait
+ends at `drainTimeout`. In that case the status records the relay as drained
+with a message saying the wait timed out, instead of reporting a healthy pool.
 
-Rollouts are serialized: one draining relay per pool at a time, so a roll never
-removes more than one relay's worth of capacity from service, and the
-`turnURIs` list is never empty while at least one ready relay exists.
+Rollouts are serialized: one draining relay per pool at a time. A roll
+therefore never removes more than one relay's worth of capacity from service,
+and the `turnURIs` list is never empty while at least one ready relay exists.
 
 ## Consequences
 
@@ -57,5 +57,5 @@ removes more than one relay's worth of capacity from service, and the
   in the manifest.
 * The e2e suite proves the ordering: with an active allocation on the relay
   being removed, the relay disappears from `turnURIs` while its pod still
-  exists, and the pod is deleted only after the allocation is released (or
+  exists. The pod is deleted only after the allocation is released (or
   `drainTimeout` expires).

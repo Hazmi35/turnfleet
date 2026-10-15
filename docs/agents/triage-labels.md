@@ -1,6 +1,6 @@
 # Triage Labels
 
-The skills speak in terms of five canonical triage roles. This file maps those roles to the actual label strings used in this repo's issue tracker.
+The skills use five canonical triage roles. This file maps each role to the label string this repo's issue tracker uses.
 
 | Label in mattpocock/skills | Label in our tracker | Meaning |
 |---|---|---|
@@ -10,9 +10,7 @@ The skills speak in terms of five canonical triage roles. This file maps those r
 | `ready-for-human` | `ready-for-human` | Requires human implementation |
 | `wontfix` | `wontfix` | Will not be actioned |
 
-When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
-
-Edit the "Label in our tracker" column to match whatever vocabulary you actually use.
+When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the matching label string from this table.
 
 ## This repo
 
@@ -31,4 +29,4 @@ Work that is planned but not scheduled also carries the `roadmap` label and exac
 | `area:observability` | Metrics, probes and external vantage points. |
 | `area:docs` | Examples and documentation deliverables. |
 
-An issue without `roadmap` is still work in the tracker: the label marks what came out of the retired next-steps list, not the only work worth doing. Add a new `area:*` string only when a family of work has no home above, and record the row here in the same change.
+An issue without `roadmap` is still work in the tracker: the label marks what came out of the retired next-steps list, not the only work worth doing. Add a new `area:*` string only when no row above covers that family of work, and record the row here in the same change.

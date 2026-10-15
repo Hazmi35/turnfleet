@@ -18,7 +18,7 @@ kubectl --context kind-turnfleet -n <ns> get turnpool <pool> -o yaml
 
 Read `status.relays[]`: `ready`, `draining`, `relayAddress`, `portRange`,
 `portsInUse`/`portsTotal`, and `lastProbe.{succeeded,message}`. A relay that is
-`ready: false` with a probe message is a *data plane* problem; a relay that is
+`ready: false` with a probe message is a *data plane* problem. A relay that is
 missing from `status.relays` is a *planner* problem. `kubectl --context
 kind-turnfleet describe turnpool <pool>` shows the conditions:
 `Ready`, `ProbeSucceeded`, `CapacityPressure`, `AddressConflict`, `Degraded`.
@@ -33,8 +33,8 @@ kubectl --context kind-turnfleet -n <ns> get secret <pool>-relay-config \
 The Secret carries one key per relay, named after its pod. Check the listening
 address, `--relay-ip`/`--external-ip`, `--min-port`/`--max-port`, realm, and
 that `--static-auth-secret` matches the Secret the issuer uses. If the config
-looks right but the relay does not, the pod is probably not running on a
-labelled node.
+looks right but the relay is not running, the pod is probably not on a labelled
+relay node.
 
 ## 3. Relay process
 
@@ -59,8 +59,8 @@ bin/turnfleet-probe --uri "turn:<relayAddress>:<port>?transport=udp" \
   --expect-port-range <start>-<end> --json
 ```
 
-A failure from inside the cluster isolates configuration from reachability:
-what it cannot see is hairpin NAT and firewalls in front of the node, which is
+A failure from inside the cluster isolates configuration from reachability.
+What it cannot see is hairpin NAT and firewalls in front of the node, which is
 why `docs/capacity-model.md` says the external vantage point is the
 authoritative check. Run the same command from the host against the node
 address to test the external path.
@@ -70,7 +70,7 @@ address to test the external path.
 `turnfleet_allocation_failures_total{code="508"}` going up, with
 `CapacityPressure` true, means the relay's range is genuinely exhausted and the
 other relays are still serving. To reproduce it, allocate in a loop from a pion
-client until the relay answers 508 — the e2e saturation case does exactly this.
+client until the relay answers 508. The e2e saturation case does exactly this.
 
 Never widen a range or restart a relay to make a symptom disappear without
-naming the cause; that is how the capacity illusion comes back.
+naming the cause. That is how the capacity illusion comes back.

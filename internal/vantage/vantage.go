@@ -135,7 +135,7 @@ func Parse(object metav1.Object, data map[string]string, poolName string) (*Payl
 
 	payload := &Payload{}
 	if err := json.Unmarshal([]byte(raw), payload); err != nil {
-		return nil, fmt.Errorf("decoding the vantage result in configmap %s/%s: %w",
+		return nil, fmt.Errorf("decoding the vantage result in ConfigMap %s/%s: %w",
 			object.GetNamespace(), object.GetName(), err)
 	}
 	// A payload the controller cannot place in time is worse than no payload:
@@ -143,11 +143,11 @@ func Parse(object metav1.Object, data map[string]string, poolName string) (*Payl
 	// one, and a result that names another pool would be reported for the
 	// wrong one.
 	if payload.ObservedAt.IsZero() {
-		return nil, fmt.Errorf("the vantage result in configmap %s/%s has no observation time",
+		return nil, fmt.Errorf("the vantage result in ConfigMap %s/%s has no observation time",
 			object.GetNamespace(), object.GetName())
 	}
 	if payload.Pool != poolName {
-		return nil, fmt.Errorf("the vantage result in configmap %s/%s is about pool %q, want %q",
+		return nil, fmt.Errorf("the vantage result in ConfigMap %s/%s is about pool %q, want %q",
 			object.GetNamespace(), object.GetName(), payload.Pool, poolName)
 	}
 	return payload, nil

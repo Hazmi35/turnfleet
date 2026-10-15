@@ -321,7 +321,7 @@ func (r *TURNPoolReconciler) reconcileURIsConfigMap(ctx context.Context, pool *t
 		return controllerutil.SetControllerReference(pool, configMap, r.Scheme)
 	})
 	if err != nil && !apierrors.IsNotFound(err) {
-		return fmt.Errorf("reconciling configmap %s/%s: %w", pool.Namespace, URIsConfigMapName(pool), err)
+		return fmt.Errorf("reconciling ConfigMap %s/%s: %w", pool.Namespace, URIsConfigMapName(pool), err)
 	}
 	return nil
 }
@@ -412,7 +412,7 @@ func (r *TURNPoolReconciler) clearURIsConfigMap(ctx context.Context, pool *turnf
 		if apierrors.IsNotFound(err) {
 			return nil
 		}
-		return fmt.Errorf("reading configmap %s/%s: %w", pool.Namespace, URIsConfigMapName(pool), err)
+		return fmt.Errorf("reading ConfigMap %s/%s: %w", pool.Namespace, URIsConfigMapName(pool), err)
 	}
 	if configMap.Data["uris"] == "" {
 		return nil
@@ -420,7 +420,7 @@ func (r *TURNPoolReconciler) clearURIsConfigMap(ctx context.Context, pool *turnf
 	patch := client.MergeFrom(configMap.DeepCopy())
 	configMap.Data = map[string]string{"uris": ""}
 	if err := r.Patch(ctx, configMap, patch); err != nil {
-		return fmt.Errorf("clearing configmap %s/%s: %w", pool.Namespace, URIsConfigMapName(pool), err)
+		return fmt.Errorf("clearing ConfigMap %s/%s: %w", pool.Namespace, URIsConfigMapName(pool), err)
 	}
 	return nil
 }

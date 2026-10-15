@@ -8,10 +8,11 @@
 
 ## Context
 
-A relay needs: listener addresses and ports, relay address and port range,
-external address mapping, realm, the shared secret, denied/allowed peer ranges,
-and TLS material. There are two ways to get that into coturn: a long argument
-list on the container command, or a rendered configuration file.
+A relay needs several things: listener addresses and ports, relay address and
+port range, external address mapping, realm, the shared secret,
+denied/allowed peer ranges, and TLS material. There are two ways to get that
+into coturn: a long argument list on the container command, or a rendered
+configuration file.
 
 Arguments are not reviewable, cannot be diffed, and cannot carry a comment
 explaining why a flag is there. They also cannot be validated as a unit, which
@@ -57,7 +58,7 @@ read-only and coturn is started with `-c /etc/turnfleet/turnserver.conf`.
     the same way.** `--listening-ip`, `--relay-ip` and `--external-ip` take a
     bare IPv6 address (`-X` is split on `/`, so a public/private pair needs no
     brackets), and `--denied-peer-ip` takes IPv6 ranges. Running the pinned
-    image with a rendered v6 configuration starts it; a probe allocates on
+    image with a rendered v6 configuration starts it. A probe then allocates on
     `::1` and reads the v6 `XOR-RELAYED-ADDRESS`; `-X 2001:db8:ffff::77/fd00::11`
     is reported as the relayed address instead of the bound one; and a peer in a
     denied v6 range is refused with TURN error 403. The v6 values are rendered
@@ -66,13 +67,13 @@ read-only and coturn is started with `-c /etc/turnfleet/turnserver.conf`.
 * Authentication uses `--use-auth-secret` with `--static-auth-secret` only.
   `--lt-cred-mech` is not rendered: coturn warns when both are set, and the
   shared-secret mechanism is the one the credential issuer uses. This was
-  verified end to end against the pinned image — a probe using credentials
+  verified end to end against the pinned image. A probe using credentials
   derived from the shared secret allocates successfully, and the same probe with
   a wrong secret is refused with TURN error 401.
 * The rendered config is content-hashed into the pod's
   `turnfleet.hzmi.dev/config-hash` annotation. A change to the config or to the
-  referenced Secret changes the hash, and the relay rolls (one at a time, with
-  drain — ADR 6).
+  referenced Secret changes the hash, and the relay rolls, one at a time and
+  with drain (ADR 6).
 * Rendering is a pure function of `(pool spec, relay identity, node address)`
   and is covered by golden files, one per addressing mode, plus a fuzz target
   that asserts arbitrary specs never produce overlapping port ranges and never
@@ -80,19 +81,19 @@ read-only and coturn is started with `-c /etc/turnfleet/turnserver.conf`.
 
 `spec.dataplane.extraArgs` exists as an escape hatch. Its entries are appended
 verbatim, are part of the hash, and are **not** validated against the pinned
-image — a documented, deliberate hole for operators who need a flag the CRD
-does not model.
+image. That is a documented, deliberate hole for operators who need a flag the
+CRD does not model.
 
 ## Consequences
 
-* Configuration is reviewable (`kubectl get cm <pool>-relay-config -o yaml`,
+* Configuration is reviewable (`kubectl get secret <pool>-relay-config -o yaml`,
   one key per relay) and is the first thing `e2e-debug` looks at.
 * The "consider it a bug if you render a flag that does not exist" rule is
   mechanical, not a review habit.
-* Denied peer ranges are asserted by the golden render tests: the IPv4 golden
+* Denied peer ranges are asserted by the golden render tests. The IPv4 golden
   files carry the default list (RFC 1918, RFC 6598, loopback, link-local
   including `169.254.169.254`, benchmarking, multicast, reserved), and the IPv6
-  ones the family-specific list (loopback, link-local, unique local addresses,
-  multicast and the IPv4-mapped space `::ffff:0:0/96`, which is where the
-  metadata address lives for an IPv6 peer). That a relay denies its own
+  files carry the family-specific list (loopback, link-local, unique local
+  addresses, multicast and the IPv4-mapped space `::ffff:0:0/96`, which is where
+  the metadata address lives for an IPv6 peer). That a relay denies its own
   cluster's addresses is an e2e case, not a unit test.

@@ -64,7 +64,7 @@ spec:
             properties:
               addressing:
                 description: addressing selects how relays are placed and addressed.
-                  Immutable.
+                  It is immutable.
                 properties:
                   externalIPPool:
                     description: |-
@@ -75,7 +75,7 @@ spec:
                       addresses:
                         description: |-
                           addresses are the secondary addresses available to the pool, one relay per
-                          address. Each entry must be attached to the named node; the operator does
+                          address. Each entry must be attached to the named node. The operator does
                           not attach addresses. The webhook requires at least one address when the
                           pool's mode is ExternalIPPool.
                         items:
@@ -106,8 +106,8 @@ spec:
                     default: IPv4
                     description: |-
                       family is the address family the pool's relay addresses belong to. It is
-                      immutable for the same reason mode is: changing it changes the address,
-                      or half the addresses, of every relay and strands live allocations.
+                      immutable for the same reason mode is. Changing it changes the address,
+                      or half the addresses, of every relay, and strands live allocations.
 
                       IPv4 keeps the pool on the node's IPv4 addresses. IPv6 plans on IPv6
                       addresses only. DualStack plans the mode's relay set once per family,
@@ -137,7 +137,7 @@ spec:
                         default: 2
                         description: |-
                           relaysPerNode is how many relays share one node address. The pool's relay
-                          port range is split into that many disjoint slices; their sum is still one
+                          port range is split into that many disjoint slices. Their sum is still one
                           IP's port space, so this setting adds concurrency, not capacity.
                         format: int32
                         maximum: 64
@@ -147,28 +147,28 @@ spec:
                   podIP:
                     description: |-
                       podIP configures AddressingModePodIP and is forbidden for the other
-                      modes. For PodIP it is optional and binary: a non-empty attachmentRef
-                      names the attachment whose address the relay binds and advertises, and
-                      the zero value is the mode's other, only other spelling — the relay
-                      binds its own pod address on the cluster's default network. `podIP: {}`
-                      is neither and the schema refuses it.
+                      modes. For PodIP it is optional and binary. A non-empty attachmentRef
+                      names the attachment whose address the relay binds and advertises. The
+                      zero value is the mode's only other spelling: the relay binds its own
+                      pod address on the cluster's default network. `podIP: {}` is neither,
+                      and the schema refuses it.
                     properties:
                       attachmentRef:
                         description: |-
                           attachmentRef names the Multus NetworkAttachmentDefinition the relay pods
                           attach, in the pool's namespace ("name") or in another one
                           ("namespace/name"). The attachment is where the declared address reaches
-                          the pod. It is immutable, like mode and family: a different attachment
-                          changes which address a relay holds.
+                          the pod. It is immutable, like mode and family, because a different
+                          attachment changes which address a relay holds.
 
                           A non-empty attachmentRef is the statement that the relay uses an
-                          attachment, and the block's zero value is the other, only other
-                          spelling: no secondary interface, with the relay binding its own pod
-                          address on the cluster's default network, which must likewise be
-                          reserved and individually routable. The block refuses the empty value and
-                          the schema refuses `podIP: {}`, so neither is a spelling at all. The
-                          minimum length is also what lets a plain string, rather than a pointer,
-                          mean this: "" cannot be "set".
+                          attachment. The block's zero value is the mode's only other spelling: no
+                          secondary interface, with the relay binding its own pod address on the
+                          cluster's default network. That address must likewise be reserved and
+                          individually routable. The block refuses the empty value and the schema
+                          refuses `podIP: {}`, so neither is a spelling at all. The minimum length
+                          is also what lets a plain string, rather than a pointer, mean this: ""
+                          cannot be "set".
                         minLength: 1
                         type: string
                     type: object
@@ -229,7 +229,7 @@ spec:
                     description: |-
                       extraArgs are appended verbatim to the rendered coturn configuration.
                       They are hashed into the relay's config-hash like any other change, but
-                      they are not validated against the pinned image: use them for flags the
+                      they are not validated against the pinned image. Use them for flags the
                       API does not model.
                     items:
                       type: string
@@ -245,7 +245,7 @@ spec:
                   resources:
                     description: |-
                       resources is the resource request and limit for each relay container.
-                      Relay capacity is bounded by ports, not CPU, so this is about keeping the
+                      Relay capacity is bounded by ports, not CPU, so this setting keeps the
                       process responsive under allocation churn.
                     properties:
                       claims:
@@ -328,11 +328,11 @@ spec:
                     port:
                       description: |-
                         port is the base listener port. Relays that own their address serve
-                        exactly this port; in PartitionedIP mode, where several relays share one
+                        exactly this port. In PartitionedIP mode, where several relays share one
                         address, each relay serves port + its slot index, because a listening
                         socket can only be bound once per address. The ports a pool uses must not
-                        overlap spec.relayPortRange: a listener and an allocation cannot share a
-                        port.
+                        overlap spec.relayPortRange, because a listener and an allocation cannot
+                        share a port.
                       format: int32
                       maximum: 65535
                       minimum: 1
@@ -347,9 +347,9 @@ spec:
                     tlsSecretRef:
                       description: |-
                         tlsSecretRef is the Secret holding the listener's certificate, with the
-                        usual tls.crt and tls.key keys. Required for protocol tls, forbidden
-                        otherwise. Rotating it changes every relay's config hash and rolls the
-                        pool one relay at a time.
+                        usual tls.crt and tls.key keys. It is required for protocol tls and
+                        forbidden otherwise. Rotating it changes every relay's config hash and
+                        rolls the pool one relay at a time.
                       properties:
                         name:
                           default: ""
@@ -386,7 +386,7 @@ spec:
                     x-kubernetes-list-type: atomic
                   deniedCIDRs:
                     description: |-
-                      deniedCIDRs are rendered as coturn --denied-peer-ip entries. When empty
+                      deniedCIDRs are rendered as coturn --denied-peer-ip entries. When empty,
                       the webhook defaults them to RFC 1918, RFC 6598, loopback and link-local
                       (including 169.254.169.254), which also covers the cluster pod and service
                       CIDRs in the common case. The controller always appends the pod CIDRs it
@@ -468,8 +468,9 @@ spec:
               relayPortRange:
                 description: |-
                   relayPortRange is the pool's UDP port space. Each relay owns a disjoint
-                  slice of it; for HostNetwork and ExternalIPPool that slice is the whole
-                  range. Immutable: changing it invalidates live allocations.
+                  slice of it, and for HostNetwork and ExternalIPPool that slice is the
+                  whole range. It is immutable, because changing it invalidates live
+                  allocations.
                 properties:
                   end:
                     description: |-
@@ -492,11 +493,11 @@ spec:
               replicas:
                 description: |-
                   replicas is the desired number of relays. It is explicit rather than
-                  optional because the number of relays is the capacity decision: the value
+                  optional because the number of relays is the capacity decision. The value
                   is capped by the addresses the addressing mode makes available, and the
                   Ready condition says when it cannot be reached. The upper bound reflects
-                  where the rendered relay configurations stop fitting in one Secret;
-                  pools that need more relays than that need more than one pool.
+                  where the rendered relay configurations stop fitting in one Secret.
+                  Pools that need more relays than that need more than one pool.
                 format: int32
                 maximum: 256
                 minimum: 1
@@ -529,11 +530,16 @@ spec:
                     - PodAddressUnusable: a relay node declares a PodIP relay address that
                       cannot work at all (unspecified, loopback, link-local or multicast).
                       The address is dropped from the plan.
-                    - Degraded: fewer relays than desired, a relay is failing to converge,
-                      or a relay identity overlaps another pool's.
+                    - ReachableFromVantage: every listener URI the pool publishes answered a
+                      TURN Allocate where the vantage runner ran. False when one did not,
+                      unknown while no current result has been published.
+                    - Degraded: relays that could not be placed, a missing pod, an unusable
+                      auth Secret, a relay identity that overlaps another pool's, or a
+                      vantage point that cannot reach the relays.
 
-                  Ready and ProbeSucceeded are normal-true; CapacityPressure,
-                  AddressConflict, PodAddressUnusable and Degraded are abnormal-true.
+                  Ready, ProbeSucceeded and ReachableFromVantage are normal-true.
+                  CapacityPressure, AddressConflict, PodAddressUnusable and Degraded are
+                  abnormal-true.
                 items:
                   description: Condition contains details for one aspect of the current
                     state of this API Resource.
@@ -640,9 +646,9 @@ spec:
                       properties:
                         latencyMillis:
                           description: |-
-                            latencyMillis is the probe duration in milliseconds. Milliseconds rather
-                            than seconds so short probes stay readable, and an integer because the API
-                            has no floats.
+                            latencyMillis is the probe duration in milliseconds. The value is in
+                            milliseconds rather than seconds so short probes stay readable, and it is
+                            an integer because the API has no floats.
                           format: int64
                           type: integer
                         message:
@@ -662,8 +668,8 @@ spec:
                       type: object
                     name:
                       description: |-
-                        name is the relay identity: stable across restarts and controller
-                        failover, derived from the relay's address and port range.
+                        name is the relay identity. It is stable across restarts and controller
+                        failover, and it is derived from the relay's address and port range.
                       minLength: 1
                       type: string
                     nodeName:
@@ -698,20 +704,20 @@ spec:
                     portsInUse:
                       description: |-
                         portsInUse is the number of relay ports currently held by allocations. One
-                        allocation occupies one port, so this equals allocations; it is reported
+                        allocation occupies one port, so this equals allocations. It is reported
                         separately because consumers reason about ports.
                       format: int32
                       type: integer
                     portsTotal:
                       description: |-
-                        portsTotal is the number of ports this relay owns. Capacity is portsTotal;
-                        the ratio consumers compute is portsInUse/portsTotal.
+                        portsTotal is the number of ports this relay owns. Capacity is portsTotal.
+                        The ratio consumers compute is portsInUse/portsTotal.
                       format: int32
                       type: integer
                     ready:
                       description: |-
-                        ready reports whether the relay is serving: pod ready and last probe
-                        successful.
+                        ready reports whether the relay is serving. A serving relay has a ready
+                        pod and a successful last probe.
                       type: boolean
                     relayAddress:
                       description: relayAddress is the address the relay advertises

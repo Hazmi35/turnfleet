@@ -1,7 +1,7 @@
 # Architecture Decision Records
 
 One file per decision that was not obvious from the code. Format: context,
-decision, consequences. Numbered, never renumbered, never deleted; a superseded
+decision, consequences. Numbered, never renumbered, never deleted. A superseded
 decision gets a new ADR that says so.
 
 | ADR | Decision |

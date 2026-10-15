@@ -18,8 +18,8 @@ say so.
 ## What to check, in order
 
 1. **Naming.** The glossary in `AGENTS.md` is authoritative. A TURN process is
-   a "relay" — never "instance", "replica" or "server" in a field, JSON name,
-   doc comment, condition reason or metric. `TURNPool` is the resource;
+   a "relay", never "instance", "replica" or "server" in a field, JSON name,
+   doc comment, condition reason or metric. `TURNPool` is the resource.
    `Pool` alone is acceptable only in prose. Every label, annotation and
    finalizer uses the `turnfleet.hzmi.dev/` prefix. Metric names start with
    `turnfleet_`.
@@ -36,12 +36,14 @@ say so.
      truth, it does not belong in status.
    * `Conditions` is the first status field, uses `metav1.Condition`, and is
      written with `meta.SetStatusCondition`. Condition types are chosen from
-     the set in `docs/architecture.md` (`Ready`/`ProbeSucceeded` normal-true;
-     `CapacityPressure`/`AddressConflict`/`Degraded` abnormal-true).
+     the set in `docs/architecture.md` (`Ready`/`ProbeSucceeded`/
+     `ReachableFromVantage` normal-true;
+     `CapacityPressure`/`AddressConflict`/`PodAddressUnusable`/`Degraded`
+     abnormal-true).
    * Enums use `+kubebuilder:validation:Enum` and a Go type; every `switch`
      over the type is exhaustive.
 3. **Capacity honesty.** Does the field distinguish capacity from concurrency?
-   Anything that suggests more replicas behind one address add capacity is a
+   Any field that implies more replicas behind one address add capacity is a
    blocking finding: see `docs/adr/0001-addressing-modes.md`.
 4. **Mutability.** Would changing this field invalidate live allocations
    (relay address, port range, realm)? If so, the webhook must reject the

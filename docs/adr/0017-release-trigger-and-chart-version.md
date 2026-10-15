@@ -10,31 +10,32 @@ The pipeline used to start on a tag push: `.github/workflows/image.yaml` and
 pushing a tag built the images, signed them, attached an SBOM and provenance and
 wrote the release body. That made the release an *output* of a git act: the tag
 was the input, and the workflow created the release it then wrote the notes for.
-A tag pushed for any other reason — a marker, a rehearsal, a mistake — started
-the whole thing, and a tag whose build failed left a release behind anyway.
+A tag pushed for any other reason (a marker, a rehearsal, a mistake) started the
+whole thing, and a tag whose build failed left a release behind anyway.
 
 The chart had the same shape of problem in miniature. Its `version` was `0.1.0`
-and its `appVersion` was `dev`, the Makefile's `IMAGE_TAG` for a local build, so
-the chart carried two numbers with no relation to each other and no relation to
-the images it installs. A consumer reading a chart version learned nothing about
-which controller image it would run, and once the chart is published as an
-artifact of its own (#39) that question becomes the first one a consumer asks.
+and its `appVersion` was `dev`, the Makefile's `IMAGE_TAG` for a local build.
+The chart therefore carried two numbers with no relation to each other and no
+relation to the images it installs. A consumer reading a chart version learned
+nothing about which controller image it would run, and once the chart is
+published as an artifact of its own (#39) that question becomes the first one a
+consumer asks.
 
 What made a single number possible: `docker/metadata-action` publishes `0.1.0`
-beside the tag's `v0.1.0` for every release, so an image tag exists that is the
-release version exactly, without the `v` that a chart's `version` field does not
-accept.
+beside the tag's `v0.1.0` for every release. An image tag therefore exists that
+is the release version exactly, without the `v` that a chart's `version` field
+does not accept.
 
 ## Decision
 
 The GitHub release is the trigger. The chart's version is the application's.
 
-* `image.yaml` runs on `release: published` — beside the push to `main` that
-  builds the `main` tag for day-to-day work — and `release.yaml` runs on the same
+* `image.yaml` runs on `release: published`, beside the push to `main` that
+  builds the `main` tag for day-to-day work, and `release.yaml` runs on the same
   event. A tag push publishes nothing. The release event is the one act that
   publishes a version, and it is deliberate by construction.
-* The tag a release points at is still the ref both workflows work from
-  (`github.ref` is `refs/tags/<tag>` for a release event), so the identity the
+* The tag a release points at is still the ref both workflows work from, because
+  `github.ref` is `refs/tags/<tag>` for a release event. The identity the
   signatures carry (`…/release.yaml@refs/tags/<tag>`) and the digests the notes
   record are unchanged.
 * `release.yaml` keeps its wait for the images to appear in the registry. The
@@ -57,13 +58,13 @@ The GitHub release is the trigger. The chart's version is the application's.
 * A tag is inert. Publishing requires creating the release, which is a
   deliberate act with a version attached, and a failed image build now fails
   inside a release that already exists rather than producing one as a side
-  effect — visible, because the signing job waits for digests that never appear
-  and says so.
+  effect. That failure is visible, because the signing job waits for digests
+  that never appear and says so.
 * One number covers the chart, the images and the OCI artifact of #39. A chart
   install without flags pulls the image released beside it.
 * A local install of the chart no longer gets a locally loaded image by default:
   the chart's `appVersion` is a released tag, so a local install passes
-  `make helm-install` (or `--set image.tag=dev`). That is the intended trade —
+  `make helm-install` (or `--set image.tag=dev`). That is the intended trade:
   the chart's default belongs to a consumer, not to this repository's workflow.
 * The trigger itself is unverified until the first release runs it. Every static
   check passes (`actionlint`, and the checks GitHub starts on a pull request are

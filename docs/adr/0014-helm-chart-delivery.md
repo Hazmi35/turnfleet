@@ -15,18 +15,18 @@ has.
 A second path forks the definition of the same controller. The failure mode is
 quiet: the chart keeps installing yesterday's objects while `config/` moves on,
 and nothing in `make ci` notices, because the chart is not rendered by anything
-that also renders `config/`. The failure is worse than a cosmetic drift — a
-chart whose Deployment does not match `config/manager/manager.yaml` can install a
+that also renders `config/`. The failure is worse than a cosmetic drift. A chart
+whose Deployment does not match `config/manager/manager.yaml` can install a
 controller with the wrong args, the wrong webhook port or a missing RBAC rule,
 and it looks installed.
 
 The work also exposed a bug in the first path. `config/with-webhook` adds the
 webhook Service, the cert-manager Issuer and Certificates and the two webhook
 configurations outside `../default`, and kustomize's transformers only reach the
-resources of the kustomization that declares them, so those objects landed in a
-namespace called `system`: cert-manager created the serving Secret there and the
-manager in `turnfleet-system` mounted a Secret that did not exist. Writing the
-chart against that overlay is what surfaced it.
+resources of the kustomization that declares them. Those objects therefore
+landed in a namespace called `system`: cert-manager created the serving Secret
+there and the manager in `turnfleet-system` mounted a Secret that did not
+exist. Writing the chart against that overlay is what surfaced it.
 
 ## Decision
 
@@ -41,9 +41,9 @@ truth for what the controller is, and `make helm-drift` holds the chart to it.
   kustomize creates and Helm does not, top-level `metadata.labels`, the
   installer's keys in the label maps that remain (`managed-by`, `instance`,
   `version`, `helm.sh/*`), `meta.helm.sh/*` annotations, and empty maps and lists
-  where `config/` carries placeholders. The labels the cluster acts on — the
-  Deployment's selector, its pod template, the Services' selectors — are compared
-  in full.
+  where `config/` carries placeholders. The labels the cluster acts on are
+  compared in full: the Deployment's selector, its pod template, the Services'
+  selectors.
 * The chart owns the ServiceAccount, RBAC, the manager Deployment, the metrics
   Service, the CRDs and, behind `webhook.enabled`, the webhook Service, the
   cert-manager objects and the webhook configurations. It never templates relay

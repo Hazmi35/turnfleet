@@ -78,7 +78,7 @@ const (
 	// label, such as the relay-node marker.
 	labelValueTrue = "true"
 
-	// configVolumeName and tlsVolumeName are the pod volume names.
+	// configVolumeName, tlsVolumeName and tmpVolumeName are the pod volume names.
 	configVolumeName = "turnfleet-config"
 	tlsVolumeName    = "turnfleet-tls"
 	tmpVolumeName    = "turnfleet-tmp"

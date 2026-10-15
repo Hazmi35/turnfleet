@@ -5,19 +5,21 @@ description: Change the TURNPool API types safely - edit types and markers, rege
 
 # Changing the TURNPool API
 
-Work in this order; each step catches a different class of mistake.
+Work in this order. Each step catches a different class of mistake.
 
 1. **Edit `api/v1alpha1/turnpool_types.go`.**
-   - Every field is explicitly `+optional` or `+required`. No floats; ratios are
+   - Every field is explicitly `+optional` or `+required`. No floats. Ratios are
      `portsInUse`/`portsTotal` integers that consumers divide.
    - Lists get `+listType=map` + `+listMapKey=<key>` (or `+listType=atomic` with
-     a one-line reason), maps are avoided.
+     a one-line reason). Avoid maps.
    - Status fields are `+optional` and derived from the spec, never cached
      from it. Conditions stay the first status field, set with
      `meta.SetStatusCondition`.
    - New enum values: extend the Go type, the `+kubebuilder:validation:Enum`
      marker, and every `switch` over it (the `exhaustive` linter fails the
-     build otherwise). Add the docs line in the same edit.
+     build otherwise). Add the doc comment on the new value, and the
+     `AGENTS.md` glossary line for it when the value names a domain concept, in
+     the same edit.
 2. **Decide mutability.** Anything that would invalidate live allocations is
    immutable: relay port range, addressing mode and its per-node split, realm.
    Adding it to the immutability check in
@@ -36,7 +38,7 @@ Work in this order; each step catches a different class of mistake.
    - `internal/relay` golden files if the rendered coturn config changes; a new
      field that reaches the data plane always changes the goldens.
    - `test/e2e/` if the field is observable from outside.
-6. **Update docs**: `docs/api.md` is generated; `docs/architecture.md` and
+6. **Update docs**: `docs/api.md` is generated. `docs/architecture.md` and
    `docs/capacity-model.md` are not. A new addressing mode also needs an ADR
    (`add-addressing-mode`).
 7. **Prove it**: `make ci`. If the change touches the data plane,

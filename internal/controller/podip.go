@@ -207,7 +207,7 @@ func podIPNetworksAnnotation(poolNamespace string, attachment podIPAttachment, r
 	}
 	encoded, err := json.Marshal([]multusAttachment{element})
 	if err != nil {
-		return "", fmt.Errorf("encoding the multus attachment %s/%s: %w", attachment.namespace, attachment.name, err)
+		return "", fmt.Errorf("encoding the Multus attachment %s/%s: %w", attachment.namespace, attachment.name, err)
 	}
 	return string(encoded), nil
 }

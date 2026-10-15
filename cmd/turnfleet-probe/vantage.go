@@ -155,7 +155,7 @@ func clusterClient() (client.Client, error) {
 func publishedURIs(ctx context.Context, cluster client.Client, namespace, name string) ([]string, error) {
 	configMap := &corev1.ConfigMap{}
 	if err := cluster.Get(ctx, types.NamespacedName{Namespace: namespace, Name: name}, configMap); err != nil {
-		return nil, fmt.Errorf("reading configmap %s/%s: %w", namespace, name, err)
+		return nil, fmt.Errorf("reading ConfigMap %s/%s: %w", namespace, name, err)
 	}
 
 	var uris []string
@@ -210,7 +210,7 @@ func publishResult(ctx context.Context, cluster client.Client, namespace, name s
 		configMap.Data = data
 		return nil
 	}); err != nil {
-		return fmt.Errorf("writing configmap %s/%s: %w", namespace, name, err)
+		return fmt.Errorf("writing ConfigMap %s/%s: %w", namespace, name, err)
 	}
 	return nil
 }

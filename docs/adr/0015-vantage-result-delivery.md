@@ -5,19 +5,19 @@
 
 ## Context
 
-ADR 7 splits the probe in two: the controller proves a relay's configuration
-and capacity from inside the cluster every interval, and `turnfleet-probe` run
-from outside is the authoritative check for reachability, because hairpin NAT, a
+ADR 7 splits the probe in two. The controller proves a relay's configuration and
+capacity from inside the cluster every interval. `turnfleet-probe` run from
+outside is the authoritative check for reachability, because hairpin NAT, a
 firewall in front of the relay node and a NAT mapping that is not 1:1 are all
-invisible from a pod. That left the authoritative check manual — a CI job, a
-laptop, someone remembering to run it — and issue #9 asks to bring its answer
+invisible from a pod. That left the authoritative check manual (a CI job, a
+laptop, someone remembering to run it), and issue #9 asks to bring its answer
 into the control loop.
 
 Two things have to be decided before a runner can move the status: where the
 runner runs, and how its answer reaches the pool. `status` is written by the
 controller, so the runner cannot write the verdict itself, and the controller
-must not be able to derive the verdict from anything it observes in-cluster —
-otherwise an in-cluster observation can stand in for an outside one, which is
+must not be able to derive the verdict from anything it observes in-cluster.
+Otherwise an in-cluster observation can stand in for an outside one, which is
 the failure ADR 7 exists to prevent.
 
 The runner also has to be able to say "unreachable" and be believed, while the
@@ -54,9 +54,9 @@ probe produces. A payload that names another pool, or that carries no observatio
 time, is refused: the first is what a copied runner manifest produces, and
 without a time there is no way to tell a current success from a stale one.
 
-**What the runner checks** is every URI in the pool's list —
-`<pool>-turn-uris`, which is exactly what a client is handed — one probe per
-listener. From a vantage point the only assertion available without reading the
+**What the runner checks** is every URI in the pool's list, one probe per
+listener. The list is `<pool>-turn-uris`, which is exactly what a client is
+handed. From a vantage point the only assertion available without reading the
 pool's spec is that the relay advertises the address the URI names, so that is
 what the runner asserts; the port range stays the in-cluster check's job.
 
@@ -76,21 +76,21 @@ and the manifest's schedule are a pair.
 **The condition is `ReachableFromVantage`** (normal-true), set through the same
 `meta.SetStatusCondition` helper as the others: true when every published result
 succeeded, false when one did not, unknown while nothing current has been
-published. It is computed from the published payload alone — no in-cluster
+published. It is computed from the published payload alone. No in-cluster
 observation takes part in it. A failing observation also raises `Degraded`
 (reason `UnreachableFromVantage` when it is the only thing wrong), which is what
 an operator alerts on.
 
 `Ready` keeps its in-cluster meaning: the relays exist, are ready and are not
-draining. A pool whose relays cannot be reached from outside is not "not ready"
-— it is ready and unusable, and `ReachableFromVantage: false` plus `Degraded:
+draining. A pool whose relays cannot be reached from outside is not "not ready":
+it is ready and unusable, and `ReachableFromVantage: false` plus `Degraded:
 true` says so without conflating the two.
 
 **The publisher lives in `turnfleet-probe`** (`--uris-configmap`,
 `--publish-configmap`, `--pool`), not in a second binary. The runner is the
 probe: same code, same credentials, same `Allocate`, same JSON. A second binary
 would have to be kept identical to this one by hand, and the reason ADR 7 gives
-for the CLI — that an operator runs what the operator trusts — argues against
+for the CLI, that an operator runs what the operator trusts, argues against
 splitting it. The client it needs is controller-runtime's, which reads
 in-cluster configuration or `KUBECONFIG`, so the same binary publishes from a
 laptop or a CI job.
@@ -118,8 +118,8 @@ be given the value out of band.
   repository: `config/vantage/runner.yaml` runs in a pod, and
   `TestVantageRunnerInCluster` proves the delivery path, not the vantage point.
   Demonstrating it needs a machine outside the cluster, routable relay
-  addresses, and ingress rules per address — the operator's infrastructure, not
-  the operator's code.
-* A pool with no result published forever reports `ReachableFromVantage:
+  addresses, and ingress rules per address. That is the operator's
+  infrastructure, not the operator's code.
+* A pool that never has a result published reports `ReachableFromVantage:
   unknown`, which is visible in `kubectl get turnpool -o yaml` but raises no
   event. Monitoring should alert on unknown, not only on false.
