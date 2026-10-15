@@ -1,7 +1,8 @@
 # Test suite audit — Turnfleet
 
-Branch: `test-audit/2026-10-15` (19 commits), pushed and open as **draft PR
-#62** so the CI wall times in Session 2 could be measured rather than derived.
+Branch: `test-audit/2026-10-15`, pushed and open as **draft PR #62** so the CI
+wall times in Session 2 could be measured rather than derived. Nothing has been
+merged and `main` is untouched.
 
 Everything below is measured on this workstation (2 vCPU, 15 GiB, docker 26.1.5,
 buildx 0.13.1, kind v0.33.0) or read out of real CI runs of this repository
@@ -124,6 +125,14 @@ inconsistency to report. What was wrong was the helper assuming its own overlay.
   time budget from the maintainer; unchanged.
 * **The e2e specs are still serial** (`PLAN.md` §8, ~40s of CI), and the envtest
   control planes are still two (§11, 4.4s). Both ranked, neither attempted.
+
+### The gates on the tip
+
+`make ci` (verify, helm-verify, lint, test, vuln, licenses, dco) is green on the
+final tree: `0 issues` from the linter, every package `ok`, and
+`internal/controller` coverage **82.7% → 83.3%** from the eight new specs. The
+end-to-end workflow is green on the final commit too (`31b3c7e`, run
+38766346326), which is where the measured CI numbers come from.
 
 ### Commit list (this session)
 
