@@ -1,0 +1,9 @@
+BEFORE exit=0 seconds=399.4
+--- image ids (before) ---
+sha256:b255137f3dabb7841e01cb5730518b14312931820fe88c7c0e507705920f99b7
+AFTER1 exit=0 seconds=237.7
+sha256:b6fffca09db87beafe8f46132ed59bdeae6e80cc40469e79c5896f5dec2d9d53
+AFTER2 exit=0 seconds=27.1
+--- image ids (after) ---
+sha256:77e541059fb75c63ddf675fdd2c16902c7708e0afa07074cab7473d662629522
+DONE

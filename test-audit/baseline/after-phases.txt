@@ -1,0 +1,10 @@
+kind-up                exit=0 seconds=0.1
+docker-build           exit=0 seconds=256.7
+probe-bin              exit=0 seconds=4.0
+install                exit=0 seconds=2.0
+load-images            exit=0 seconds=18.9
+deploy                 exit=0 seconds=12.8
+go test (specs)        exit=0 seconds=90.8
+### make test-e2e-chart REUSE_IMAGES=1
+test-e2e-chart         exit=0 seconds=48.1
+DONE

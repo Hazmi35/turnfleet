@@ -74,14 +74,20 @@ func TestDefaulter(t *testing.T) {
 		t.Fatal("Default() did not create peerPolicy")
 	}
 	want := relay.DefaultDeniedCIDRs()
-	if len(pool.Spec.PeerPolicy.DeniedCIDRs) != len(want) {
-		t.Errorf("deniedCIDRs = %v, want the %d default entries %v", pool.Spec.PeerPolicy.DeniedCIDRs, len(want), want)
+	if !slices.Equal(pool.Spec.PeerPolicy.DeniedCIDRs, want) {
+		t.Errorf("deniedCIDRs = %v, want the default entries %v", pool.Spec.PeerPolicy.DeniedCIDRs, want)
 	}
 	if pool.Spec.DrainTimeout == nil || pool.Spec.DrainTimeout.Duration != relay.DefaultDrainTimeout {
 		t.Errorf("drainTimeout = %v, want %v", pool.Spec.DrainTimeout, relay.DefaultDrainTimeout)
 	}
-	if pool.Spec.Probe == nil || pool.Spec.Probe.Interval == nil || pool.Spec.Probe.Interval.Duration != relay.DefaultProbeInterval {
-		t.Errorf("probe interval = %v, want %v", pool.Spec.Probe, relay.DefaultProbeInterval)
+	// Fatal, not Error: the two checks below dereference Probe, so a defaulting
+	// regression that leaves it nil has to stop here rather than panic on the
+	// next line.
+	if pool.Spec.Probe == nil || pool.Spec.Probe.Interval == nil {
+		t.Fatalf("probe = %+v, want the default interval and timeout: defaulting did not fill it in", pool.Spec.Probe)
+	}
+	if pool.Spec.Probe.Interval.Duration != relay.DefaultProbeInterval {
+		t.Errorf("probe interval = %v, want %v", pool.Spec.Probe.Interval, relay.DefaultProbeInterval)
 	}
 	if pool.Spec.Probe.Timeout == nil || pool.Spec.Probe.Timeout.Duration != relay.DefaultProbeTimeout {
 		t.Errorf("probe timeout = %v, want %v", pool.Spec.Probe.Timeout, relay.DefaultProbeTimeout)
@@ -141,8 +147,14 @@ func TestDefaulterKeepsExplicitValues(t *testing.T) {
 	if len(pool.Spec.PeerPolicy.DeniedCIDRs) != 1 || pool.Spec.PeerPolicy.DeniedCIDRs[0] != "203.0.113.0/24" {
 		t.Errorf("deniedCIDRs = %v, want the operator's single entry", pool.Spec.PeerPolicy.DeniedCIDRs)
 	}
+	if pool.Spec.DrainTimeout == nil {
+		t.Fatal("drainTimeout was cleared: defaulting must not overwrite what an operator set")
+	}
 	if pool.Spec.DrainTimeout.Duration != 5*time.Minute {
 		t.Errorf("drainTimeout = %v, want 5m", pool.Spec.DrainTimeout.Duration)
+	}
+	if pool.Spec.Probe == nil || pool.Spec.Probe.Interval == nil {
+		t.Fatalf("probe = %+v, want the interval the pool declared", pool.Spec.Probe)
 	}
 	if pool.Spec.Probe.Interval.Duration != time.Minute {
 		t.Errorf("probe interval = %v, want 1m", pool.Spec.Probe.Interval.Duration)
@@ -783,11 +795,21 @@ func TestValidatePortRangePartitioning(t *testing.T) {
 			pool.Spec.RelayPortRange = turnfleetv1alpha1.PortRange{Start: tc.start, End: tc.end}
 
 			_, err := validator.ValidateCreate(context.Background(), pool)
-			if tc.wantErr && err == nil {
+			switch {
+			case tc.wantErr && err == nil:
 				t.Fatal("ValidateCreate() admitted a range that cannot be partitioned")
-			}
-			if !tc.wantErr && err != nil {
+			case !tc.wantErr && err != nil:
 				t.Fatalf("ValidateCreate() rejected a valid range: %v", err)
+			case tc.wantErr:
+				// wantField was declared for every failing case and never read,
+				// so a rejection pointing at the wrong field passed.
+				var statusErr *apierrors.StatusError
+				if !asStatusError(err, &statusErr) {
+					t.Fatalf("ValidateCreate() error is not an API status error: %v", err)
+				}
+				if fields := causeFields(statusErr); !containsField(fields, tc.wantField) {
+					t.Errorf("ValidateCreate() reported fields %v, want one of them to be %q", fields, tc.wantField)
+				}
 			}
 		})
 	}
@@ -810,19 +832,46 @@ func TestValidateDeleteIsUnconditional(t *testing.T) {
 }
 
 // TestValidateSpecMatchesPathRoot keeps the paths the webhook reports in step
-// with the API: a change to the field names should make this fail loudly rather
-// than silently produce errors pointing at nothing.
+// with the API: every rule family must name the field it rejected, so renaming
+// an API field fails here instead of silently producing errors that point at
+// nothing.
 func TestValidateSpecMatchesPathRoot(t *testing.T) {
 	t.Parallel()
 
 	pool := validPool()
-	pool.Spec.Listeners[0].Port = 49160
-	errs := validateSpec(&pool.Spec, field.NewPath("spec"))
-	if len(errs) == 0 {
-		t.Fatal("validateSpec() found no error for a listener inside the relay range")
+	// One violation per rule family, so each path below comes from the rule it
+	// names. Both plain listeners move together because coturn serves udp and
+	// tcp on one port: moving only the udp one would add a second error, about
+	// the two listeners no longer sharing a port.
+	pool.Spec.Listeners[0].Port = 49160 // inside relayPortRange
+	pool.Spec.Listeners[1].Port = 49160
+	pool.Spec.Dataplane.Image = "coturn/coturn:latest" // not digest-pinned
+	pool.Spec.Auth.SecretRef.Key = ""                  // required
+	pool.Spec.PeerPolicy = &turnfleetv1alpha1.PeerPolicySpec{DeniedCIDRs: []string{"not-a-cidr"}}
+	pool.Spec.DrainTimeout = &metav1.Duration{Duration: -time.Second}
+	pool.Spec.Probe = &turnfleetv1alpha1.ProbeSpec{
+		Interval: &metav1.Duration{Duration: time.Second},
+		Timeout:  &metav1.Duration{Duration: 5 * time.Second},
 	}
-	if got := errs[0].Field; got != "spec.listeners[0].port" {
-		t.Errorf("field = %q, want %q", got, "spec.listeners[0].port")
+
+	errs := validateSpec(&pool.Spec, field.NewPath("spec"))
+	got := make([]string, 0, len(errs))
+	for _, err := range errs {
+		got = append(got, err.Field)
+	}
+	slices.Sort(got)
+
+	want := []string{
+		"spec.auth.secretRef.key",
+		"spec.dataplane.image",
+		"spec.drainTimeout",
+		"spec.listeners[0].port",
+		"spec.listeners[1].port",
+		"spec.peerPolicy.deniedCIDRs[0]",
+		"spec.probe.timeout",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("validateSpec() reported fields %v, want exactly %v", got, want)
 	}
 }
 

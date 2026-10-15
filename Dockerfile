@@ -12,11 +12,21 @@ ARG LDFLAGS
 
 WORKDIR /workspace
 COPY go.mod go.sum ./
-RUN go mod download
+# The module cache and the build cache are BuildKit cache mounts, not layers:
+# they are shared between the two images built in one `make docker-build` and
+# between the two `make docker-build` runs a CI job makes (one for the suite,
+# one for the chart), and they never end up in the image. Without them a
+# change to LDFLAGS — which the Makefile stamps with the build date — misses
+# the layer cache and recompiles the whole dependency graph.
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY . .
 # -trimpath keeps the build reproducible: no local paths end up in the binary.
-RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
-    go build -trimpath -a -ldflags "${LDFLAGS}" -o /out/turnfleet-controller ./cmd/turnfleet-controller
+# -a is deliberately absent: it forces every package to be rebuilt, which
+# defeats the build cache above while producing the same binary. A build with
+# no cache to reuse compiles everything anyway, so -a only ever cost time.
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags "${LDFLAGS}" -o /out/turnfleet-controller ./cmd/turnfleet-controller
 
 FROM ${RUNTIME_IMAGE}
 # RUNTIME_IMAGE is declared before the first FROM, which puts it out of scope

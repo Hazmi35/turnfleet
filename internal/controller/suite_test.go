@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -35,6 +36,12 @@ var (
 	k8sClient  client.Client
 	testScheme = runtime.NewScheme()
 )
+
+// fixtureCounter numbers the test namespaces. A counter and not a clock
+// reading: `time.Now().UnixNano() % 1_000_000` repeats every millisecond, so
+// two fixtures could pick the same name and the second Create would fail with
+// AlreadyExists — a failure with nothing to do with the code under test.
+var fixtureCounter atomic.Uint64
 
 func TestMain(m *testing.M) {
 	utilruntime.Must(clientgoscheme.AddToScheme(testScheme))
@@ -74,6 +81,82 @@ const (
 	secretName    = "turn-secret"
 	fixtureSecret = "0123456789abcdef"
 )
+
+// mutationCounter counts the mutating requests a reconcile pass issues. The API
+// server is a poor witness for this: an Update whose content is unchanged comes
+// back with the same resourceVersion and writes nothing to etcd, so a pass that
+// issues a redundant write looks exactly like a pass that issues none. Only the
+// client can see the difference, which is what makes it assertable.
+//
+// It is read and written by the test goroutine alone — the pass is called
+// synchronously from a spec — so it needs no lock.
+type mutationCounter struct {
+	client.Client
+
+	calls []string
+}
+
+func (c *mutationCounter) record(call string, obj client.Object) {
+	c.calls = append(c.calls, call+" "+obj.GetName())
+}
+
+func (c *mutationCounter) count() int { return len(c.calls) }
+
+// since returns the calls issued after the nth, for a spec that wants to know
+// what one pass did rather than what the whole test did.
+func (c *mutationCounter) since(n int) []string {
+	if n > len(c.calls) {
+		return nil
+	}
+	return slices.Clone(c.calls[n:])
+}
+
+func (c *mutationCounter) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+	c.record("create", obj)
+	return c.Client.Create(ctx, obj, opts...)
+}
+
+func (c *mutationCounter) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+	c.record("update", obj)
+	return c.Client.Update(ctx, obj, opts...)
+}
+
+func (c *mutationCounter) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+	c.record("patch", obj)
+	return c.Client.Patch(ctx, obj, patch, opts...)
+}
+
+func (c *mutationCounter) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+	c.record("delete", obj)
+	return c.Client.Delete(ctx, obj, opts...)
+}
+
+func (c *mutationCounter) DeleteAllOf(ctx context.Context, obj client.Object, opts ...client.DeleteAllOfOption) error {
+	c.record("deleteAllOf", obj)
+	return c.Client.DeleteAllOf(ctx, obj, opts...)
+}
+
+// Status wraps the status subresource writer, which is where a reconcile's
+// status updates go (r.Status().Update).
+func (c *mutationCounter) Status() client.SubResourceWriter {
+	return &countingStatusWriter{SubResourceWriter: c.Client.Status(), counter: c}
+}
+
+type countingStatusWriter struct {
+	client.SubResourceWriter
+
+	counter *mutationCounter
+}
+
+func (w *countingStatusWriter) Update(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+	w.counter.record("statusUpdate", obj)
+	return w.SubResourceWriter.Update(ctx, obj, opts...)
+}
+
+func (w *countingStatusWriter) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
+	w.counter.record("statusPatch", obj)
+	return w.SubResourceWriter.Patch(ctx, obj, patch, opts...)
+}
 
 // ctrlRequest builds the reconcile request for a pool.
 func ctrlRequest(namespace, name string) ctrl.Request {
@@ -136,6 +219,9 @@ type testFixture struct {
 	prober     *testProber
 	scraper    *testScraper
 	namespace  string
+	// api counts the mutating requests the reconciler issues, which the API
+	// server cannot show for a write that changes nothing.
+	api *mutationCounter
 }
 
 func newFixture(t *testing.T) *testFixture {
@@ -144,8 +230,9 @@ func newFixture(t *testing.T) *testFixture {
 	clock := newFakeClock()
 	prober := &testProber{}
 	scraper := &testScraper{}
+	api := &mutationCounter{Client: k8sClient}
 
-	namespace := fmt.Sprintf("turnfleet-%d", time.Now().UnixNano()%1_000_000)
+	namespace := fmt.Sprintf("turnfleet-%d", fixtureCounter.Add(1))
 	ctx := context.Background()
 	if err := k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}); err != nil {
 		t.Fatalf("creating the test namespace: %v", err)
@@ -158,7 +245,7 @@ func newFixture(t *testing.T) *testFixture {
 		t:   t,
 		ctx: ctx,
 		reconciler: &TURNPoolReconciler{
-			Client:   k8sClient,
+			Client:   api,
 			Scheme:   testScheme,
 			Recorder: events.NewFakeRecorder(100),
 			Now:      clock.Now,
@@ -169,25 +256,40 @@ func newFixture(t *testing.T) *testFixture {
 		prober:    prober,
 		scraper:   scraper,
 		namespace: namespace,
+		api:       api,
 	}
 }
 
-// reconcile runs one pass of the loop.
+// reconcile runs one pass of the loop and fails the test if the pass errored.
+// It throws the ctrl.Result away: a spec that cares what the pass scheduled
+// next wants reconcileResult.
 func (f *testFixture) reconcile(name string) {
 	f.t.Helper()
 
-	_, err := f.reconciler.Reconcile(f.ctx, ctrlRequest(f.namespace, name))
-	if err != nil {
+	if _, err := f.reconcileResult(name); err != nil {
 		f.t.Fatalf("Reconcile(%s) failed: %v", name, err)
 	}
 }
+
+// reconcileResult runs one pass of the loop and returns what the pass asked
+// for, including the error. Nothing used to look at the result, so none of the
+// controller's requeue contracts was asserted anywhere.
+func (f *testFixture) reconcileResult(name string) (ctrl.Result, error) {
+	f.t.Helper()
+
+	return f.reconciler.Reconcile(f.ctx, ctrlRequest(f.namespace, name))
+}
+
+// reconcileAttempts bounds reconcileUntil. A condition that does not hold by
+// then fails the test instead of hanging it.
+const reconcileAttempts = 80
 
 // reconcileUntil runs the loop until the condition holds, advancing the fake
 // clock between passes. It fails the test instead of hanging.
 func (f *testFixture) reconcileUntil(name, what string, condition func() bool) {
 	f.t.Helper()
 
-	for range 80 {
+	for range reconcileAttempts {
 		f.reconcile(name)
 		// envtest runs no kubelet, so the test makes new pods look ready.
 		f.markPodsReady(name)
@@ -196,7 +298,7 @@ func (f *testFixture) reconcileUntil(name, what string, condition func() bool) {
 		}
 		f.clock.Advance(time.Second)
 	}
-	f.t.Fatalf("condition %q never held after 50 reconciles", what)
+	f.t.Fatalf("condition %q never held after %d reconciles", what, reconcileAttempts)
 }
 
 func (f *testFixture) pool(name string) *turnfleetv1alpha1.TURNPool {
@@ -251,8 +353,11 @@ func (f *testFixture) relayConfig(pool string) string {
 func (f *testFixture) markPodsReady(pool string) {
 	f.t.Helper()
 
-	for i := range f.pods(pool) {
-		pod := f.pods(pool)[i]
+	// One List for the whole call: re-listing inside the loop cost one API
+	// round trip per pod, and reconcileUntil can call this 80 times.
+	pods := f.pods(pool)
+	for i := range pods {
+		pod := pods[i]
 		patch := client.MergeFrom(pod.DeepCopy())
 		pod.Status.Phase = corev1.PodRunning
 		pod.Status.PodIP = "10.244.0.10"

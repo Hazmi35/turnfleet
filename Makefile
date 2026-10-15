@@ -177,8 +177,7 @@ test-e2e: kind-up docker-build build install ## Run the end-to-end suite against
 # will not adopt objects that kustomize created and the CRDs have to belong to
 # the release that installs them.
 .PHONY: test-e2e-chart
-test-e2e-chart: kind-up docker-build build ## Install the CRDs and the controller from the chart, then probe a relay.
-	$(MAKE) load-images
+test-e2e-chart: kind-up build images-for-e2e ## Install the CRDs and the controller from the chart, then probe a relay.
 	$(MAKE) undeploy KUSTOMIZE_OVERLAY=config/e2e
 	$(MAKE) uninstall
 	$(MAKE) helm-install
@@ -197,7 +196,24 @@ envtest: ## Download the envtest control plane binaries.
 build: generate ## Build the controller and probe binaries.
 	@mkdir -p bin
 	CGO_ENABLED=0 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/turnfleet-controller ./cmd/turnfleet-controller
-	CGO_ENABLED=0 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o bin/turnfleet-probe ./cmd/turnfleet-probe
+	CGO_ENABLED=0 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(PROBE_BIN) ./cmd/turnfleet-probe
+
+# REUSE_IMAGES=1 makes `make test-e2e-chart` use the images a preceding
+# `make test-e2e` already built and loaded, instead of rebuilding and reloading
+# them. The CI e2e job runs the two targets back to back against one tree; the
+# rebuild cost 137s of the chart step for two images nothing had changed in.
+# Anything else — a standalone `make test-e2e-chart`, a different tree — still
+# builds, so the target keeps testing what it is pointed at.
+REUSE_IMAGES ?= 0
+
+.PHONY: images-for-e2e
+images-for-e2e:
+ifeq ($(REUSE_IMAGES),1)
+	@echo "REUSE_IMAGES=1: using the images test-e2e already built and loaded"
+else
+	$(MAKE) docker-build
+	$(MAKE) load-images
+endif
 
 .PHONY: run
 run: generate ## Run the controller against the current kubeconfig.
@@ -272,6 +288,22 @@ uninstall: ## Remove the CRDs from the kind cluster.
 # webhooks and their serving certificates live.
 KUSTOMIZE_OVERLAY ?= config/default
 
+# await-rollout waits for the controller deployment to finish rolling out, and
+# on failure dumps the state that explains why. The step has failed eight times
+# in the E2E job's history as "1 old replicas are pending termination" followed
+# by a bare timeout, with nothing recorded about the pods or the nodes, so the
+# run had to be re-run to learn nothing. See test-audit/REPORT.md.
+.PHONY: await-rollout
+await-rollout:
+	@if ! $(KUBECTL) -n turnfleet-system rollout status deployment/turnfleet-controller-manager --timeout=180s; then \
+		echo "await-rollout: the rollout did not finish; the cluster says:" >&2; \
+		$(KUBECTL) -n turnfleet-system get deployment turnfleet-controller-manager -o yaml >&2 || true; \
+		$(KUBECTL) -n turnfleet-system get pods -o wide >&2 || true; \
+		$(KUBECTL) get nodes -o wide >&2 || true; \
+		$(KUBECTL) get events -A --sort-by=.lastTimestamp >&2 | tail -40 || true; \
+		exit 1; \
+	fi
+
 .PHONY: deploy
 deploy: ## Deploy the controller into the kind cluster.
 	# The image is set on the cluster rather than in config/manager, so running
@@ -282,7 +314,7 @@ deploy: ## Deploy the controller into the kind cluster.
 	# without this, a running pod keeps the image it started with and the
 	# cluster silently tests the previous build.
 	$(KUBECTL) -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
-	$(KUBECTL) -n turnfleet-system rollout status deployment/turnfleet-controller-manager --timeout=180s
+	$(MAKE) await-rollout
 
 .PHONY: undeploy
 undeploy: ## Remove the controller from the kind cluster.
@@ -363,7 +395,7 @@ helm-install: helm ## Install the controller from the chart into the kind cluste
 	# Same reason as `make deploy`: the tag is constant, so a freshly loaded
 	# image needs a new pod.
 	$(KUBECTL) -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
-	$(KUBECTL) -n turnfleet-system rollout status deployment/turnfleet-controller-manager --timeout=180s
+	$(MAKE) await-rollout
 
 .PHONY: helm-uninstall
 helm-uninstall: helm ## Remove the chart from the kind cluster.

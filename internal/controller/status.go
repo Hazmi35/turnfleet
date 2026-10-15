@@ -77,6 +77,7 @@ const (
 // writeStatus computes and persists the pool's status.
 func (r *TURNPoolReconciler) writeStatus(ctx context.Context, pool *turnfleetv1alpha1.TURNPool, inputs *statusInputs) error {
 	status := buildStatus(pool, inputs)
+	carryTransitionTimes(pool.Status, status)
 	if pool.Status != nil && equality.Semantic.DeepEqual(pool.Status, status) {
 		return nil
 	}
@@ -424,8 +425,11 @@ func (r *TURNPoolReconciler) clearURIsConfigMap(ctx context.Context, pool *turnf
 	return nil
 }
 
-// setCondition writes one condition, preserving the transition time of an
-// unchanged one.
+// setCondition writes one condition into a status that is being built from
+// nothing. The transition time of an unchanged condition is carried over by
+// carryTransitionTimes, which runs on the finished status: this function cannot
+// preserve it, because meta.SetStatusCondition stamps time.Now() on a condition
+// it does not find in the slice it is handed.
 func setCondition(status *turnfleetv1alpha1.TURNPoolStatus, conditionType string, conditionStatus metav1.ConditionStatus, reason, message string) {
 	meta.SetStatusCondition(&status.Conditions, metav1.Condition{
 		Type:               conditionType,
@@ -434,6 +438,36 @@ func setCondition(status *turnfleetv1alpha1.TURNPoolStatus, conditionType string
 		Message:            message,
 		ObservedGeneration: observedGeneration(status),
 	})
+}
+
+// carryTransitionTimes copies the transition time of every condition the new
+// status reproduces unchanged from the stored one.
+//
+// It exists because LastTransitionTime is the API's "when did this condition
+// last transition from one status to another", and buildStatus builds its
+// conditions from nothing: meta.SetStatusCondition stamps time.Now() on a
+// condition it does not find. Without this, every pass produces a status that
+// differs from the stored one by a few nanoseconds, and two things follow, both
+// wrong: writeStatus' equality guard never fires, so the status is written again
+// on every pass — and, because the API server stores whole seconds, the stored
+// LastTransitionTime walks forward on a pool nothing has happened to.
+func carryTransitionTimes(previous, next *turnfleetv1alpha1.TURNPoolStatus) {
+	if previous == nil {
+		return
+	}
+	for i := range next.Conditions {
+		condition := &next.Conditions[i]
+		prior := meta.FindStatusCondition(previous.Conditions, condition.Type)
+		if prior == nil {
+			continue
+		}
+		if prior.Status == condition.Status &&
+			prior.Reason == condition.Reason &&
+			prior.Message == condition.Message &&
+			prior.ObservedGeneration == condition.ObservedGeneration {
+			condition.LastTransitionTime = prior.LastTransitionTime
+		}
+	}
 }
 
 func observedGeneration(status *turnfleetv1alpha1.TURNPoolStatus) int64 {

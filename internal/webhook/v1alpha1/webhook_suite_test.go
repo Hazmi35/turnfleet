@@ -6,10 +6,10 @@ package v1alpha1
 import (
 	"context"
 	"crypto/tls"
-	"fmt"
 	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -111,8 +111,14 @@ var _ = BeforeSuite(func() {
 	}()
 
 	// wait for the webhook server to get ready.
+	//
+	// The timeout is explicit because Gomega's default is one second (gomega
+	// v1.44.0, internal/duration_bundle.go), a library default and not a
+	// measured convergence time. This dial is the only thing in the suite that
+	// waits for the manager, and a one-second expiry under load reads as a TLS
+	// failure rather than as "the manager never came up".
 	dialer := &net.Dialer{Timeout: time.Second}
-	addrPort := fmt.Sprintf("%s:%d", webhookInstallOptions.LocalServingHost, webhookInstallOptions.LocalServingPort)
+	addrPort := net.JoinHostPort(webhookInstallOptions.LocalServingHost, strconv.Itoa(webhookInstallOptions.LocalServingPort))
 	Eventually(func() error {
 		//nolint:gosec // envtest serves a self-signed certificate; the check only asserts the port accepts TLS.
 		conn, err := tls.DialWithDialer(dialer, "tcp", addrPort, &tls.Config{InsecureSkipVerify: true})
@@ -121,7 +127,7 @@ var _ = BeforeSuite(func() {
 		}
 
 		return conn.Close()
-	}).Should(Succeed())
+	}).WithTimeout(30 * time.Second).WithPolling(100 * time.Millisecond).Should(Succeed())
 })
 
 var _ = AfterSuite(func() {

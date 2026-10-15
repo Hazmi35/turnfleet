@@ -5,6 +5,7 @@ package v1alpha1
 
 import (
 	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -171,11 +172,14 @@ var _ = Describe("TURNPool admission through the API server", func() {
 			}}
 			Expect(k8sClient.Create(ctx, node)).To(Succeed())
 			DeferCleanup(func() {
+				// One spec's bad declaration must not reject another's pool, so
+				// the node has to be gone before the next spec runs. The timeout
+				// is explicit: Gomega's default is one second.
 				_ = k8sClient.Delete(context.Background(), node)
 				Eventually(func() bool {
 					return apierrors.IsNotFound(k8sClient.Get(context.Background(),
 						types.NamespacedName{Name: name}, &corev1.Node{}))
-				}).Should(BeTrue())
+				}).WithTimeout(30 * time.Second).WithPolling(100 * time.Millisecond).Should(BeTrue())
 			})
 		}
 
