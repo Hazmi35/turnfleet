@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -35,6 +36,12 @@ var (
 	k8sClient  client.Client
 	testScheme = runtime.NewScheme()
 )
+
+// fixtureCounter numbers the test namespaces. A counter and not a clock
+// reading: `time.Now().UnixNano() % 1_000_000` repeats every millisecond, so
+// two fixtures could pick the same name and the second Create would fail with
+// AlreadyExists — a failure with nothing to do with the code under test.
+var fixtureCounter atomic.Uint64
 
 func TestMain(m *testing.M) {
 	utilruntime.Must(clientgoscheme.AddToScheme(testScheme))
@@ -145,7 +152,7 @@ func newFixture(t *testing.T) *testFixture {
 	prober := &testProber{}
 	scraper := &testScraper{}
 
-	namespace := fmt.Sprintf("turnfleet-%d", time.Now().UnixNano()%1_000_000)
+	namespace := fmt.Sprintf("turnfleet-%d", fixtureCounter.Add(1))
 	ctx := context.Background()
 	if err := k8sClient.Create(ctx, &corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: namespace}}); err != nil {
 		t.Fatalf("creating the test namespace: %v", err)
@@ -182,12 +189,16 @@ func (f *testFixture) reconcile(name string) {
 	}
 }
 
+// reconcileAttempts bounds reconcileUntil. A condition that does not hold by
+// then fails the test instead of hanging it.
+const reconcileAttempts = 80
+
 // reconcileUntil runs the loop until the condition holds, advancing the fake
 // clock between passes. It fails the test instead of hanging.
 func (f *testFixture) reconcileUntil(name, what string, condition func() bool) {
 	f.t.Helper()
 
-	for range 80 {
+	for range reconcileAttempts {
 		f.reconcile(name)
 		// envtest runs no kubelet, so the test makes new pods look ready.
 		f.markPodsReady(name)
@@ -196,7 +207,7 @@ func (f *testFixture) reconcileUntil(name, what string, condition func() bool) {
 		}
 		f.clock.Advance(time.Second)
 	}
-	f.t.Fatalf("condition %q never held after 50 reconciles", what)
+	f.t.Fatalf("condition %q never held after %d reconciles", what, reconcileAttempts)
 }
 
 func (f *testFixture) pool(name string) *turnfleetv1alpha1.TURNPool {
@@ -251,8 +262,11 @@ func (f *testFixture) relayConfig(pool string) string {
 func (f *testFixture) markPodsReady(pool string) {
 	f.t.Helper()
 
-	for i := range f.pods(pool) {
-		pod := f.pods(pool)[i]
+	// One List for the whole call: re-listing inside the loop cost one API
+	// round trip per pod, and reconcileUntil can call this 80 times.
+	pods := f.pods(pool)
+	for i := range pods {
+		pod := pods[i]
 		patch := client.MergeFrom(pod.DeepCopy())
 		pod.Status.Phase = corev1.PodRunning
 		pod.Status.PodIP = "10.244.0.10"
