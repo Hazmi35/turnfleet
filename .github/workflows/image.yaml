@@ -13,6 +13,19 @@
 # (`X.Y.Z`), because the chart's default image tag is its `appVersion`, the bare
 # number (ADR 17, docs/versions.md). The version embedded in the binary stays the
 # git ref, so a released image reports `vX.Y.Z` exactly as `make build` does.
+#
+# Those two tags have one writer: the release event. A branch push and a manual
+# run publish the commit-addressed `sha-<sha>` instead (and, for a branch, the
+# branch's own tag), because `release.yaml` resolves `vX.Y.Z` while this workflow
+# may still be publishing it, and a release tag another run can move after that
+# resolution is a release that documents a digest the tag no longer carries.
+# `sha-<sha>` names a commit, not a particular build of it: a commit can be built
+# more than once, so it is a handle to look a commit up by, not a reproducible
+# digest, and nothing resolves a release through it.
+#
+# The `-X` stamps are the Makefile's LDFLAGS, including `date` in the Makefile's
+# `date -u +%Y-%m-%dT%H:%M:%SZ` form, so a released binary reports its build
+# date rather than the `unknown` the linker leaves when the stamp is missing.
 name: Image
 
 on:
@@ -37,6 +50,11 @@ env:
   GO_IMAGE: golang:1.27.2-bookworm@sha256:5cf287a799e6b94384bad13d16b14904c531f51ba65792237e122ce42b392f61
   RUNTIME_IMAGE: gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
   PLATFORMS: linux/amd64,linux/arm64
+  # The Makefile's LDFLAGS without the date: `-s -w`, the version (the ref being
+  # built) and the commit. It lives here so both builds stamp the same two, and
+  # the date is appended per build because it is a step's output and a
+  # workflow-level env is resolved before any step runs.
+  LDFLAGS_BASE: -s -w -X github.com/Hazmi35/turnfleet/internal/version.version=${{ github.ref_name }} -X github.com/Hazmi35/turnfleet/internal/version.commit=${{ github.sha }}
 
 jobs:
   images:
@@ -48,6 +66,17 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      # The date `make build` stamps, in the Makefile's format. It cannot live in
+      # the workflow's `env` beside the rest of the LDFLAGS: an `env` is resolved
+      # before any step runs, and this value is an output of a step. `date` is
+      # not the `created` label the images carry (metadata-action's, the moment
+      # the tags were derived) but the moment the binaries were stamped, which is
+      # what `internal/version.Date` reports and what a released binary was
+      # missing.
+      - name: Stamp the build date
+        id: stamp
+        run: echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >>"$GITHUB_OUTPUT"
 
       # arm64 is emulated on the amd64 runners; the builder stage itself runs on
       # BUILDPLATFORM and cross-compiles with CGO_ENABLED=0.
@@ -70,11 +99,16 @@ jobs:
         with:
           images: ghcr.io/hazmi35/turnfleet-controller
           # The default rules are branch and tag refs; the semver rule is the one
-          # the chart's default image tag needs.
+          # the chart's default image tag needs. The two that name a release's
+          # version are gated on the release event: it is the only event that
+          # publishes a version, so a manual run on a tag ref cannot move a tag
+          # `release.yaml` is reading. Every build is also addressable by the
+          # commit it was built from.
           tags: |
             type=ref,event=branch
-            type=ref,event=tag
-            type=semver,pattern={{version}}
+            type=ref,event=tag,enable=${{ github.event_name == 'release' }}
+            type=semver,pattern={{version}},enable=${{ github.event_name == 'release' }}
+            type=sha,format=long
 
       - name: Derive tags for turnfleet-probe
         id: meta-probe
@@ -83,8 +117,9 @@ jobs:
           images: ghcr.io/hazmi35/turnfleet-probe
           tags: |
             type=ref,event=branch
-            type=ref,event=tag
-            type=semver,pattern={{version}}
+            type=ref,event=tag,enable=${{ github.event_name == 'release' }}
+            type=semver,pattern={{version}},enable=${{ github.event_name == 'release' }}
+            type=sha,format=long
 
       - name: Build and push turnfleet-controller
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -100,7 +135,7 @@ jobs:
           build-args: |
             GO_IMAGE=${{ env.GO_IMAGE }}
             RUNTIME_IMAGE=${{ env.RUNTIME_IMAGE }}
-            LDFLAGS=-s -w -X github.com/Hazmi35/turnfleet/internal/version.version=${{ github.ref_name }} -X github.com/Hazmi35/turnfleet/internal/version.commit=${{ github.sha }}
+            LDFLAGS=${{ env.LDFLAGS_BASE }} -X github.com/Hazmi35/turnfleet/internal/version.date=${{ steps.stamp.outputs.date }}
 
       - name: Build and push turnfleet-probe
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -116,4 +151,4 @@ jobs:
           build-args: |
             GO_IMAGE=${{ env.GO_IMAGE }}
             RUNTIME_IMAGE=${{ env.RUNTIME_IMAGE }}
-            LDFLAGS=-s -w -X github.com/Hazmi35/turnfleet/internal/version.version=${{ github.ref_name }} -X github.com/Hazmi35/turnfleet/internal/version.commit=${{ github.sha }}
+            LDFLAGS=${{ env.LDFLAGS_BASE }} -X github.com/Hazmi35/turnfleet/internal/version.date=${{ steps.stamp.outputs.date }}

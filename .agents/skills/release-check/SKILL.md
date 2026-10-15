@@ -67,9 +67,12 @@ output as evidence for each one; "looks fine" is not evidence.
   and signs the chart at the digest its own push reported, verifies all of it
   with the identity it records, and writes the release body from the digests and
   the commands. It fails loudly if the digests never appear (look at the Image
-  run for the tag), if the chart's `version` or `appVersion` is not the release
-  version (nothing is pushed in that case), or if one of its own verifications
-  fails.
+  run for the tag), if the tag resolves to an image built from another commit
+  (the check reads `org.opencontainers.image.revision` against the tagged
+  commit, so a tag still carrying a previous release's build fails the run
+  instead of being signed), if the chart's `version` or `appVersion` is not the
+  release version (nothing is pushed in that case), or if one of its own
+  verifications fails.
 * Check what it published rather than trusting it. The release notes carry the
   digests, the certificate identity and the exact commands; `identity` is
   `https://github.com/Hazmi35/turnfleet/.github/workflows/release.yaml@refs/tags/<tag>`:
