@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -245,4 +246,181 @@ func TestRequeueWhileDeletingAPoolThatStillHasRelays(t *testing.T) {
 	if err := k8sClient.Get(f.ctx, namespaced(f.namespace, name), &turnfleetv1alpha1.TURNPool{}); !apierrors.IsNotFound(err) {
 		t.Errorf("the pool still exists after its finalizer was removed: err=%v", err)
 	}
+}
+
+// TestReconcileIsIdempotentOnUnchangedState is the property the whole
+// level-based design rests on: a pass over state nothing has changed must
+// schedule the same work and write nothing. A pass that rewrote its own output
+// every time would bump every resourceVersion in the namespace forever, and
+// every watcher in it — including this controller — would reconcile in a loop.
+//
+// "Writes nothing" is checked where it can be observed: the resourceVersion of
+// every object a pass can write. The pool and the relay configuration Secret
+// are in the snapshot, as is the URI ConfigMap and the relay pods.
+func TestReconcileIsIdempotentOnUnchangedState(t *testing.T) {
+	const name = "tpool-requeue-idempotent"
+
+	f := newFixture(t)
+	f.createSecret()
+	f.createNode("tf-requeue-7", "203.0.113.77")
+	f.createPool(hostNetworkPoolOn(name, 52600))
+
+	f.reconcile(name)
+	f.reconcile(name)
+	f.markPodsReady(name)
+	f.reconcileUntil(name, "one ready relay", func() bool {
+		return readyRelays(t, f, name) == 1
+	})
+
+	// The first of the two passes settles anything still in flight; the second
+	// is the one that must be a no-op, and it must ask for exactly the same
+	// work as the one before it.
+	f.reconcile(name)
+	before := f.objectVersions(name)
+
+	// The snapshot has to be worth comparing: one entry per object a pass can
+	// write, each of them really there. A snapshot that came back empty (or
+	// with "absent" for an object the pass should have made) would let the
+	// comparison below pass without checking anything.
+	if len(before) != 4 {
+		t.Fatalf("the snapshot holds %d objects (%v), want the pool, its pod, its relay configuration Secret and its URI ConfigMap", len(before), before)
+	}
+	for key, version := range before {
+		if version == "absent" {
+			t.Fatalf("%s does not exist before the steady-state pass, so its resourceVersion proves nothing: %v", key, before)
+		}
+	}
+	t.Logf("steady-state resourceVersions: %v", before)
+
+	// resourceVersion alone cannot show a write the API server discards: an
+	// Update whose content is unchanged comes back with the same version and
+	// writes nothing to etcd. The client sees the request, so the pass is held
+	// to issuing none.
+	mutationsBefore := f.api.count()
+
+	first, err := f.reconcileResult(name)
+	if err != nil {
+		t.Fatalf("first steady-state pass failed: %v", err)
+	}
+	after := f.objectVersions(name)
+
+	if first.RequeueAfter != 10*time.Second {
+		t.Errorf("a steady-state pass asked to be re-run in %s, want the 10s probe interval", first.RequeueAfter)
+	}
+	for key, version := range before {
+		if got := after[key]; got != version {
+			t.Errorf("%s moved from resourceVersion %s to %s: a pass over unchanged state wrote it", key, version, got)
+		}
+	}
+	for key := range after {
+		if _, ok := before[key]; !ok {
+			t.Errorf("%s appeared during a steady-state pass", key)
+		}
+	}
+	if issued := f.api.since(mutationsBefore); len(issued) != 0 {
+		t.Errorf("a steady-state pass issued %d mutating request(s): %v; a pass over state nothing changed must write nothing, or every watcher in the namespace reconciles again",
+			len(issued), issued)
+	}
+
+	second, err := f.reconcileResult(name)
+	if err != nil {
+		t.Fatalf("second steady-state pass failed: %v", err)
+	}
+	if second != first {
+		t.Errorf("two passes over the same state asked for %+v then %+v, want the same work", first, second)
+	}
+}
+
+// TestCarryTransitionTimesKeepsOnlyUnchangedTransitionTimes pins the helper that
+// makes a rebuilt status comparable, and with it the API's meaning of
+// LastTransitionTime — the time a condition last transitioned. Both directions
+// are checked: carrying the time of a condition that did change would freeze
+// LastTransitionTime forever, which is the same bug from the other side.
+func TestCarryTransitionTimesKeepsOnlyUnchangedTransitionTimes(t *testing.T) {
+	t.Parallel()
+
+	stored := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	previous := &turnfleetv1alpha1.TURNPoolStatus{Conditions: []metav1.Condition{
+		{
+			Type:               ConditionReady,
+			Status:             metav1.ConditionTrue,
+			Reason:             "RelaysReady",
+			Message:            "2 of 2 relays are ready",
+			ObservedGeneration: 3,
+			LastTransitionTime: metav1.NewTime(stored),
+		},
+		{
+			Type:               ConditionDegraded,
+			Status:             metav1.ConditionFalse,
+			Reason:             "AsExpected",
+			Message:            "every planned relay exists and is placeable",
+			ObservedGeneration: 3,
+			LastTransitionTime: metav1.NewTime(stored),
+		},
+	}}
+
+	unchanged := metav1.Condition{
+		Type: ConditionReady, Status: metav1.ConditionTrue, Reason: "RelaysReady",
+		Message: "2 of 2 relays are ready", ObservedGeneration: 3,
+	}
+	changed := metav1.Condition{
+		Type: ConditionDegraded, Status: metav1.ConditionTrue, Reason: "RelayIdentityOverlap",
+		Message: "another pool holds a relay on this pool's address", ObservedGeneration: 3,
+	}
+	fresh := metav1.Condition{
+		Type: ConditionCapacityPressure, Status: metav1.ConditionFalse, Reason: "CapacityAvailable",
+		Message: "0 of 48 ports in use across 1 relay(s)", ObservedGeneration: 3,
+	}
+
+	next := &turnfleetv1alpha1.TURNPoolStatus{Conditions: []metav1.Condition{unchanged, changed, fresh}}
+	carryTransitionTimes(previous, next)
+
+	if got := next.Conditions[0].LastTransitionTime.Time; !got.Equal(stored) {
+		t.Errorf("an unchanged condition's transition time = %s, want the stored %s", got, stored)
+	}
+	if got := next.Conditions[1].LastTransitionTime; !got.IsZero() {
+		t.Errorf("a changed condition's transition time = %s, want it left unset so meta.SetStatusCondition stamps the transition", got)
+	}
+	if got := next.Conditions[2].LastTransitionTime; !got.IsZero() {
+		t.Errorf("a new condition's transition time = %s, want it left unset so meta.SetStatusCondition stamps it", got)
+	}
+
+	// The first pass of a pool's life has nothing to carry, and must not panic
+	// on the nil status it reads.
+	carryTransitionTimes(nil, &turnfleetv1alpha1.TURNPoolStatus{Conditions: []metav1.Condition{unchanged}})
+}
+
+// objectVersions snapshots the resourceVersion of everything one pass can
+// write: the pool itself, its relay pods, its relay configuration Secret and
+// its URI ConfigMap. A missing object is recorded as absent rather than
+// failing, so a pass that creates one shows up as a change.
+func (f *testFixture) objectVersions(poolName string) map[string]string {
+	f.t.Helper()
+
+	versions := map[string]string{}
+
+	pool := &turnfleetv1alpha1.TURNPool{}
+	if err := k8sClient.Get(f.ctx, namespaced(f.namespace, poolName), pool); err != nil {
+		f.t.Fatalf("reading pool %s: %v", poolName, err)
+	}
+	versions["TURNPool/"+poolName] = pool.ResourceVersion
+
+	pods := f.pods(poolName)
+	for i := range pods {
+		versions["Pod/"+pods[i].Name] = pods[i].ResourceVersion
+	}
+
+	secret := &corev1.Secret{}
+	versions["Secret/"+RelayConfigSecretName(pool)] = "absent"
+	if err := k8sClient.Get(f.ctx, namespaced(f.namespace, RelayConfigSecretName(pool)), secret); err == nil {
+		versions["Secret/"+RelayConfigSecretName(pool)] = secret.ResourceVersion
+	}
+
+	configMap := &corev1.ConfigMap{}
+	versions["ConfigMap/"+URIsConfigMapName(pool)] = "absent"
+	if err := k8sClient.Get(f.ctx, namespaced(f.namespace, URIsConfigMapName(pool)), configMap); err == nil {
+		versions["ConfigMap/"+URIsConfigMapName(pool)] = configMap.ResourceVersion
+	}
+
+	return versions
 }

@@ -82,6 +82,82 @@ const (
 	fixtureSecret = "0123456789abcdef"
 )
 
+// mutationCounter counts the mutating requests a reconcile pass issues. The API
+// server is a poor witness for this: an Update whose content is unchanged comes
+// back with the same resourceVersion and writes nothing to etcd, so a pass that
+// issues a redundant write looks exactly like a pass that issues none. Only the
+// client can see the difference, which is what makes it assertable.
+//
+// It is read and written by the test goroutine alone — the pass is called
+// synchronously from a spec — so it needs no lock.
+type mutationCounter struct {
+	client.Client
+
+	calls []string
+}
+
+func (c *mutationCounter) record(call, kind string, obj client.Object) {
+	c.calls = append(c.calls, call+" "+kind+"/"+obj.GetName())
+}
+
+func (c *mutationCounter) count() int { return len(c.calls) }
+
+// since returns the calls issued after the nth, for a spec that wants to know
+// what one pass did rather than what the whole test did.
+func (c *mutationCounter) since(n int) []string {
+	if n > len(c.calls) {
+		return nil
+	}
+	return slices.Clone(c.calls[n:])
+}
+
+func (c *mutationCounter) Create(ctx context.Context, obj client.Object, opts ...client.CreateOption) error {
+	c.record("create", "object", obj)
+	return c.Client.Create(ctx, obj, opts...)
+}
+
+func (c *mutationCounter) Update(ctx context.Context, obj client.Object, opts ...client.UpdateOption) error {
+	c.record("update", "object", obj)
+	return c.Client.Update(ctx, obj, opts...)
+}
+
+func (c *mutationCounter) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+	c.record("patch", "object", obj)
+	return c.Client.Patch(ctx, obj, patch, opts...)
+}
+
+func (c *mutationCounter) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
+	c.record("delete", "object", obj)
+	return c.Client.Delete(ctx, obj, opts...)
+}
+
+func (c *mutationCounter) DeleteAllOf(ctx context.Context, obj client.Object, opts ...client.DeleteAllOfOption) error {
+	c.record("deleteAllOf", "object", obj)
+	return c.Client.DeleteAllOf(ctx, obj, opts...)
+}
+
+// Status wraps the status subresource writer, which is where a reconcile's
+// status updates go (r.Status().Update).
+func (c *mutationCounter) Status() client.SubResourceWriter {
+	return &countingStatusWriter{SubResourceWriter: c.Client.Status(), counter: c}
+}
+
+type countingStatusWriter struct {
+	client.SubResourceWriter
+
+	counter *mutationCounter
+}
+
+func (w *countingStatusWriter) Update(ctx context.Context, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+	w.counter.record("statusUpdate", "object", obj)
+	return w.SubResourceWriter.Update(ctx, obj, opts...)
+}
+
+func (w *countingStatusWriter) Patch(ctx context.Context, obj client.Object, patch client.Patch, opts ...client.SubResourcePatchOption) error {
+	w.counter.record("statusPatch", "object", obj)
+	return w.SubResourceWriter.Patch(ctx, obj, patch, opts...)
+}
+
 // ctrlRequest builds the reconcile request for a pool.
 func ctrlRequest(namespace, name string) ctrl.Request {
 	return ctrl.Request{NamespacedName: types.NamespacedName{Namespace: namespace, Name: name}}
@@ -143,6 +219,9 @@ type testFixture struct {
 	prober     *testProber
 	scraper    *testScraper
 	namespace  string
+	// api counts the mutating requests the reconciler issues, which the API
+	// server cannot show for a write that changes nothing.
+	api *mutationCounter
 }
 
 func newFixture(t *testing.T) *testFixture {
@@ -151,6 +230,7 @@ func newFixture(t *testing.T) *testFixture {
 	clock := newFakeClock()
 	prober := &testProber{}
 	scraper := &testScraper{}
+	api := &mutationCounter{Client: k8sClient}
 
 	namespace := fmt.Sprintf("turnfleet-%d", fixtureCounter.Add(1))
 	ctx := context.Background()
@@ -165,7 +245,7 @@ func newFixture(t *testing.T) *testFixture {
 		t:   t,
 		ctx: ctx,
 		reconciler: &TURNPoolReconciler{
-			Client:   k8sClient,
+			Client:   api,
 			Scheme:   testScheme,
 			Recorder: events.NewFakeRecorder(100),
 			Now:      clock.Now,
@@ -176,6 +256,7 @@ func newFixture(t *testing.T) *testFixture {
 		prober:    prober,
 		scraper:   scraper,
 		namespace: namespace,
+		api:       api,
 	}
 }
 
