@@ -21,8 +21,8 @@ prefix, and a Multus secondary interface (`azure-ipam`, SR-IOV, macvlan) can
 hand the pod an address with its own IPAM.
 
 What such a relay needs is its **own** address, held by the pod rather than by
-the node, with no Service and no load balancer in the path. The 5-tuple hashing
-in front of one public address is the bug this project removes (ADR 1, ADR 3,
+the node, with no Service and no load balancer in the path. A load balancer in
+front of one public address is the shape this project removes (ADR 1, ADR 3,
 ADR 4).
 
 ## Decision

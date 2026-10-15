@@ -26,25 +26,40 @@ What a pool gives you:
 ## Why not replicas behind a Service
 
 The common TURN deployment is N relay replicas behind one load-balanced public
-IP. It cannot work. A TURN allocation is a public `(IP, port)` pair, and peer
-traffic sent to that pair must reach the exact process holding the allocation.
-Peer packets arrive from an arbitrary source port, so anything that hashes the
-5-tuple (a Service, a cloud NLB, an L4 proxy) spreads them across the replicas:
+IP. You cannot build it out of the stock parts. A TURN allocation is a public
+`(IP, port)` pair, and peer traffic sent to that pair must reach the exact
+process holding the allocation. Peer packets carry nothing that names the
+allocation, so the layer in front of the replicas would have to decide on the
+destination port: `(relay address, relay port)` belongs to exactly one process,
+and only that process can answer. A Service and a cloud L4 load balancer decide
+otherwise:
 
 ```mermaid
 flowchart LR
   peer["WebRTC peer"] -->|"UDP to 203.0.113.7:49160,<br/>the relayed address it was given"| lb["L4 load balancer"]
-  lb -->|"5-tuple hash"| b["relay pod B<br/>no allocation on :49160"]
+  lb -->|"balances per flow,<br/>not per destination port"| b["relay pod B<br/>no allocation on :49160"]
   b --> lost["packet dropped,<br/>the relay candidate fails"]
   lb -.->|"must arrive here"| a["relay pod A<br/>holds the allocation on :49160"]
 ```
 
-The failure is silent, because every pod stays healthy. Turnfleet removes the
-load balancer instead: one relay per public address, each owning a disjoint port
-range, so a packet sent to `(address, port)` reaches the one process that owns
-that port. A Kubernetes Service cannot express a port range at all, which is why
-the relay range never travels through one. The full argument, including what a
-cloud load balancer can and cannot do, is in
+A `ServicePort` carries a single `port` and no range, so a relay range would
+need one entry per port, and cloud L4 load balancers are per-port or
+single-range and balance per flow. Neither expresses a range in which every
+port maps to its own backend, which is what makes the shape impossible to
+assemble from the products on hand. The failure is silent, because every pod
+stays healthy.
+
+Turnfleet removes the load balancer instead: one relay per public address, each
+owning a disjoint port range, so a packet sent to `(address, port)` reaches the
+one process that owns that port, delivered by the kernel on the node that binds
+the address. A purpose-built forwarder that reads the destination port and
+steers each one to its owning relay is possible, and operators run per-pod port
+ranges behind static DNAT outside Kubernetes today. It costs what the kernel
+does for free: a health and drain-aware mapping that never black-holes an
+allocation, the peer-facing address left with the relay that binds and
+advertises it, and both address families
+([`docs/adr/0019-one-address-is-never-split-across-nodes.md`](docs/adr/0019-one-address-is-never-split-across-nodes.md)).
+The full argument, including what a cloud load balancer can and cannot do, is in
 [`docs/capacity-model.md`](docs/capacity-model.md).
 
 ## Install
@@ -200,10 +215,12 @@ gains ports from a second family.
 Two things follow:
 
 * **Nothing load-balances the relay data path.** A Service has no port range
-  field at all, and a load balancer that supported ranges would still hash on
-  the 5-tuple and deliver peer packets to the wrong relay. So no Service sits in
-  front of a relay, and the relay nodes' firewall must allow the listener ports
-  and the relay range directly.
+  field, and the stock cloud load balancers are per-port or single-range, so the
+  relay range cannot travel through either. A purpose-built forwarder that maps
+  each destination port to its owning relay is possible, but it puts a
+  forwarding tier in the peer's path; Turnfleet lets the node deliver
+  `(address, port)` to the owning process instead. The relay nodes' firewall
+  must allow the listener ports and the relay range directly.
 * **Exhaustion is visible per relay.** The operator reads allocation counts from
   coturn's own metrics endpoint and publishes
   `turnfleet_relay_ports_in_use` / `turnfleet_relay_ports_total`, counts the

@@ -298,8 +298,8 @@ func (r *TURNPoolReconciler) createPod(ctx context.Context, pool *turnfleetv1alp
 //
 // The pod runs with hostNetwork on the node the planner chose, because that is
 // what makes peer traffic to (address, port) reach the process that owns the
-// port: no Service and no load balancer is involved, so the 5-tuple hashing that
-// would spray peer packets across relays never happens.
+// port: no Service and no load balancer sits between the peer and the relay, so
+// no flow hash or front-end decision picks the process that receives the packet.
 func desiredPod(pool *turnfleetv1alpha1.TURNPool, state *relayState) (*corev1.Pod, error) {
 	pod := &corev1.Pod{Spec: podSpec(pool, state)}
 	pod.Name = state.relay.Name

@@ -34,16 +34,21 @@ leaves a relay no ports.
 ## Why replicas behind one IP add nothing
 
 Peer packets arrive at the relayed address from an arbitrary source
-address/port. Nothing in the packet identifies which relay process the
-allocation belongs to, so anything that load balances by 5-tuple (a Service, a
-cloud NLB, an L4 proxy) will spray those packets across replicas. The peer's
-traffic reaches the wrong process, and the relay candidate fails silently while
-every pod is healthy.
+address/port. Nothing in the packet names the allocation, so the layer in front
+would have to route on the destination port: `(relay address, relay port)`
+belongs to one relay process, and only that process can answer. A Service and a
+cloud L4 load balancer do not route that way. A Service load balances per flow,
+and a cloud L4 load balancer is per-port or single-range. The peer's traffic
+reaches the wrong process, and the relay candidate fails silently while every
+pod is healthy.
 
 Kubernetes Services cannot express a port range at all (`ServicePort` has a
-single `port`; ranges exist only in NetworkPolicy). Cloud load balancers are
-per-port or single-range with the same 5-tuple behaviour. The findings are in
-`docs/adr/0003-service-port-ranges.md`.
+single `port`; ranges exist only in NetworkPolicy), so the relay range cannot
+travel through one. A forwarder that maps each destination port to the relay
+that owns it can be built, and operators run per-pod port ranges behind static
+DNAT outside Kubernetes, but it puts a forwarding tier in the peer's path. ADR 3
+excludes it, and ADR 19 records what such a layer would have to do to replace
+the node. The findings are in `docs/adr/0003-service-port-ranges.md`.
 
 The only correct scaling axis is therefore **more relay addresses**, each with
 its own port range, delivered without a load balancer.
@@ -190,9 +195,9 @@ prefixes only. A port-range front end is a load balancer, whatever its shape:
 
 ADR 3 and ADR 4 therefore exclude that approach, and the peer-facing address
 stays off the node. A floating address or an anycast prefix is one address per
-slice, which is `ExternalIPPool` again. Per-flow ECMP hashes the peer's source
-port, so a NAT rebind moves one peer's flow onto a node that holds no allocation
-for it. See ADR 19. `PartitionedIP` remains the one way to put several relays on
+slice, which is `ExternalIPPool` again. Per-flow ECMP hashes each flow, so a NAT
+rebind moves one peer's flow onto a node that holds no allocation for it. See
+ADR 19. `PartitionedIP` remains the one way to put several relays on
 one address, and it keeps them on one node.
 
 ## Running out

@@ -11,11 +11,11 @@ allocation. If it does not, the relay candidate the client advertised never
 works: signalling succeeds, media never flows, and every pod reports healthy.
 
 Running N relays behind one Kubernetes Service that exposes one public IP
-therefore does not add relay capacity. The Service load balances on the
-5-tuple, so a peer that was told `203.0.113.7:52134` has no way to influence
-which backend receives its packet. Capacity per public IP is bounded by the
-port space, not by the number of processes: 65536 ports, of which at most ~16k
-are usable in practice.
+therefore does not add relay capacity. A Service load balances per flow, and it
+cannot express a port range, so a peer that was told `203.0.113.7:52134` has no
+way to influence which backend receives its packet. Capacity per public IP is
+bounded by the port space, not by the number of processes: 65536 ports, of which
+at most ~16k are usable in practice.
 
 The alternative is to give each relay process a public relay identity of its
 own: an address plus a disjoint port range. That range's traffic must then

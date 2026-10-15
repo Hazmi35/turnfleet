@@ -7,12 +7,13 @@ relay identity. It keeps that set reachable, drained and observable.
 
 A TURN allocation is a public `(IP, port)` pair. Peer traffic sent to that pair
 must reach the exact process holding the allocation. Running N relays behind one
-load-balanced public IP cannot guarantee that. An L4 load balancer hashes on
-the 5-tuple, and a peer's source port is arbitrary. Adding replicas behind one
-address therefore adds processes without adding *relay capacity*. Every pod
-reports healthy, so the failure is silent. Turnfleet replaces that with
-per-relay identities: one address plus a disjoint port range, delivered without
-a load balancer. See `docs/adr/0001-addressing-modes.md` and
+load-balanced public IP cannot guarantee that: a Service or a cloud L4 load
+balancer decides per flow, and peer packets arrive from arbitrary source ports,
+so the destination port does not pick the process that holds the allocation.
+Adding replicas behind one address therefore adds processes without adding
+*relay capacity*. Every pod reports healthy, so the failure is silent. Turnfleet
+replaces that with per-relay identities: one address plus a disjoint port range,
+delivered without a load balancer. See `docs/adr/0001-addressing-modes.md` and
 `docs/adr/0003-service-port-ranges.md`.
 
 ## Data path
