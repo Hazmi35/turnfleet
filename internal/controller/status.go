@@ -48,11 +48,11 @@ const (
 	ConditionAddressConflict = "AddressConflict"
 
 	// ConditionPodAddressUnusable is true when a relay node declares a PodIP
-	// address the pool cannot advertise — a private, carrier-grade NAT,
-	// link-local, loopback, multicast or unspecified address. The address is
-	// dropped from the plan, and the condition names the node and the reason.
-	// It is the reconcile-time half of a rule admission also checks, because a
-	// node annotation can change after the pool was admitted.
+	// address the pool cannot advertise at all — unspecified, loopback,
+	// link-local or multicast. The address is dropped from the plan, and the
+	// condition names the node and the reason. It is the reconcile-time half
+	// of a rule admission also checks, because a node annotation can change
+	// after the pool was admitted.
 	ConditionPodAddressUnusable = "PodAddressUnusable"
 
 	// ConditionReachableFromVantage is true when the latest result published by

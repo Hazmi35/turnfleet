@@ -53,12 +53,17 @@ so the address has to exist before the pod does. The declaration is also what
 keeps the identity stable: the same node and the same declaration always plan
 the same relays.
 
-**How the pod receives it.** `addressing.podIP.attachmentRef` (optional,
-immutable) names the Multus `NetworkAttachmentDefinition` the pod attaches, in
-the pool's namespace or as `namespace/name`; without it the pod binds its own
-address on the cluster's default network. The controller asks for the declared
-address in the pod's Multus annotation, which is what an IPAM that honours a
-request needs:
+**How the pod receives it.** `addressing.podIP` names the Multus
+`NetworkAttachmentDefinition` the pod attaches, in the pool's namespace or as
+`namespace/name`, through `attachmentRef`. The block is immutable, like `mode`
+and `family`, and so is the reference. Omitting the block is how a pool says the
+relay uses the pod's own address on the cluster's default network, and that zero
+value is the mode's other and only other spelling. The block cannot be present
+and name nothing: its one field must be set whenever the block is — a one-field
+`AtLeastOneOf`, so `podIP: {}` is refused — and the reference must be non-empty,
+so `podIP: {attachmentRef: ""}` is refused too. The controller asks for the
+declared address in the pod's Multus annotation, which is what an IPAM that
+honours a request needs:
 
 ```
 k8s.v1.cni.cncf.io/networks: '[{"name":"relay-pods","ips":["203.0.113.21/24"]}]'
@@ -105,10 +110,13 @@ What the mode forbids:
   address every relay holds, so it strands live allocations exactly as changing
   `mode` or `family` does. `mode`, `family` and the attachment are immutable;
   a new pool is the move.
-* Addresses that cannot be individually routable — RFC 1918, RFC 6598,
-  loopback, link-local, multicast, unspecified, and IPv6 unique local
-  addresses — because a peer could not reach them even with every firewall
-  open.
+* Addresses that cannot work at all — unspecified, loopback, link-local
+  unicast and multicast — because a peer could not reach them even with every
+  firewall open. A private address (RFC 1918), a carrier-grade NAT address
+  (RFC 6598) or an IPv6 unique local address (RFC 4193) is **not** refused:
+  whether the peers route it is the operator's judgement — a hub-and-spoke
+  cluster whose pod CIDR is peered while the node subnet is not routes one —
+  and the external vantage point (ADR 7) is what proves it.
 
 ## Consequences
 

@@ -176,11 +176,11 @@ func specFromBytes(data []byte) turnfleetv1alpha1.TURNPoolSpec {
 			},
 		}
 	case turnfleetv1alpha1.AddressingModePodIP:
-		// The mode works with and without an attachment: without one the relay
-		// binds the pod's own address on the default network.
-		spec.Addressing.PodIP = &turnfleetv1alpha1.PodIPSpec{}
+		// PodIP is optional and its zero value is the default-network
+		// spelling, so both spellings stay fuzzed: the block set with a
+		// reference, and the block left zero.
 		if byteAt(12)%2 == 0 {
-			spec.Addressing.PodIP.AttachmentRef = new("relay-pods")
+			spec.Addressing.PodIP = turnfleetv1alpha1.PodIPSpec{AttachmentRef: "relay-pods"}
 		}
 	case turnfleetv1alpha1.AddressingModeHostNetwork:
 		// Nothing mode-specific to configure.
