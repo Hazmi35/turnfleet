@@ -145,13 +145,16 @@ run on the same ref).
 
 | | before | after, five runs | median |
 |---|---|---|---|
-| e2e job wall | 10.12 min (run 38719831132); 12.15 min median of the 36 successful runs before | 7.65, 6.88, 7.55, 7.70, 6.67 min | **7.55 min** |
-| `make test-e2e` step | 386s | 373, 316, 366, 374, 310s | 366s |
-| `make test-e2e-chart` step | 174s | 45, 48, 47, 46, 45s | **46s** |
+| e2e job wall | 10.12 min (run 38719831132); 12.15 min median of the 36 successful runs before | 7.65, 6.88, 7.55, 7.70, 6.67 min (5a1a5ce), 7.90 min (31b3c7e) | **7.60 min** |
+| `make test-e2e` step | 386s | 373, 316, 366, 374, 310s, 360s | 363s |
+| `make test-e2e-chart` step | 174s | 45, 48, 47, 46, 45s, 46s | **46s** |
 | probe image build | 53s | 5, 5, 5, 6, 6s | **5s** |
 | controller image build | 101s | 122, 92, 119, 121, 94s | 119s |
 | host binary build | 62s (`make build`, both binaries) | 78, 48, 77, 76, 49s (`probe-bin`, probe only) | 76s |
 | `go test` in the suite step (package) | 67.7s | 67.8, 64.3, 66.0, 73.2, 67.9s | 67.8s |
+
+The sixth run is the final commit of the session (`31b3c7e`, run 38766346326,
+`ci-pr62-final-steps.tsv`).
 
 Raw: `ci-pr62-attempt{1..5}-steps.tsv` are GitHub's own step timings;
 `ci-pr62-attempt{1..5}.log` are the job logs the per-phase table is parsed from

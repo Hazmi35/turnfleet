@@ -140,21 +140,29 @@ inconsistency to report. What was wrong was the helper assuming its own overlay.
 
 §8 of the session-1 report listed the E2E job time (~6.7 min) and the chart step
 (~35s) as derived. They are now measured: the branch is pushed and PR #62 (draft)
-is open, which runs the real workflow. Five runs — the first push plus four
-`gh run rerun`s of the same run, one at a time, because the workflow's
-concurrency group cancels an in-progress run on the same ref.
+is open, which runs the real workflow. Six runs in all — the push that opened the
+PR, four `gh run rerun`s of that run, and the run on this session's final commit.
+The reruns are one at a time because the workflow's concurrency group cancels an
+in-progress run on the same ref.
 
-| | before | after (5 runs) | change |
+| | before | after (six runs) | change |
 |---|---|---|---|
-| E2E job wall | 12.15 min median of 36 successful runs (10.0-13.5) | **7.55 min median** (6.67-7.70) | **-38%** |
-| `make test-e2e` step | 386s | 366s median (310-374) | -5% |
+| E2E job wall | 12.15 min median of 36 successful runs (10.0-13.5) | **7.60 min median** (6.67-7.90) | **-37%** |
+| `make test-e2e` step | 386s | 363s median (310-374) | -6% |
 | `make test-e2e-chart` step | 174s | **46s median** (45-48) | **-74%** |
-| probe image build | 53s | **5-6s in all five** | -90% |
+| probe image build | 53s | **5-6s in all six** | -90% |
 | controller image build | 101s | 92-122s | none (variance) |
-| host probe build | 62s for both binaries | 48-77s for the probe alone | none (variance) |
+| host binary build | 62s (`make build`, both binaries) | 48-77s | none (variance) — see the revert below |
 | `go test` in the suite step (package) | 67.7s | 64.3-73.2s | none, as expected |
 
-The before and after ranges do not overlap (10.0-13.5 vs 6.67-7.70).
+Which commit: five of the six are the branch at `5a1a5ce`, session 1's tip and
+the push that opened the PR. The sixth is `31b3c7e`, the last commit of this
+session, carrying the revert, the metrics-scheme fix and the new specs: job
+7.90 min, suite step 360s, chart step 46s, green. The session-2 changes move none
+of these, which is what they should do — they change the test suite and one
+controller file, not the build path.
+
+The before and after ranges do not overlap (10.0-13.5 vs 6.67-7.90).
 
 **Where the derivation missed, and why.** The chart step was derived at ~35s and
 measures 46s — 31%, over the 20% the task allows. The gap is that step's own
