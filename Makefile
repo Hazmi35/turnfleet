@@ -289,10 +289,10 @@ uninstall: ## Remove the CRDs from the kind cluster.
 KUSTOMIZE_OVERLAY ?= config/default
 
 # await-rollout waits for the controller deployment to finish rolling out, and
-# on failure dumps the state that explains why. The step has failed eight times
-# in the E2E job's history as "1 old replicas are pending termination" followed
-# by a bare timeout, with nothing recorded about the pods or the nodes, so the
-# run had to be re-run to learn nothing. See test-audit/REPORT.md.
+# on failure dumps the state that explains why. Eight E2E runs had failed here
+# with "1 old replicas are pending termination" followed by a bare timeout, and
+# nothing recorded about the pods or the nodes, so the failure was invisible
+# without a re-run.
 .PHONY: await-rollout
 await-rollout:
 	@if ! $(KUBECTL) -n turnfleet-system rollout status deployment/turnfleet-controller-manager --timeout=180s; then \
