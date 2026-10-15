@@ -29,7 +29,7 @@ KUSTOMIZE_VERSION ?= v5.8.2
 # from the release into $(LOCALBIN) and verified against the checksum the
 # release publishes next to it (see the `helm` target). Renovate reads this
 # line (customManager in renovate.json).
-HELM_VERSION ?= v4.3.0
+HELM_VERSION ?= v4.3.1
 KIND_IMAGE ?= kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
 # The coturn data plane. COTURN_IMAGE is the tag the kind cluster is loaded
 # with (a multi-arch index digest cannot be loaded with `docker save`), and
