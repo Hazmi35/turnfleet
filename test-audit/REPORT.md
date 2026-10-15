@@ -270,6 +270,13 @@ reconciler contracts (the requeue intervals, §4 row 8) are asserted *nowhere*,
 and the cheapest place to catch them is the existing envtest `reconcile()`
 helper, not the e2e suite.
 
+**No spec was lost.** `git grep -c '^func Test'` over every `*_test.go` returns
+113 on `main` and 113 on this branch: no test function was added or removed, and
+the 22 Ginkgo specs are untouched (`turnpool_webhook_envtest_test.go` changed
+only its node-cleanup `DeferCleanup` and an import; the specs in
+`turnpool_webhook_test.go` kept their names, cases and count). The E2E suite's 8 specs are
+byte-identical: this branch does not touch `test/e2e/` at all.
+
 ---
 
 ## 7. Untested CI changes needing a real CI run
@@ -500,6 +507,9 @@ make kind-up docker-build probe-bin install load-images  # 294.5s here, all phas
 make deploy KUSTOMIZE_OVERLAY=config/e2e
 go test -tags=e2e -count=1 -v -timeout 30m ./test/e2e/   # 90.8s here
 make test-e2e-chart REUSE_IMAGES=1                       # 48.1s here
+
+# The repo's own gates, all green on the final tree:
+make lint && make verify && make test && make ci
 
 # The envtest before/after (§5), 5 runs each, one package per invocation:
 git worktree add --detach /tmp/before 9ba0193
