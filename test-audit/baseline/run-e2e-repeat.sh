@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Turnfleet Authors
+#
+# The exact script behind the five-run e2e flake measurement in
+# test-audit/REPORT.md section 5. Kept next to its output so the
+# measurement can be repeated rather than trusted.
 # Phase 2 flakiness: rerun the E2E specs 5 times against the already-deployed cluster.
 # Spec execution only: the cluster, images and controller are left in place by run-e2e.sh.
 set -uo pipefail

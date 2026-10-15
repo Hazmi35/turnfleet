@@ -1,6 +1,6 @@
 # Test suite audit — Turnfleet
 
-Branch: `test-audit/2026-10-15` (9 commits, not pushed).
+Branch: `test-audit/2026-10-15` (11 commits, not pushed).
 
 Everything below is measured on this workstation (2 vCPU, 15 GiB, docker 26.1.5,
 buildx 0.13.1, kind v0.33.0) or read out of real CI runs of this repository
@@ -17,17 +17,19 @@ the judgment calls are in `DECISIONS.md`.
 **The E2E job is the pull request's critical path: 10.0-13.5 min, median
 12.2 min, against 2.2 min for the ci job.** Almost none of it was the tests.
 `make test-e2e` spent 305s of its 386s on setup and 67.7s running specs; the
-chart step spent 165s of its 174s on setup and 7.5s on its one spec. Two thirds
-of the whole job (353s of 560s) was `docker build`, and three of the four image
-builds recompiled from source a tree that had not changed.
+chart step spent 165s of its 174s on setup and 7.5s on its one spec. Half of the
+time inside the two steps (291s of 560s) was four `docker build` invocations:
+the two in the chart step rebuilt a tree the step above had just built, and
+each of the four compiled every dependency from scratch, because `DATE` in
+`LDFLAGS` changes on every `make` run and invalidates the build layer.
 
 | Layer / job | Before | After | How |
 |---|---|---|---|
 | `ci` job (unit + envtest, lint, vuln) | 2.2-2.5 min | unchanged | nothing here was the bottleneck |
 | `internal/controller` envtest | 20.04s local, 5 runs **[measured]** | 19.78s local, 5 runs **[measured]** | one `List` per `markPodsReady` instead of one per pod — within the run-to-run spread, so a correctness fix, not a timing win |
 | `make test-e2e` setup | 484.1s local **[measured]** | 294.5s local **[measured]** (-39%) | cacheable images, probe-only host build |
-| `make test-e2e` specs | 116.5s local | 90.8s local (variance, not a change: see §5) | — |
-| `make test-e2e` total | 600.6s local **[measured]** | 385.3s local **[measured]** (-36%) | |
+| `make test-e2e` specs | 116.5s local, single run | 74.8s mean over 5 runs, 70.4-79.0s **[measured]** | the spec code is unchanged; the spread is scheduling (§5) |
+| `make test-e2e` total | 600.6s local **[measured]** | 385.3s local **[measured]** (-36%), of which the spec phase was a 90.8s run; with the 5-run mean it is ~370s | |
 | `make test-e2e` (CI step) | 386s **[measured]** | ~320s **[derived]** | probe image build 53s → ~5s, host build 62s → ~48s |
 | `make test-e2e-chart` (CI step) | 174s **[measured]** | ~35s **[derived]**; 48.1s local **[measured]** | `REUSE_IMAGES=1` removes 144s of build and load |
 | `e2e` job total | 10.0-13.5 min, median 12.2 **[measured, 50 runs]** | ~6.7 min **[derived]** | |
@@ -383,6 +385,12 @@ Each with what it would take to confirm.
 7. **Preload the coturn image** instead of `kind load` per run (`PLAN.md` §12):
    ~7s.
 8. **Quantify and fix the envtest namespace leak** (§4 row 16).
+9. **Let the Ginkgo suite run with a fixed seed in CI.** `make test` passes all
+   packages to one `go test`, and `-args` reaches *every* test binary in that
+   invocation, so `--ginkgo.seed` kills `internal/controller` with "flag
+   provided but not defined: -ginkgo.seed". A fixed seed in CI needs the two
+   envtest packages split into two invocations (or a `GINKGO_SEED` env var).
+   Found the hard way while writing the rerun script.
 
 ---
 
@@ -492,4 +500,24 @@ make kind-up docker-build probe-bin install load-images  # 294.5s here, all phas
 make deploy KUSTOMIZE_OVERLAY=config/e2e
 go test -tags=e2e -count=1 -v -timeout 30m ./test/e2e/   # 90.8s here
 make test-e2e-chart REUSE_IMAGES=1                       # 48.1s here
+
+# The envtest before/after (§5), 5 runs each, one package per invocation:
+git worktree add --detach /tmp/before 9ba0193
+for s in 1101 2202 3303 4404 5505; do
+  for tree in /tmp/before "$PWD"; do
+    ( cd "$tree"
+      KUBEBUILDER_ASSETS="$PWD/bin/k8s/1.37.0-linux-amd64" \
+        go test -race -count=1 -timeout 20m ./internal/controller/
+      KUBEBUILDER_ASSETS="$PWD/bin/k8s/1.37.0-linux-amd64" \
+        go test -race -count=1 -timeout 20m ./internal/webhook/v1alpha1/ \
+        -args --ginkgo.seed=$s --ginkgo.randomize-all )
+  done
+done
+
+# The e2e flake reruns (§5), 5 times, against the install `make test-e2e` makes:
+for i in 1 2 3 4 5; do
+  KUBE_CONTEXT=kind-turnfleet KIND_CLUSTER=turnfleet COTURN_IMAGE=coturn/coturn:4.18.0-r0 \
+  PROBE_BIN="$PWD/bin/turnfleet-probe" PROBE_IMG=ghcr.io/hazmi35/turnfleet-probe:dev \
+    go test -tags=e2e -count=1 -v -timeout 30m ./test/e2e/
+done
 ```
