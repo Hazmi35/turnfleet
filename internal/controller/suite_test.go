@@ -179,14 +179,24 @@ func newFixture(t *testing.T) *testFixture {
 	}
 }
 
-// reconcile runs one pass of the loop.
+// reconcile runs one pass of the loop and fails the test if the pass errored.
+// It throws the ctrl.Result away: a spec that cares what the pass scheduled
+// next wants reconcileResult.
 func (f *testFixture) reconcile(name string) {
 	f.t.Helper()
 
-	_, err := f.reconciler.Reconcile(f.ctx, ctrlRequest(f.namespace, name))
-	if err != nil {
+	if _, err := f.reconcileResult(name); err != nil {
 		f.t.Fatalf("Reconcile(%s) failed: %v", name, err)
 	}
+}
+
+// reconcileResult runs one pass of the loop and returns what the pass asked
+// for, including the error. Nothing used to look at the result, so none of the
+// controller's requeue contracts was asserted anywhere.
+func (f *testFixture) reconcileResult(name string) (ctrl.Result, error) {
+	f.t.Helper()
+
+	return f.reconciler.Reconcile(f.ctx, ctrlRequest(f.namespace, name))
 }
 
 // reconcileAttempts bounds reconcileUntil. A condition that does not hold by
