@@ -177,8 +177,7 @@ test-e2e: kind-up docker-build probe-bin install ## Run the end-to-end suite aga
 # will not adopt objects that kustomize created and the CRDs have to belong to
 # the release that installs them.
 .PHONY: test-e2e-chart
-test-e2e-chart: kind-up docker-build build ## Install the CRDs and the controller from the chart, then probe a relay.
-	$(MAKE) load-images
+test-e2e-chart: kind-up probe-bin images-for-e2e ## Install the CRDs and the controller from the chart, then probe a relay.
 	$(MAKE) undeploy KUSTOMIZE_OVERLAY=config/e2e
 	$(MAKE) uninstall
 	$(MAKE) helm-install
@@ -207,6 +206,23 @@ build: generate ## Build the controller and probe binaries.
 probe-bin: generate ## Build the host probe binary, which the e2e suite runs.
 	@mkdir -p bin
 	CGO_ENABLED=0 $(GO) build -trimpath -ldflags "$(LDFLAGS)" -o $(PROBE_BIN) ./cmd/turnfleet-probe
+
+# REUSE_IMAGES=1 makes `make test-e2e-chart` use the images a preceding
+# `make test-e2e` already built and loaded, instead of rebuilding and reloading
+# them. The CI e2e job runs the two targets back to back against one tree; the
+# rebuild cost 137s of the chart step for two images nothing had changed in.
+# Anything else — a standalone `make test-e2e-chart`, a different tree — still
+# builds, so the target keeps testing what it is pointed at.
+REUSE_IMAGES ?= 0
+
+.PHONY: images-for-e2e
+images-for-e2e:
+ifeq ($(REUSE_IMAGES),1)
+	@echo "REUSE_IMAGES=1: using the images test-e2e already built and loaded"
+else
+	$(MAKE) docker-build
+	$(MAKE) load-images
+endif
 
 .PHONY: run
 run: generate ## Run the controller against the current kubeconfig.
