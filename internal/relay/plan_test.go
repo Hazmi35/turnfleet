@@ -712,6 +712,12 @@ func TestComputePlanIPv6IsStable(t *testing.T) {
 		dualStackNode("worker-1", "203.0.113.11", "2001:db8::11"),
 	}})
 
+	// Pinned first: without it a planner that placed nothing would satisfy the
+	// size comparison below with 0 == 0 and never enter the loop, so the test
+	// would pass while proving nothing.
+	if len(first.Relays) != 2 {
+		t.Fatalf("planned %d relays, want 2: two IPv6 nodes and two replicas", len(first.Relays))
+	}
 	if len(first.Relays) != len(second.Relays) {
 		t.Fatalf("plans differ in size: %d vs %d", len(first.Relays), len(second.Relays))
 	}

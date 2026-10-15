@@ -88,6 +88,12 @@ func TestComputePlanPodIPIsStable(t *testing.T) {
 		podIPNode("worker-1", "203.0.113.24", "203.0.113.21"),
 	}})
 
+	// Pinned first: three declared addresses and three replicas must place
+	// three relays, and without this a planner that placed nothing would pass
+	// the size comparison below with 0 == 0 and never enter the loop.
+	if len(first.Relays) != 3 {
+		t.Fatalf("planned %d relays, want 3: three declared addresses on two nodes", len(first.Relays))
+	}
 	if len(first.Relays) != len(second.Relays) {
 		t.Fatalf("plans differ in size: %d vs %d", len(first.Relays), len(second.Relays))
 	}
