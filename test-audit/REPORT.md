@@ -1,6 +1,6 @@
 # Test suite audit — Turnfleet
 
-Branch: `test-audit/2026-10-15` (17 commits), pushed and open as **draft PR
+Branch: `test-audit/2026-10-15` (19 commits), pushed and open as **draft PR
 #62** so the CI wall times in Session 2 could be measured rather than derived.
 
 Everything below is measured on this workstation (2 vCPU, 15 GiB, docker 26.1.5,

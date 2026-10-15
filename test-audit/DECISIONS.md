@@ -178,3 +178,18 @@ Both are in the report: the 40 unconstrained cycles as evidence of a mistake I
 made, the constrained ones as the real test. The distinction is the whole point
 of "every claim needs evidence" — the first run would have read as a clean null
 result.
+
+## 13. The lint fixes are their own commit, not folded into the ones they amend
+
+`staticcheck` flagged the new requeue helper for reading `ctrl.Result.Requeue`
+(deprecated in controller-runtime) and `unparam` flagged a `kind` argument that
+was always "object". Both fixes belong to code committed earlier in this session
+— `edeb70b` and `813d64e` — and folding them in means rewriting two commits and
+rebasing four more on top for a lint nit, late in the session, with the tree
+otherwise green. They are one commit instead, whose message says what they change
+and why they are separate.
+
+The risk of that choice is that the two amended commits are not lint-clean in
+isolation; the tip is, `make ci` is green on it, and the break matrix was re-run
+from the committed script after the change to confirm the rewritten assertion
+still discriminates.
