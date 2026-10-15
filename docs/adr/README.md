@@ -24,6 +24,7 @@ decision gets a new ADR that says so.
 | [0016](0016-release-signature-storage.md) | Release signatures and attestations live in the registry on cosign's tag-based storage, so the cosign pin is held on the v2 line. |
 | [0017](0017-release-trigger-and-chart-version.md) | The GitHub release is what publishes a version, and the chart carries the application's version. |
 | [0018](0018-addressing-mode-podip.md) | The `PodIP` addressing mode: relays in their own network namespace, on addresses declared per node, read back from the pod and drained on a mismatch. |
+| [0019](0019-one-address-is-never-split-across-nodes.md) | One address is never split across nodes: the only layers that read the destination port are the node holding the address and a load balancer, which ADR 3 and ADR 4 keep out of the peer's path. |
 
 Related documents that are not ADRs: [`../architecture.md`](../architecture.md),
 [`../capacity-model.md`](../capacity-model.md),

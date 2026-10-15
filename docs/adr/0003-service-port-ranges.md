@@ -34,6 +34,14 @@ load balancing decision must be `(relay IP, relay port) → relay process`, whil
 L4 load balancers hash on the whole 5-tuple: peer-originated packets arrive
 from an arbitrary source address:port and would be sprayed across relays.
 
+*(Corrected by ADR 19.)* The 5-tuple hashing above is the common L4 design, not
+the only one: a GCP forwarding rule can front one port range per backend
+service, and Global Accelerator custom routing keys on the destination port
+alone. The durable reasons to keep a load balancer out of the relay data path
+are narrower, and ADR 19 records them: it puts a load balancer in the peer's
+path, the address the peer dials belongs to the balancer and not to the relay,
+and it cannot carry the drain semantics of ADR 6.
+
 ## Decision
 
 No Service, Ingress or cloud load balancer is placed in the relay data path.
