@@ -297,6 +297,22 @@ uninstall: ## Remove the CRDs from the kind cluster.
 # webhooks and their serving certificates live.
 KUSTOMIZE_OVERLAY ?= config/default
 
+# await-rollout waits for the controller deployment to finish rolling out, and
+# on failure dumps the state that explains why. The step has failed eight times
+# in the E2E job's history as "1 old replicas are pending termination" followed
+# by a bare timeout, with nothing recorded about the pods or the nodes, so the
+# run had to be re-run to learn nothing. See test-audit/REPORT.md.
+.PHONY: await-rollout
+await-rollout:
+	@if ! $(KUBECTL) -n turnfleet-system rollout status deployment/turnfleet-controller-manager --timeout=180s; then \
+		echo "await-rollout: the rollout did not finish; the cluster says:" >&2; \
+		$(KUBECTL) -n turnfleet-system get deployment turnfleet-controller-manager -o yaml >&2 || true; \
+		$(KUBECTL) -n turnfleet-system get pods -o wide >&2 || true; \
+		$(KUBECTL) get nodes -o wide >&2 || true; \
+		$(KUBECTL) get events -A --sort-by=.lastTimestamp >&2 | tail -40 || true; \
+		exit 1; \
+	fi
+
 .PHONY: deploy
 deploy: ## Deploy the controller into the kind cluster.
 	# The image is set on the cluster rather than in config/manager, so running
@@ -307,7 +323,7 @@ deploy: ## Deploy the controller into the kind cluster.
 	# without this, a running pod keeps the image it started with and the
 	# cluster silently tests the previous build.
 	$(KUBECTL) -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
-	$(KUBECTL) -n turnfleet-system rollout status deployment/turnfleet-controller-manager --timeout=180s
+	$(MAKE) await-rollout
 
 .PHONY: undeploy
 undeploy: ## Remove the controller from the kind cluster.
@@ -388,7 +404,7 @@ helm-install: helm ## Install the controller from the chart into the kind cluste
 	# Same reason as `make deploy`: the tag is constant, so a freshly loaded
 	# image needs a new pod.
 	$(KUBECTL) -n turnfleet-system rollout restart deployment/turnfleet-controller-manager
-	$(KUBECTL) -n turnfleet-system rollout status deployment/turnfleet-controller-manager --timeout=180s
+	$(MAKE) await-rollout
 
 .PHONY: helm-uninstall
 helm-uninstall: helm ## Remove the chart from the kind cluster.
