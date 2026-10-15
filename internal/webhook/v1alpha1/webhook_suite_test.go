@@ -58,7 +58,12 @@ var _ = BeforeSuite(func() {
 
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "..", "config", "crd", "bases")},
+		CRDDirectoryPaths: []string{
+			filepath.Join("..", "..", "..", "config", "crd", "bases"),
+			// The PodIP mode's attachment kind: Multus owns it, so it is not in
+			// config/crd/bases, but the webhook reads it and the suite needs it.
+			filepath.Join("testdata", "envtest-crds"),
+		},
 		ErrorIfCRDPathMissing: false,
 
 		WebhookInstallOptions: envtest.WebhookInstallOptions{

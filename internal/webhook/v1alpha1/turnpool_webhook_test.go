@@ -190,6 +190,59 @@ func TestValidateCreate(t *testing.T) {
 			},
 		},
 		{
+			name: "valid PodIP pool",
+			mutate: func(p *turnfleetv1alpha1.TURNPool) {
+				p.Spec.Addressing = turnfleetv1alpha1.AddressingSpec{
+					Mode:  turnfleetv1alpha1.AddressingModePodIP,
+					PodIP: &turnfleetv1alpha1.PodIPSpec{AttachmentRef: new("relay-pods")},
+				}
+			},
+		},
+		{
+			name: "valid PodIP pool without an attachment",
+			mutate: func(p *turnfleetv1alpha1.TURNPool) {
+				// No podIP block at all: the relay binds the pod's own address
+				// on the default network, and the addresses are declared on the
+				// relay nodes.
+				p.Spec.Addressing = turnfleetv1alpha1.AddressingSpec{Mode: turnfleetv1alpha1.AddressingModePodIP}
+			},
+		},
+		{
+			name: "podIP on a HostNetwork pool",
+			mutate: func(p *turnfleetv1alpha1.TURNPool) {
+				p.Spec.Addressing.PodIP = &turnfleetv1alpha1.PodIPSpec{AttachmentRef: new("relay-pods")}
+			},
+			wantErr:   true,
+			wantField: "spec.addressing.podIP",
+		},
+		{
+			name: "externalIPPool on a PodIP pool",
+			mutate: func(p *turnfleetv1alpha1.TURNPool) {
+				p.Spec.Addressing = turnfleetv1alpha1.AddressingSpec{
+					Mode:  turnfleetv1alpha1.AddressingModePodIP,
+					PodIP: &turnfleetv1alpha1.PodIPSpec{},
+					ExternalIPPool: &turnfleetv1alpha1.ExternalIPPoolSpec{
+						Addresses: []turnfleetv1alpha1.ExternalAddress{
+							{NodeName: "worker-1", Address: "203.0.113.10"},
+						},
+					},
+				}
+			},
+			wantErr:   true,
+			wantField: "spec.addressing.externalIPPool",
+		},
+		{
+			name: "partitionedIP on a PodIP pool",
+			mutate: func(p *turnfleetv1alpha1.TURNPool) {
+				p.Spec.Addressing = turnfleetv1alpha1.AddressingSpec{
+					Mode:          turnfleetv1alpha1.AddressingModePodIP,
+					PartitionedIP: &turnfleetv1alpha1.PartitionedIPSpec{RelaysPerNode: 2},
+				}
+			},
+			wantErr:   true,
+			wantField: "spec.addressing.partitionedIP",
+		},
+		{
 			name: "valid IPv6 pool",
 			mutate: func(p *turnfleetv1alpha1.TURNPool) {
 				p.Spec.Addressing = turnfleetv1alpha1.AddressingSpec{
@@ -663,6 +716,39 @@ func TestValidateUpdateImmutability(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// TestValidateUpdateKeepsThePodIPAttachment pins the second half of PodIP
+// immutability: the mode stays the same on both sides, and only the attachment
+// moves. Replacing it changes which address every relay holds, so it strands
+// live allocations exactly as changing the mode does.
+func TestValidateUpdateKeepsThePodIPAttachment(t *testing.T) {
+	t.Parallel()
+
+	validator := &TURNPoolValidator{}
+	oldPool := validPool()
+	oldPool.Spec.Addressing = turnfleetv1alpha1.AddressingSpec{
+		Mode:  turnfleetv1alpha1.AddressingModePodIP,
+		PodIP: &turnfleetv1alpha1.PodIPSpec{AttachmentRef: new("relay-pods")},
+	}
+
+	if _, err := validator.ValidateUpdate(context.Background(), oldPool, oldPool.DeepCopy()); err != nil {
+		t.Fatalf("an update that changes nothing was rejected: %v", err)
+	}
+
+	changed := oldPool.DeepCopy()
+	changed.Spec.Addressing.PodIP.AttachmentRef = new("relay-pods-v2")
+	_, err := validator.ValidateUpdate(context.Background(), oldPool, changed)
+	if err == nil {
+		t.Fatal("changing the attachment was admitted: every relay's address would move")
+	}
+	var statusErr *apierrors.StatusError
+	if !asStatusError(err, &statusErr) {
+		t.Fatalf("error is not an API status error: %v", err)
+	}
+	if !containsField(causeFields(statusErr), "spec.addressing.podIP.attachmentRef") {
+		t.Errorf("error names %v, want spec.addressing.podIP.attachmentRef", causeFields(statusErr))
 	}
 }
 

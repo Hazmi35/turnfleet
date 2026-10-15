@@ -23,6 +23,7 @@ decision gets a new ADR that says so.
 | [0015](0015-vantage-result-delivery.md) | A vantage runner publishes its result in a `<pool>-vantage` ConfigMap; the controller reads it into the `ReachableFromVantage` condition and cannot mask it. |
 | [0016](0016-release-signature-storage.md) | Release signatures and attestations live in the registry on cosign's tag-based storage, so the cosign pin is held on the v2 line. |
 | [0017](0017-release-trigger-and-chart-version.md) | The GitHub release is what publishes a version, and the chart carries the application's version. |
+| [0018](0018-addressing-mode-podip.md) | The `PodIP` addressing mode: relays in their own network namespace, on addresses declared per node, read back from the pod and drained on a mismatch. |
 
 Related documents that are not ADRs: [`../architecture.md`](../architecture.md),
 [`../capacity-model.md`](../capacity-model.md),

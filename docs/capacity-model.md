@@ -55,23 +55,28 @@ its own port range, delivered without a load balancer.
 | `HostNetwork` | 1 (required anti-affinity) | the node's `ExternalIP` (or the `turnfleet.hzmi.dev/relay-address` annotation) | the whole range | `end - start + 1` |
 | `PartitionedIP` | `addressing.partitionedIP.relaysPerNode` | the node address, shared by all relays on that node | `(end - start + 1) / relaysPerNode`, remainder to the first slices | still `end - start + 1` — **splitting an IP does not create ports** |
 | `ExternalIPPool` | 1 (required anti-affinity, as in `HostNetwork`) | the declared secondary address | the whole range | `end - start + 1` |
+| `PodIP` | 1 | the address the pod holds on the default network or on a Multus attachment, declared per node in `turnfleet.hzmi.dev/relay-pod-addresses` | the whole range | `end - start + 1` |
 
-Every mode here binds a node address. A fourth mode for routable, stable pod or
-secondary addresses is tracked in #15; its prerequisites are stated in the issue
-and in `docs/limitations.md`.
+Every mode but `PodIP` binds an address that belongs to the node. `PodIP` gives
+the address to the pod itself, which is what makes it usable on clusters whose
+nodes have no address a peer can route to (Azure Kubernetes Service with
+Cilium, and Multus secondary networks); see
+`docs/adr/0018-addressing-mode-podip.md`, and note that its per-address ingress
+rules, routable pod network and stable IPAM are prerequisites the operator owns.
 
 Growing capacity:
 
 * `HostNetwork`: add nodes with the relay-node label. Each new node is a new
   public address and a fresh port space.
 * `ExternalIPPool`: declare an address on another node and add it to
-  `addressing.externalIPPool.addresses`. Every declared address is planned as
-  its own relay, but only one relay of a single-family pool is schedulable per
-  node: the required anti-affinity that keeps one relay per node (the rule
-  `HostNetwork` follows) applies to every mode but `PartitionedIP`, so a second
-  address declared on a node that already runs a relay is planned and never
-  scheduled. Attaching cloud secondary addresses to existing nodes is what this
-  mode exists for, and it is not there yet (#11).
+  `addressing.externalIPPool.addresses`, or declare a second address on a node
+  that already runs a relay: every relay owns its address, so a node with two
+  declared addresses runs two relays. Attaching cloud secondary addresses to
+  existing nodes is what this mode exists for.
+* `PodIP`: declare another address on a relay node in
+  `turnfleet.hzmi.dev/relay-pod-addresses`. Each declared address is one relay
+  with its own port space, exactly as in `ExternalIPPool`; the routes and
+  ingress rules for the new address are the operator's to add.
 * `PartitionedIP`: this mode does **not** add capacity on a node. It exists so
   several relays can share an address when the address is a scarce resource —
   more processes, more concurrency and per-process blast-radius isolation, but
@@ -110,6 +115,7 @@ So `DualStack` on a dual-stack node plans the mode's relay set once per family:
 | `HostNetwork` | one relay on the node's IPv4 address | one relay on its IPv6 address | two relays, one per family, each with the whole range |
 | `PartitionedIP` | `relaysPerNode` slices of the IPv4 address | `relaysPerNode` slices of the IPv6 address | `relaysPerNode` slices of each address: the split is per address, and each split still sums to one port space |
 | `ExternalIPPool` | one relay per declared IPv4 address | one relay per declared IPv6 address | one relay per declared address of either family |
+| `PodIP` | one relay per IPv4 address declared on the node | one relay per IPv6 address declared on the node | one relay per declared address of either family |
 
 `DualStack` therefore doubles a dual-stack node's port space, because it doubles
 its relay addresses, and adds nothing to a node that has only one. Ports per

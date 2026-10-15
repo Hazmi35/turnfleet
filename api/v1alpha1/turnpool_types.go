@@ -15,7 +15,7 @@ import (
 // number of ports in its own range, so only modes that add relay addresses add
 // capacity. See docs/capacity-model.md.
 //
-// +kubebuilder:validation:Enum=HostNetwork;ExternalIPPool;PartitionedIP
+// +kubebuilder:validation:Enum=HostNetwork;ExternalIPPool;PartitionedIP;PodIP
 type AddressingMode string
 
 const (
@@ -34,6 +34,15 @@ const (
 	// adds concurrency and isolation but NOT capacity: the sum of the slices is
 	// still one IP's port space.
 	AddressingModePartitionedIP AddressingMode = "PartitionedIP"
+
+	// AddressingModePodIP runs one relay per address the relay nodes reserve
+	// for the pool, in an ordinary pod (hostNetwork: false) that binds and
+	// advertises the address the pod itself holds — on the cluster's default
+	// network, or on a Multus NetworkAttachmentDefinition named by
+	// addressing.podIP.attachmentRef. Capacity grows with the number of
+	// reserved addresses, exactly as in ExternalIPPool. See
+	// docs/adr/0018-addressing-mode-podip.md.
+	AddressingModePodIP AddressingMode = "PodIP"
 )
 
 // AddressingFamily selects the address family of a pool's relay addresses.
@@ -163,6 +172,29 @@ type PartitionedIPSpec struct {
 	RelaysPerNode int32 `json:"relaysPerNode,omitempty"`
 }
 
+// PodIPSpec configures AddressingModePodIP.
+//
+// The addresses themselves are declared by the operator on the relay nodes, in
+// the turnfleet.hzmi.dev/relay-pod-addresses annotation (one address per relay,
+// stable and reserved), because IPAM is a prerequisite this operator does not
+// own and cannot enumerate: the operator attaches the address, the operator
+// declares it. The controller reads each scheduled pod's own address back and
+// treats a relay whose address changed as a drain, never as a silent
+// re-advertise (docs/adr/0006-drain-semantics.md).
+type PodIPSpec struct {
+	// attachmentRef names the Multus NetworkAttachmentDefinition the relay pods
+	// attach, in the pool's namespace ("name") or in another one
+	// ("namespace/name"). The attachment is where the declared address reaches
+	// the pod. It is immutable, like mode and family: a different attachment
+	// changes which address a relay holds.
+	//
+	// When it is unset (nil) the relay has no secondary interface and binds its
+	// own pod address on the cluster's default network, which must likewise be
+	// reserved and individually routable.
+	// +optional
+	AttachmentRef *string `json:"attachmentRef,omitempty"`
+}
+
 // AddressingSpec selects how relays are placed and addressed.
 type AddressingSpec struct {
 	// mode is the addressing mode. It is immutable: changing it changes every
@@ -192,6 +224,12 @@ type AddressingSpec struct {
 	// mode is PartitionedIP. Forbidden for the other modes.
 	// +optional
 	PartitionedIP *PartitionedIPSpec `json:"partitionedIP,omitempty"`
+
+	// podIP configures AddressingModePodIP and is forbidden for the other
+	// modes. It may be omitted for PodIP: without an attachment the relay binds
+	// the pod's own address on the default network.
+	// +optional
+	PodIP *PodIPSpec `json:"podIP,omitempty"`
 }
 
 // ListenerSpec is one TURN listener every relay serves.
@@ -450,11 +488,15 @@ type TURNPoolStatus struct {
 	//     holds, on the same address and with overlapping ports. Two relays
 	//     cannot own the same ports on one address, so the affected pools serve
 	//     less than they report. Disjoint ranges on a shared address are legal.
+	//   - PodAddressUnusable: a relay node declares a PodIP relay address the
+	//     pool cannot advertise (a private, carrier-grade NAT, link-local,
+	//     loopback, multicast or unspecified address). The address is dropped
+	//     from the plan.
 	//   - Degraded: fewer relays than desired, a relay is failing to converge,
 	//     or a relay identity overlaps another pool's.
 	//
 	// Ready and ProbeSucceeded are normal-true; CapacityPressure,
-	// AddressConflict and Degraded are abnormal-true.
+	// AddressConflict, PodAddressUnusable and Degraded are abnormal-true.
 	// +listType=map
 	// +listMapKey=type
 	// +optional

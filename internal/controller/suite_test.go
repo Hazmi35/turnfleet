@@ -27,6 +27,7 @@ import (
 	turnfleetv1alpha1 "github.com/Hazmi35/turnfleet/api/v1alpha1"
 	"github.com/Hazmi35/turnfleet/internal/metrics"
 	"github.com/Hazmi35/turnfleet/internal/probe"
+	"github.com/Hazmi35/turnfleet/internal/relay"
 )
 
 var (
@@ -263,6 +264,29 @@ func (f *testFixture) markPodsReady(pool string) {
 			f.t.Fatalf("marking pod %s ready: %v", pod.Name, err)
 		}
 	}
+}
+
+// createPodIPNode creates a relay node that declares the addresses a PodIP
+// pool plans on. The node has no relay address of its own: in this mode the
+// relay address belongs to the pod, and the node only declares which addresses
+// are reserved for the pool's relays.
+func (f *testFixture) createPodIPNode(name string, declared ...string) {
+	f.t.Helper()
+
+	node := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        name,
+			Labels:      map[string]string{RelayNodeLabel: "true"},
+			Annotations: map[string]string{relay.PodAddressesAnnotation: strings.Join(declared, ",")},
+		},
+		Spec: corev1.NodeSpec{PodCIDR: "10.244.0.0/24"},
+	}
+	if err := k8sClient.Create(f.ctx, node); err != nil {
+		f.t.Fatalf("creating node %s: %v", name, err)
+	}
+	f.t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: name}})
+	})
 }
 
 // createNode creates a relay node with an address.

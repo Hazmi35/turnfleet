@@ -131,7 +131,7 @@ func candidatesFor(spec *turnfleetv1alpha1.TURNPoolSpec, nodes []Node) []candida
 	for _, node := range nodes {
 		onNode := int32(0)
 		for _, family := range families {
-			for _, c := range candidatesForFamily(spec, node, family, portRange) {
+			for _, c := range candidatesForFamily(spec, &node, family, portRange) {
 				c.metricsPortOffset = onNode
 				onNode++
 				out = append(out, c)
@@ -143,7 +143,7 @@ func candidatesFor(spec *turnfleetv1alpha1.TURNPoolSpec, nodes []Node) []candida
 
 // candidatesForFamily lists the relays one addressing mode could place on one
 // node's address of one family.
-func candidatesForFamily(spec *turnfleetv1alpha1.TURNPoolSpec, node Node, family turnfleetv1alpha1.AddressingFamily, portRange PortRange) []candidate {
+func candidatesForFamily(spec *turnfleetv1alpha1.TURNPoolSpec, node *Node, family turnfleetv1alpha1.AddressingFamily, portRange PortRange) []candidate {
 	switch spec.Addressing.Mode {
 	case turnfleetv1alpha1.AddressingModeHostNetwork:
 		address, ok := node.addressOf(family)
@@ -192,9 +192,48 @@ func candidatesForFamily(spec *turnfleetv1alpha1.TURNPoolSpec, node Node, family
 		}
 		return out
 
+	case turnfleetv1alpha1.AddressingModePodIP:
+		// Every relay in this mode owns its own address: a node's declared
+		// pod addresses are one relay each, and each relay owns the whole port
+		// range. The address is declared by the operator on the node, so it is
+		// known before the pod exists and the relay identity stays stable.
+		addresses := declaredPodAddresses(node, family)
+		out := make([]candidate, 0, len(addresses))
+		for _, addr := range addresses {
+			out = append(out, candidate{
+				nodeName:    node.Name,
+				address:     addr,
+				bindAddress: addr,
+				portRange:   portRange,
+			})
+		}
+		return out
+
 	default:
 		return nil
 	}
+}
+
+// declaredPodAddresses returns the PodIP addresses one node declares for one
+// family, sorted, deduplicated, and reduced to the bare address a relay binds.
+// A declaration carrying a prefix is still that address: the prefix is only
+// what the pod's attachment requests from its IPAM.
+func declaredPodAddresses(node *Node, family turnfleetv1alpha1.AddressingFamily) []string {
+	out := make([]string, 0, len(node.PodAddresses))
+	seen := make(map[string]bool, len(node.PodAddresses))
+	for _, declared := range node.PodAddresses {
+		address, ok := PodAddress(declared)
+		if !ok || seen[address] {
+			continue
+		}
+		if AddressFamilyOf(address) != family {
+			continue
+		}
+		seen[address] = true
+		out = append(out, address)
+	}
+	slices.Sort(out)
+	return out
 }
 
 // PartitionPortRange splits a pool's port space into relaysPerNode disjoint
@@ -245,7 +284,7 @@ func normalizeNodes(nodes []Node) []Node {
 // address family, sorted by address. The family comes from the address itself:
 // a declared address is whatever is attached to the node, and a duplicated
 // family field could only disagree with it.
-func declaredAddresses(spec *turnfleetv1alpha1.TURNPoolSpec, node Node, family turnfleetv1alpha1.AddressingFamily) []turnfleetv1alpha1.ExternalAddress {
+func declaredAddresses(spec *turnfleetv1alpha1.TURNPoolSpec, node *Node, family turnfleetv1alpha1.AddressingFamily) []turnfleetv1alpha1.ExternalAddress {
 	if spec.Addressing.ExternalIPPool == nil {
 		return nil
 	}

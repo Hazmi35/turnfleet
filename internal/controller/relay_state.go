@@ -38,6 +38,21 @@ type relayState struct {
 	// draining reports whether the relay is going away.
 	draining bool
 
+	// addressRequest is the declaration a PodIP relay pod asks its attachment
+	// for, prefix included, so the pod is given the address the relay was
+	// planned with rather than whichever address the IPAM picks. It is empty
+	// for every other mode and for a PodIP pool without an attachment.
+	addressRequest string
+
+	// addressChanged reports whether the scheduled pod holds another address
+	// than the one the relay was planned with. It is the PodIP mode's
+	// stability check: a mismatch drains the relay (ADR 6).
+	addressChanged bool
+
+	// observedAddress is the address the pod actually holds, for the drain
+	// event and the log line.
+	observedAddress string
+
 	// drainStarted is when the relay was first seen draining.
 	drainStarted time.Time
 
@@ -102,12 +117,13 @@ func (s *relayState) probeObservedCapacity() bool {
 func (r *TURNPoolReconciler) renderRelays(
 	pool *turnfleetv1alpha1.TURNPool,
 	plan *relay.Plan,
-	clusterPodCIDRs []string,
+	observed *nodeObservation,
 	secret string,
 	tlsSecretHash string,
 	pods []corev1.Pod,
 ) ([]*relayState, error) {
-	denied := relay.MergeCIDRs(policyDeniedCIDRs(pool), r.ClusterCIDRs, clusterPodCIDRs)
+	denied := relay.MergeCIDRs(policyDeniedCIDRs(pool), r.ClusterCIDRs, observed.podCIDRs)
+	requests := podAddressRequests(observed)
 	var allowed []string
 	if pool.Spec.PeerPolicy != nil {
 		allowed = pool.Spec.PeerPolicy.AllowedCIDRs
@@ -132,9 +148,10 @@ func (r *TURNPoolReconciler) renderRelays(
 		}
 
 		state := &relayState{
-			relay:   planned,
-			planned: true,
-			config:  config,
+			relay:          planned,
+			planned:        true,
+			config:         config,
+			addressRequest: requests[planned.NodeName+"|"+planned.Address],
 		}
 		hash, err := relayHash(pool, state, tlsSecretHash)
 		if err != nil {
@@ -148,6 +165,8 @@ func (r *TURNPoolReconciler) renderRelays(
 			state.pod = pod
 			state.drainStarted = parseTime(pod.Annotations[DrainStartedAtAnnotation])
 			state.draining = !state.drainStarted.IsZero()
+			state.observedAddress, _ = relayAddressOnPod(pool, pod)
+			state.addressChanged = relayAddressChanged(pool, &state.relay, pod)
 		}
 		state.probeDue = r.probeDue(pool, state)
 

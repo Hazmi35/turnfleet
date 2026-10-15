@@ -115,6 +115,13 @@ type Node struct {
 	// SecondaryAddresses are the addresses declared for this node in the pool's
 	// externalIPPool, sorted. They are only used by the ExternalIPPool mode.
 	SecondaryAddresses []string
+
+	// PodAddresses are the addresses the operator declares for this node for
+	// PodIP relays, as written in the node's
+	// turnfleet.hzmi.dev/relay-pod-addresses annotation: a bare address, or an
+	// address with the prefix length the pod's attachment should request. One
+	// relay per address. They are only used by the PodIP mode.
+	PodAddresses []string
 }
 
 // NodeAddress is one address a relay on a node could advertise, with the local
@@ -130,7 +137,7 @@ type NodeAddress struct {
 }
 
 // addressOf returns the node's address in one family.
-func (n Node) addressOf(family turnfleetv1alpha1.AddressingFamily) (NodeAddress, bool) {
+func (n *Node) addressOf(family turnfleetv1alpha1.AddressingFamily) (NodeAddress, bool) {
 	for _, address := range n.Addresses {
 		if AddressFamilyOf(address.Address) == family {
 			return address, true

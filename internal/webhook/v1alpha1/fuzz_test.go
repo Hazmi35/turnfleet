@@ -89,9 +89,10 @@ func poolFromBytes(data []byte) *turnfleetv1alpha1.TURNPool {
 		turnfleetv1alpha1.AddressingModeHostNetwork,
 		turnfleetv1alpha1.AddressingModeExternalIPPool,
 		turnfleetv1alpha1.AddressingModePartitionedIP,
+		turnfleetv1alpha1.AddressingModePodIP,
 		"SomethingElse",
 		"",
-	}[int(byteAt(0))%5]
+	}[int(byteAt(0))%6]
 
 	// byteAt(11) is past every byte the seeds use, so the stored corpus keeps
 	// meaning what it meant before the family existed.
@@ -150,6 +151,12 @@ func poolFromBytes(data []byte) *turnfleetv1alpha1.TURNPool {
 				{NodeName: "worker-1", Address: "198.51.100.11"},
 				{NodeName: "worker-1", Address: "2001:db8:100::1"},
 			},
+		}
+	case turnfleetv1alpha1.AddressingModePodIP:
+		// The attachment is optional; half the corpus gets one so both shapes
+		// are validated.
+		if byteAt(5)%2 == 0 {
+			pool.Spec.Addressing.PodIP = &turnfleetv1alpha1.PodIPSpec{AttachmentRef: new("relay-pods")}
 		}
 	case turnfleetv1alpha1.AddressingModeHostNetwork:
 	}
