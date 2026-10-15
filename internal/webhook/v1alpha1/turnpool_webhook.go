@@ -35,7 +35,7 @@ import (
 // the digest is not.
 var digestPinnedImage = regexp.MustCompile(`^[^\s@]+@sha256:[0-9a-f]{64}$`)
 
-// log is for logging in this package.
+// turnpoollog is the package logger.
 var turnpoollog = logf.Log.WithName("turnpool-webhook")
 
 // groupKind identifies the resource in admission errors.
@@ -206,7 +206,7 @@ func validatePortRange(r *turnfleetv1alpha1.PortRange, addressing turnfleetv1alp
 }
 
 // validateListeners enforces coturn's listener model: one listener per protocol,
-// UTF and TCP sharing the plain port, TLS carrying a certificate, and no
+// UDP and TCP sharing the plain port, TLS carrying a certificate, and no
 // listener colliding with the relay port range.
 func validateListeners(spec *turnfleetv1alpha1.TURNPoolSpec, path *field.Path) field.ErrorList {
 	var errs field.ErrorList
@@ -543,7 +543,7 @@ func validatePeerPolicy(spec *turnfleetv1alpha1.TURNPoolSpec, path *field.Path) 
 // peerRangeErrs reports every reason a declared peer range is unusable.
 func peerRangeErrs(cidr string, poolFamily turnfleetv1alpha1.AddressingFamily, path *field.Path) field.ErrorList {
 	if strings.TrimSpace(cidr) == "" {
-		return field.ErrorList{field.Invalid(path, cidr, "empty CIDR")}
+		return field.ErrorList{field.Invalid(path, cidr, "must not be empty")}
 	}
 	family, err := relay.PeerCIDRFamily(cidr)
 	if err != nil {

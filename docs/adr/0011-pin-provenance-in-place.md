@@ -10,18 +10,18 @@ the lint toolchain, every container image with its digest, every GitHub Action
 with its SHA, transitive floors, the agent-tooling floor. Every number in those
 tables was a copy of a number that already existed in `go.mod`,
 `tools/go.mod`, the `Makefile`, the Dockerfiles, the workflows or
-`.custom-gcl.yml` — five pin sources, roughly thirty duplicated values, plus a
-"verification log" section whose job was to argue that the copies still agreed.
+`.custom-gcl.yml`. There were five pin sources and roughly thirty duplicated
+values, plus a "verification log" section whose job was to argue that the copies
+still agreed.
 
 Nothing kept them in step. `make verify` runs the generated-file diff, the
 header check, the harness-link check, the chart's CRD copy and `go mod tidy`;
 no script compared a table row against its source, because none existed (`hack/`
 holds `verify-dco.sh`, `verify-headers.sh` and `verify-harness-links.sh`, the
 checks it had). The release-check skill could only tell a human to "diff them,
-do not trust the table", which is the tell: a
-document that cannot be trusted is a document that will be wrong, and a stale
-digest or a stale Action SHA in a table is worse than no table, because it
-reads as verified.
+do not trust the table", which is the giveaway: a document that cannot be
+trusted is a document that will be wrong. A stale digest or a stale Action SHA
+in a table is worse than no table, because it reads as verified.
 
 The tables also carried almost no information the manifests lacked. What could
 not be recovered from the tree was small and prose-shaped: which pins are
@@ -51,8 +51,8 @@ anything would be the same ceremony in a new place.
 
 ## Consequences
 
-* Duplication drops to the copies that are forced by reality — a pin that a
-  workflow, a Dockerfile and the `Makefile` all need — and `docs/versions.md`
+* Duplication drops to the copies that are forced by reality (a pin that a
+  workflow, a Dockerfile and the `Makefile` all need), and `docs/versions.md`
   no longer competes with `go.mod` as "the" answer for what version something is.
 * `GOLANGCI_LINT_VERSION` was declared in the `Makefile` and never read by any
   target (`make golangci-lint` builds the base binary from `tools/go.mod` and

@@ -21,9 +21,9 @@ prefix, and a Multus secondary interface (`azure-ipam`, SR-IOV, macvlan) can
 hand the pod an address with its own IPAM.
 
 What such a relay needs is its **own** address, held by the pod rather than by
-the node, with no Service and no load balancer in the path — the 5-tuple
-hashing in front of one public address is the bug this project removes
-(ADR 1, ADR 3, ADR 4).
+the node, with no Service and no load balancer in the path. The 5-tuple hashing
+in front of one public address is the bug this project removes (ADR 1, ADR 3,
+ADR 4).
 
 ## Decision
 
@@ -40,11 +40,11 @@ turnfleet.hzmi.dev/relay-pod-addresses: "203.0.113.21/24, 203.0.113.22/24"
 
 one entry per relay, each optionally with the prefix length its attachment
 should ask its IPAM for. The declaration is per node and not in the pool spec,
-and that is what separates this mode from `ExternalIPPool`: there the address
+and that is what separates this mode from `ExternalIPPool`. There the address
 must already be attached to the node and the pool only names it; here the
 operator reserves an address for a pod, and the pod is where it lands. The
-operator owns the IPAM — the operator attaches the addresses, routes them and
-opens the ingress rules — so the operator declares them.
+operator owns the IPAM: the operator attaches the addresses, routes them and
+opens the ingress rules, so the operator declares them.
 
 **Why the address is declared, not observed.** A relay's identity is
 `(address, portRange)` and its pod name is the hash of that identity. An
@@ -58,9 +58,9 @@ the same relays.
 `namespace/name`, through `attachmentRef`. The block is immutable, like `mode`
 and `family`, and so is the reference. Omitting the block is how a pool says the
 relay uses the pod's own address on the cluster's default network, and that zero
-value is the mode's other and only other spelling. The block cannot be present
-and name nothing: its one field must be set whenever the block is — a one-field
-`AtLeastOneOf`, so `podIP: {}` is refused — and the reference must be non-empty,
+value is the mode's only other spelling. The block cannot be present and name
+nothing. Its one field must be set whenever the block is, a one-field
+`AtLeastOneOf`, so `podIP: {}` is refused; and the reference must be non-empty,
 so `podIP: {attachmentRef: ""}` is refused too. The controller asks for the
 declared address in the pod's Multus annotation, which is what an IPAM that
 honours a request needs:
@@ -77,19 +77,19 @@ allocation depends on the node and on what is already taken. So the address the
 operator declares is the planning input, and the pod's own report is the check.
 
 **The read-back.** The controller reads the address the scheduled pod actually
-holds — from the attachment's entry in Multus'
+holds: from the attachment's entry in Multus'
 `k8s.v1.cni.cncf.io/network-status` when the pool names an attachment, and from
 `status.podIP`/`status.podIPs` when it does not (the pod's primary address is
 never the attachment's). A pod that came up on another address is drained
 (ADR 6) rather than re-advertised: silently moving the relay would strand every
-allocation bound to the old address. The drain is observable — a
+allocation bound to the old address. The drain is observable: a
 `RelayAddressChanged` warning event names both addresses, and the relay leaves
 `turnURIs` in the same pass.
 
 **Two halves of one rule.** Admission checks the declared addresses and the
 attachment against the cluster state, but node annotations change after
-admission, so the reconciler re-checks exactly the same rules on every pass:
-an address that is not individually routable is dropped from the plan and
+admission, so the reconciler re-checks exactly the same rules on every pass.
+An address that is not individually routable is dropped from the plan and
 reported as the `PodAddressUnusable` condition (with `Degraded`), for the same
 reason ADR 12 reports a cross-pool overlap from the reconciler rather than
 trusting the webhook.
@@ -110,13 +110,13 @@ What the mode forbids:
   address every relay holds, so it strands live allocations exactly as changing
   `mode` or `family` does. `mode`, `family` and the attachment are immutable;
   a new pool is the move.
-* Addresses that cannot work at all — unspecified, loopback, link-local
-  unicast and multicast — because a peer could not reach them even with every
-  firewall open. A private address (RFC 1918), a carrier-grade NAT address
-  (RFC 6598) or an IPv6 unique local address (RFC 4193) is **not** refused:
-  whether the peers route it is the operator's judgement — a hub-and-spoke
-  cluster whose pod CIDR is peered while the node subnet is not routes one —
-  and the external vantage point (ADR 7) is what proves it.
+* Addresses that cannot work at all: unspecified, loopback, link-local unicast
+  and multicast. A peer could not reach them even with every firewall open. A
+  private address (RFC 1918), a carrier-grade NAT address (RFC 6598) or an IPv6
+  unique local address (RFC 4193) is **not** refused. Whether the peers route it
+  is the operator's judgement (a hub-and-spoke cluster whose pod CIDR is peered
+  while the node subnet is not routes one), and the external vantage point
+  (ADR 7) is what proves it.
 
 ## Consequences
 
@@ -134,10 +134,10 @@ What the mode forbids:
   collide on the addresses offered there; the cross-pool check (ADR 12) reports
   it, because the identities carry the address.
 * Kind as `make kind-up` configures it has no Multus and no secondary address
-  for a pod, so this mode's data path is not exercised by `make test-e2e` yet:
-  it is proven by unit, envtest and the renderer's golden files, and its data
+  for a pod, so this mode's data path is not exercised by `make test-e2e` yet.
+  It is proven by unit, envtest and the renderer's golden files, and its data
   path shares the flag set ADR 8 verified against the pinned image. That is a
-  gap in the local cluster, not in the mode — #19 tracks the fixture (Multus
+  gap in the local cluster, not in the mode. #19 tracks the fixture (Multus
   plus a macvlan attachment, whose host side the suite already probes for
   `ExternalIPPool` in `test/fixtures/attach-secondary-address.sh` and
   `hostProbe`) that would let the suite exercise it.
@@ -159,7 +159,7 @@ What the mode forbids:
 * Where the read-back comes from: Multus publishes the addresses it attached in
   the pod's `k8s.v1.cni.cncf.io/network-status` annotation, an array of
   `{"name": …, "interface": …, "ips": […], …}` entries where the default
-  network is one entry of its own (`"name": "cbr0", "default": true`) — which is
+  network is one entry of its own (`"name": "cbr0", "default": true`). That is
   why the attachment's address is never read from `status.podIP`
   (`k8snetworkplumbingwg/multus-cni`, `docs/quickstart.md`).
 * Whereabouts is built on the static IPAM plugin ("I utilized his static CNI

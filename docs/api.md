@@ -20,7 +20,7 @@ _Underlying type:_ _string_
 
 AddressingFamily selects the address family of a pool's relay addresses.
 
-A family is part of an address, not an extra port space: a node's IPv4 and
+A family is part of an address, not an extra port space. A node's IPv4 and
 IPv6 addresses are two relay addresses with two port spaces each, and a
 second family never adds ports to one address. See docs/capacity-model.md.
 
@@ -32,9 +32,9 @@ _Appears in:_
 
 | Field | Description |
 | --- | --- |
-| `IPv4` | AddressingFamilyIPv4 places relays on IPv4 addresses only. It is the<br />default, and what every pool planned before this field existed does.<br /> |
+| `IPv4` | AddressingFamilyIPv4 places relays on IPv4 addresses only. It is the<br />default, and every pool planned before this field existed uses it.<br /> |
 | `IPv6` | AddressingFamilyIPv6 places relays on IPv6 addresses only.<br /> |
-| `DualStack` | AddressingFamilyDualStack plans the mode's relay set once per family. On<br />a node that has both addresses that is one relay identity per family,<br />and each of them owns the whole port range: two addresses, two port<br />spaces.<br /> |
+| `DualStack` | AddressingFamilyDualStack plans the mode's relay set once per family. On<br />a node that has both addresses, that is one relay identity per family,<br />and each relay identity owns the whole port range, so two addresses give<br />two port spaces.<br /> |
 
 
 #### AddressingMode
@@ -43,7 +43,7 @@ _Underlying type:_ _string_
 
 AddressingMode selects how relay addresses are assigned to nodes.
 
-The choice decides capacity, not just placement: a relay's capacity is the
+The choice decides capacity, not just placement. A relay's capacity is the
 number of ports in its own range, so only modes that add relay addresses add
 capacity. See docs/capacity-model.md.
 
@@ -57,8 +57,8 @@ _Appears in:_
 | --- | --- |
 | `HostNetwork` | AddressingModeHostNetwork runs exactly one relay per relay node, binding<br />the node's ExternalIP (or the turnfleet.hzmi.dev/relay-address override).<br />Capacity grows with the number of labelled nodes.<br /> |
 | `ExternalIPPool` | AddressingModeExternalIPPool binds relays to specific secondary addresses<br />declared in addressing.externalIPPool.addresses, one relay per address.<br />Capacity grows with the number of declared addresses.<br /> |
-| `PartitionedIP` | AddressingModePartitionedIP runs several relays per node on the node's<br />single address, each owning a disjoint slice of the relay port range. It<br />adds concurrency and isolation but NOT capacity: the sum of the slices is<br />still one IP's port space.<br /> |
-| `PodIP` | AddressingModePodIP runs one relay per address the relay nodes reserve<br />for the pool, in an ordinary pod (hostNetwork: false) that binds and<br />advertises the address the pod itself holds — on the cluster's default<br />network, or on a Multus NetworkAttachmentDefinition named by<br />addressing.podIP.attachmentRef. Capacity grows with the number of<br />reserved addresses, exactly as in ExternalIPPool. See<br />docs/adr/0018-addressing-mode-podip.md.<br /> |
+| `PartitionedIP` | AddressingModePartitionedIP runs several relays per node on the node's<br />single address, each owning a disjoint slice of the relay port range. It<br />adds concurrency and isolation but NOT capacity. The sum of the slices is<br />still one IP's port space.<br /> |
+| `PodIP` | AddressingModePodIP runs one relay per address the relay nodes reserve<br />for the pool. Each relay runs in an ordinary pod (hostNetwork: false)<br />that binds and advertises the address the pod itself holds, on the<br />cluster's default network or on a Multus NetworkAttachmentDefinition<br />named by addressing.podIP.attachmentRef. Capacity grows with the number<br />of reserved addresses, exactly as in ExternalIPPool. See<br />docs/adr/0018-addressing-mode-podip.md.<br /> |
 
 
 #### AddressingSpec
@@ -75,10 +75,10 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `mode` _[AddressingMode](#addressingmode)_ | mode is the addressing mode. It is immutable: changing it changes every<br />relay's advertised address and invalidates live allocations. |  | Enum: [HostNetwork ExternalIPPool PartitionedIP PodIP] <br />Required: \{\} <br /> |
-| `family` _[AddressingFamily](#addressingfamily)_ | family is the address family the pool's relay addresses belong to. It is<br />immutable for the same reason mode is: changing it changes the address,<br />or half the addresses, of every relay and strands live allocations.<br />IPv4 keeps the pool on the node's IPv4 addresses. IPv6 plans on IPv6<br />addresses only. DualStack plans the mode's relay set once per family,<br />so a node with both addresses runs two relays and offers two port<br />spaces. | IPv4 | Enum: [IPv4 IPv6 DualStack] <br />Optional: \{\} <br /> |
+| `family` _[AddressingFamily](#addressingfamily)_ | family is the address family the pool's relay addresses belong to. It is<br />immutable for the same reason mode is. Changing it changes the address,<br />or half the addresses, of every relay, and strands live allocations.<br />IPv4 keeps the pool on the node's IPv4 addresses. IPv6 plans on IPv6<br />addresses only. DualStack plans the mode's relay set once per family,<br />so a node with both addresses runs two relays and offers two port<br />spaces. | IPv4 | Enum: [IPv4 IPv6 DualStack] <br />Optional: \{\} <br /> |
 | `externalIPPool` _[ExternalIPPoolSpec](#externalippoolspec)_ | externalIPPool configures AddressingModeExternalIPPool and must be set<br />(with at least one address) when mode is ExternalIPPool. Forbidden for the<br />other modes. |  | Optional: \{\} <br /> |
 | `partitionedIP` _[PartitionedIPSpec](#partitionedipspec)_ | partitionedIP configures AddressingModePartitionedIP and must be set when<br />mode is PartitionedIP. Forbidden for the other modes. |  | Optional: \{\} <br /> |
-| `podIP` _[PodIPSpec](#podipspec)_ | podIP configures AddressingModePodIP and is forbidden for the other<br />modes. For PodIP it is optional and binary: a non-empty attachmentRef<br />names the attachment whose address the relay binds and advertises, and<br />the zero value is the mode's other, only other spelling — the relay<br />binds its own pod address on the cluster's default network. `podIP: \{\}`<br />is neither and the schema refuses it. |  | AtLeastOneOf: [attachmentRef] <br />Optional: \{\} <br /> |
+| `podIP` _[PodIPSpec](#podipspec)_ | podIP configures AddressingModePodIP and is forbidden for the other<br />modes. For PodIP it is optional and binary. A non-empty attachmentRef<br />names the attachment whose address the relay binds and advertises. The<br />zero value is the mode's only other spelling: the relay binds its own<br />pod address on the cluster's default network. `podIP: \{\}` is neither,<br />and the schema refuses it. |  | AtLeastOneOf: [attachmentRef] <br />Optional: \{\} <br /> |
 
 
 #### AuthSpec
@@ -112,8 +112,8 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `image` _string_ | image is the coturn image every relay runs, pinned by digest<br />(`repo/name:tag@sha256:...`). A tag without a digest is rejected so a<br />pool cannot silently float to a new relay version. |  | MinLength: 1 <br />Required: \{\} <br /> |
-| `resources` _[ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v/#resourcerequirements-v1-core)_ | resources is the resource request and limit for each relay container.<br />Relay capacity is bounded by ports, not CPU, so this is about keeping the<br />process responsive under allocation churn. |  | Optional: \{\} <br /> |
-| `extraArgs` _string array_ | extraArgs are appended verbatim to the rendered coturn configuration.<br />They are hashed into the relay's config-hash like any other change, but<br />they are not validated against the pinned image: use them for flags the<br />API does not model. |  | Optional: \{\} <br /> |
+| `resources` _[ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v/#resourcerequirements-v1-core)_ | resources is the resource request and limit for each relay container.<br />Relay capacity is bounded by ports, not CPU, so this setting keeps the<br />process responsive under allocation churn. |  | Optional: \{\} <br /> |
+| `extraArgs` _string array_ | extraArgs are appended verbatim to the rendered coturn configuration.<br />They are hashed into the relay's config-hash like any other change, but<br />they are not validated against the pinned image. Use them for flags the<br />API does not model. |  | Optional: \{\} <br /> |
 
 
 #### ExternalAddress
@@ -146,7 +146,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `addresses` _[ExternalAddress](#externaladdress) array_ | addresses are the secondary addresses available to the pool, one relay per<br />address. Each entry must be attached to the named node; the operator does<br />not attach addresses. The webhook requires at least one address when the<br />pool's mode is ExternalIPPool. |  | Optional: \{\} <br /> |
+| `addresses` _[ExternalAddress](#externaladdress) array_ | addresses are the secondary addresses available to the pool, one relay per<br />address. Each entry must be attached to the named node. The operator does<br />not attach addresses. The webhook requires at least one address when the<br />pool's mode is ExternalIPPool. |  | Optional: \{\} <br /> |
 
 
 #### ListenerProtocol
@@ -155,9 +155,9 @@ _Underlying type:_ _string_
 
 ListenerProtocol is the transport a relay listener accepts.
 
-coturn serves UDP and TCP on the same "plain" listening port and TLS/DTLS on
-its own port, so a pool may declare at most one listener of each protocol and
-its UDP and TCP listeners must share a port.
+coturn serves UDP and TCP on the same "plain" listening port, and TLS/DTLS on
+its own port. A pool may therefore declare at most one listener of each
+protocol, and its UDP and TCP listeners must share a port.
 
 _Validation:_
 - Enum: [udp tcp tls]
@@ -187,8 +187,8 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `name` _string_ | name identifies the listener within the pool, for example "turn" or<br />"turns". It must be unique within spec.listeners. |  | MaxLength: 63 <br />MinLength: 1 <br />Required: \{\} <br /> |
 | `protocol` _[ListenerProtocol](#listenerprotocol)_ | protocol is the transport the listener accepts. |  | Enum: [udp tcp tls] <br />Required: \{\} <br /> |
-| `port` _integer_ | port is the base listener port. Relays that own their address serve<br />exactly this port; in PartitionedIP mode, where several relays share one<br />address, each relay serves port + its slot index, because a listening<br />socket can only be bound once per address. The ports a pool uses must not<br />overlap spec.relayPortRange: a listener and an allocation cannot share a<br />port. |  | Maximum: 65535 <br />Minimum: 1 <br />Required: \{\} <br /> |
-| `tlsSecretRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v/#localobjectreference-v1-core)_ | tlsSecretRef is the Secret holding the listener's certificate, with the<br />usual tls.crt and tls.key keys. Required for protocol tls, forbidden<br />otherwise. Rotating it changes every relay's config hash and rolls the<br />pool one relay at a time. |  | Optional: \{\} <br /> |
+| `port` _integer_ | port is the base listener port. Relays that own their address serve<br />exactly this port. In PartitionedIP mode, where several relays share one<br />address, each relay serves port + its slot index, because a listening<br />socket can only be bound once per address. The ports a pool uses must not<br />overlap spec.relayPortRange, because a listener and an allocation cannot<br />share a port. |  | Maximum: 65535 <br />Minimum: 1 <br />Required: \{\} <br /> |
+| `tlsSecretRef` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v/#localobjectreference-v1-core)_ | tlsSecretRef is the Secret holding the listener's certificate, with the<br />usual tls.crt and tls.key keys. It is required for protocol tls and<br />forbidden otherwise. Rotating it changes every relay's config hash and<br />rolls the pool one relay at a time. |  | Optional: \{\} <br /> |
 
 
 #### PartitionedIPSpec
@@ -204,7 +204,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `relaysPerNode` _integer_ | relaysPerNode is how many relays share one node address. The pool's relay<br />port range is split into that many disjoint slices; their sum is still one<br />IP's port space, so this setting adds concurrency, not capacity. | 2 | Maximum: 64 <br />Minimum: 1 <br />Optional: \{\} <br /> |
+| `relaysPerNode` _integer_ | relaysPerNode is how many relays share one node address. The pool's relay<br />port range is split into that many disjoint slices. Their sum is still one<br />IP's port space, so this setting adds concurrency, not capacity. | 2 | Maximum: 64 <br />Minimum: 1 <br />Optional: \{\} <br /> |
 
 
 #### PeerPolicySpec
@@ -214,7 +214,7 @@ _Appears in:_
 PeerPolicySpec restricts which peers a relay may send to.
 
 A relay must never be able to reach in-cluster or metadata addresses unless a
-pool explicitly allows it: an allocation that peers can point anywhere is an
+pool explicitly allows it. An allocation that peers can point anywhere is an
 SSRF pivot into the cluster.
 
 
@@ -224,7 +224,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `deniedCIDRs` _string array_ | deniedCIDRs are rendered as coturn --denied-peer-ip entries. When empty<br />the webhook defaults them to RFC 1918, RFC 6598, loopback and link-local<br />(including 169.254.169.254), which also covers the cluster pod and service<br />CIDRs in the common case. The controller always appends the pod CIDRs it<br />observes on the relay nodes. |  | Optional: \{\} <br /> |
+| `deniedCIDRs` _string array_ | deniedCIDRs are rendered as coturn --denied-peer-ip entries. When empty,<br />the webhook defaults them to RFC 1918, RFC 6598, loopback and link-local<br />(including 169.254.169.254), which also covers the cluster pod and service<br />CIDRs in the common case. The controller always appends the pod CIDRs it<br />observes on the relay nodes. |  | Optional: \{\} <br /> |
 | `allowedCIDRs` _string array_ | allowedCIDRs are rendered as coturn --allowed-peer-ip entries and take<br />precedence over deniedCIDRs for the addresses they name. |  | Optional: \{\} <br /> |
 
 
@@ -253,18 +253,18 @@ PodIPSpec configures AddressingModePodIP.
 
 The addresses themselves are declared by the operator on the relay nodes, in
 the turnfleet.hzmi.dev/relay-pod-addresses annotation (one address per relay,
-stable and reserved), because IPAM is a prerequisite this operator does not
-own and cannot enumerate: the operator attaches the address, the operator
+stable and reserved). IPAM is a prerequisite this operator does not own and
+cannot enumerate, so the operator attaches the address, and the operator
 declares it. The controller reads each scheduled pod's own address back and
 treats a relay whose address changed as a drain, never as a silent
 re-advertise (docs/adr/0006-drain-semantics.md).
 
-The block names an attachment or it says nothing: it is optional, and its one
-field must be set whenever the block is, so `podIP: {}` is not a third state
-the API accepts. The union marker carries that requirement because the field
-cannot: a non-pointer struct with required fields must itself be declared
-required (kubeapilinter's nonpointerstructs), and podIP is forbidden for the
-other modes.
+The block either names an attachment or says nothing. It is optional, and its
+one field must be set whenever the block is, so `podIP: {}` is not a third
+state the API accepts. The union marker carries that requirement because the
+field cannot: a non-pointer struct with required fields must itself be
+declared required (kubeapilinter's nonpointerstructs), and podIP is forbidden
+for the other modes.
 
 _Validation:_
 - AtLeastOneOf: [attachmentRef]
@@ -274,18 +274,21 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `attachmentRef` _string_ | attachmentRef names the Multus NetworkAttachmentDefinition the relay pods<br />attach, in the pool's namespace ("name") or in another one<br />("namespace/name"). The attachment is where the declared address reaches<br />the pod. It is immutable, like mode and family: a different attachment<br />changes which address a relay holds.<br />A non-empty attachmentRef is the statement that the relay uses an<br />attachment, and the block's zero value is the other, only other<br />spelling: no secondary interface, with the relay binding its own pod<br />address on the cluster's default network, which must likewise be<br />reserved and individually routable. The block refuses the empty value and<br />the schema refuses `podIP: \{\}`, so neither is a spelling at all. The<br />minimum length is also what lets a plain string, rather than a pointer,<br />mean this: "" cannot be "set". |  | MinLength: 1 <br />Optional: \{\} <br /> |
+| `attachmentRef` _string_ | attachmentRef names the Multus NetworkAttachmentDefinition the relay pods<br />attach, in the pool's namespace ("name") or in another one<br />("namespace/name"). The attachment is where the declared address reaches<br />the pod. It is immutable, like mode and family, because a different<br />attachment changes which address a relay holds.<br />A non-empty attachmentRef is the statement that the relay uses an<br />attachment. The block's zero value is the mode's only other spelling: no<br />secondary interface, with the relay binding its own pod address on the<br />cluster's default network. That address must likewise be reserved and<br />individually routable. The block refuses the empty value and the schema<br />refuses `podIP: \{\}`, so neither is a spelling at all. The minimum length<br />is also what lets a plain string, rather than a pointer, mean this: ""<br />cannot be "set". |  | MinLength: 1 <br />Optional: \{\} <br /> |
 
 
 #### PortRange
 
 
 
-PortRange is an inclusive range of UDP ports a relay may allocate.
+PortRange is an inclusive range of ports a relay may allocate, for both relay
+transports, because coturn builds its UDP and TCP relay port maps from this
+one range. A TCP relay endpoint therefore consumes the same port space as a
+UDP one.
 
 A relay's capacity in concurrent allocations equals the number of ports in
-its range. Ranges of relays that share one address must not overlap; the
-planner partitions them and the webhook rejects a pool that cannot be
+its range. Ranges of relays that share one address must not overlap. The
+planner partitions them, and the webhook rejects a pool that cannot be
 partitioned.
 
 
@@ -332,7 +335,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `time` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v/#time-v1-meta)_ | time is when the probe finished. |  | Optional: \{\} <br /> |
 | `succeeded` _boolean_ | succeeded reports whether the relay answered the probe with the expected<br />relayed address and range. |  | Optional: \{\} <br /> |
-| `latencyMillis` _integer_ | latencyMillis is the probe duration in milliseconds. Milliseconds rather<br />than seconds so short probes stay readable, and an integer because the API<br />has no floats. |  | Optional: \{\} <br /> |
+| `latencyMillis` _integer_ | latencyMillis is the probe duration in milliseconds. The value is in<br />milliseconds rather than seconds so short probes stay readable, and it is<br />an integer because the API has no floats. |  | Optional: \{\} <br /> |
 | `message` _string_ | message explains a failed probe, including the TURN error code when the<br />relay rejected the allocation. |  | Optional: \{\} <br /> |
 
 
@@ -349,17 +352,17 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `name` _string_ | name is the relay identity: stable across restarts and controller<br />failover, derived from the relay's address and port range. |  | MinLength: 1 <br />Required: \{\} <br /> |
+| `name` _string_ | name is the relay identity. It is stable across restarts and controller<br />failover, and it is derived from the relay's address and port range. |  | MinLength: 1 <br />Required: \{\} <br /> |
 | `podName` _string_ | podName is the pod running this relay. |  | Optional: \{\} <br /> |
 | `nodeName` _string_ | nodeName is the node the relay runs on. |  | Optional: \{\} <br /> |
 | `relayAddress` _string_ | relayAddress is the address the relay advertises in XOR-RELAYED-ADDRESS. |  | Optional: \{\} <br /> |
 | `portRange` _[PortRange](#portrange)_ | portRange is the slice of the pool's port space this relay owns. Every<br />relay owns one, so it is always present. |  | Required: \{\} <br /> |
 | `turnURIs` _string array_ | turnURIs are the per-relay listener URIs clients can allocate on. A relay<br />that is not ready or is draining has none. |  | Optional: \{\} <br /> |
-| `ready` _boolean_ | ready reports whether the relay is serving: pod ready and last probe<br />successful. |  | Optional: \{\} <br /> |
+| `ready` _boolean_ | ready reports whether the relay is serving. A serving relay has a ready<br />pod and a successful last probe. |  | Optional: \{\} <br /> |
 | `draining` _boolean_ | draining reports whether the relay is on its way out. A draining relay is<br />removed from turnURIs before its pod is deleted. |  | Optional: \{\} <br /> |
 | `allocations` _integer_ | allocations is the number of live allocations on the relay, read from<br />coturn's metrics endpoint. |  | Optional: \{\} <br /> |
-| `portsInUse` _integer_ | portsInUse is the number of relay ports currently held by allocations. One<br />allocation occupies one port, so this equals allocations; it is reported<br />separately because consumers reason about ports. |  | Optional: \{\} <br /> |
-| `portsTotal` _integer_ | portsTotal is the number of ports this relay owns. Capacity is portsTotal;<br />the ratio consumers compute is portsInUse/portsTotal. |  | Optional: \{\} <br /> |
+| `portsInUse` _integer_ | portsInUse is the number of relay ports currently held by allocations. One<br />allocation occupies one port, so this equals allocations. It is reported<br />separately because consumers reason about ports. |  | Optional: \{\} <br /> |
+| `portsTotal` _integer_ | portsTotal is the number of ports this relay owns. Capacity is portsTotal.<br />The ratio consumers compute is portsInUse/portsTotal. |  | Optional: \{\} <br /> |
 | `lastProbe` _[ProbeStatus](#probestatus)_ | lastProbe is the most recent probe result, successful or not. |  | Optional: \{\} <br /> |
 
 
@@ -418,10 +421,10 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `replicas` _integer_ | replicas is the desired number of relays. It is explicit rather than<br />optional because the number of relays is the capacity decision: the value<br />is capped by the addresses the addressing mode makes available, and the<br />Ready condition says when it cannot be reached. The upper bound reflects<br />where the rendered relay configurations stop fitting in one Secret;<br />pools that need more relays than that need more than one pool. |  | Maximum: 256 <br />Minimum: 1 <br />Required: \{\} <br /> |
+| `replicas` _integer_ | replicas is the desired number of relays. It is explicit rather than<br />optional because the number of relays is the capacity decision. The value<br />is capped by the addresses the addressing mode makes available, and the<br />Ready condition says when it cannot be reached. The upper bound reflects<br />where the rendered relay configurations stop fitting in one Secret.<br />Pools that need more relays than that need more than one pool. |  | Maximum: 256 <br />Minimum: 1 <br />Required: \{\} <br /> |
 | `dataplane` _[DataplaneSpec](#dataplanespec)_ | dataplane configures the relay processes. |  | Required: \{\} <br /> |
-| `addressing` _[AddressingSpec](#addressingspec)_ | addressing selects how relays are placed and addressed. Immutable. |  | Required: \{\} <br /> |
-| `relayPortRange` _[PortRange](#portrange)_ | relayPortRange is the pool's UDP port space. Each relay owns a disjoint<br />slice of it; for HostNetwork and ExternalIPPool that slice is the whole<br />range. Immutable: changing it invalidates live allocations. |  | Required: \{\} <br /> |
+| `addressing` _[AddressingSpec](#addressingspec)_ | addressing selects how relays are placed and addressed. It is immutable. |  | Required: \{\} <br /> |
+| `relayPortRange` _[PortRange](#portrange)_ | relayPortRange is the pool's UDP port space. Each relay owns a disjoint<br />slice of it, and for HostNetwork and ExternalIPPool that slice is the<br />whole range. It is immutable, because changing it invalidates live<br />allocations. |  | Required: \{\} <br /> |
 | `listeners` _[ListenerSpec](#listenerspec) array_ | listeners are the TURN listeners every relay serves. |  | MaxItems: 3 <br />MinItems: 1 <br />Required: \{\} <br /> |
 | `auth` _[AuthSpec](#authspec)_ | auth is the shared authentication material. realm is immutable. |  | Required: \{\} <br /> |
 | `peerPolicy` _[PeerPolicySpec](#peerpolicyspec)_ | peerPolicy restricts which peers relays may send to. |  | Optional: \{\} <br /> |
@@ -443,7 +446,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v/#condition-v1-meta) array_ | conditions represent the current state of the TURNPool resource.<br />The condition types are:<br />  - Ready: the desired number of relays exist, are ready and are not<br />    draining.<br />  - ProbeSucceeded: every ready relay last probed successfully.<br />  - CapacityPressure: a relay is near or at its port limit, or a probe<br />    observed TURN error 508.<br />  - AddressConflict: this pool holds a relay identity another pool also<br />    holds, on the same address and with overlapping ports. Two relays<br />    cannot own the same ports on one address, so the affected pools serve<br />    less than they report. Disjoint ranges on a shared address are legal.<br />  - PodAddressUnusable: a relay node declares a PodIP relay address that<br />    cannot work at all (unspecified, loopback, link-local or multicast).<br />    The address is dropped from the plan.<br />  - Degraded: fewer relays than desired, a relay is failing to converge,<br />    or a relay identity overlaps another pool's.<br />Ready and ProbeSucceeded are normal-true; CapacityPressure,<br />AddressConflict, PodAddressUnusable and Degraded are abnormal-true. |  | Optional: \{\} <br /> |
+| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v/#condition-v1-meta) array_ | conditions represent the current state of the TURNPool resource.<br />The condition types are:<br />  - Ready: the desired number of relays exist, are ready and are not<br />    draining.<br />  - ProbeSucceeded: every ready relay last probed successfully.<br />  - CapacityPressure: a relay is near or at its port limit, or a probe<br />    observed TURN error 508.<br />  - AddressConflict: this pool holds a relay identity another pool also<br />    holds, on the same address and with overlapping ports. Two relays<br />    cannot own the same ports on one address, so the affected pools serve<br />    less than they report. Disjoint ranges on a shared address are legal.<br />  - PodAddressUnusable: a relay node declares a PodIP relay address that<br />    cannot work at all (unspecified, loopback, link-local or multicast).<br />    The address is dropped from the plan.<br />  - ReachableFromVantage: every listener URI the pool publishes answered a<br />    TURN Allocate where the vantage runner ran. False when one did not,<br />    unknown while no current result has been published.<br />  - Degraded: relays that could not be placed, a missing pod, an unusable<br />    auth Secret, a relay identity that overlaps another pool's, or a<br />    vantage point that cannot reach the relays.<br />Ready, ProbeSucceeded and ReachableFromVantage are normal-true.<br />CapacityPressure, AddressConflict, PodAddressUnusable and Degraded are<br />abnormal-true. |  | Optional: \{\} <br /> |
 | `relays` _[RelayStatus](#relaystatus) array_ | relays is the per-relay observed state, keyed by relay name. |  | Optional: \{\} <br /> |
 | `portsInUse` _integer_ | portsInUse is the total number of relay ports held by allocations across<br />the pool. |  | Optional: \{\} <br /> |
 | `portsTotal` _integer_ | portsTotal is the total number of relay ports the pool owns. Capacity is<br />bounded by distinct relay addresses times ports per address, not by the<br />number of relays. |  | Optional: \{\} <br /> |

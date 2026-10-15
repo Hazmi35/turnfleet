@@ -2,77 +2,87 @@
 
 Turnfleet is a Kubernetes operator for TURN relay fleets.
 
-TURN is the fallback path for WebRTC peers that cannot establish a direct path:
-symmetric NAT, CGNAT, restrictive corporate and carrier networks. The usual
-deployment — N relay replicas behind one load-balanced public IP — does not
-work, and fails silently. A TURN allocation is a public `(IP, port)` pair, and
-peer traffic sent to that pair must reach the exact process holding the
-allocation. An L4 load balancer hashes on the 5-tuple, so replicas behind one
-address add processes, not capacity, while every pod reports healthy. Turnfleet
-gives every relay its own public relay identity — an address plus a disjoint
-port range, delivered without a load balancer — and turns capacity exhaustion
-into an observable signal.
+TURN (Traversal Using Relays around NAT) is the fallback path for WebRTC peers
+that cannot establish a direct path: symmetric NAT, CGNAT, restrictive corporate
+and carrier networks. The usual deployment is N relay replicas behind one
+load-balanced public IP. It does not work, and it fails silently. A TURN
+allocation is a public `(IP, port)` pair, and peer traffic sent to that pair
+must reach the exact process holding the allocation. An L4 load balancer hashes
+on the 5-tuple, so replicas behind one address add processes, not capacity,
+while every pod reports healthy. Turnfleet gives every relay its own public
+relay identity: an address plus a disjoint port range, delivered without a load
+balancer. It also turns capacity exhaustion into an observable signal.
 
 ## How it works
 
 A `TURNPool` declares the realm and shared secret, the listeners, the relay port
 range and an addressing mode. The operator places one TURN process (a **relay**)
-per identity on nodes labelled `turnfleet.hzmi.dev/relay-node=true`, with
-`hostNetwork: true`, so the kernel delivers traffic addressed to
-`(node address, port)` to the one process that owns that port. Each relay gets a
-rendered coturn configuration, a stable pod name derived from its identity, and
-a readiness state that comes from a real TURN `Allocate` probe. Per-relay
-`turn:` URIs for ready, non-draining relays are published in the
-`<pool>-turn-uris` ConfigMap for the credential issuer to hand out. Scaling
-happens by adding relay addresses (nodes, or secondary IPs), never by adding
-replicas behind an address.
+per identity on nodes labelled `turnfleet.hzmi.dev/relay-node=true`. Every mode
+but `PodIP` runs the relay with `hostNetwork: true`, so the kernel delivers
+traffic addressed to `(node address, port)` to the one process that owns that
+port. `PodIP` gives the relay a pod address of its own instead, which is what
+lets the mode work where no node address is routable. Each relay gets a rendered
+coturn configuration, a stable pod name derived from its identity, and a
+readiness state that comes from a real TURN `Allocate` probe. Per-relay `turn:`
+URIs for ready, non-draining relays are published in the `<pool>-turn-uris`
+ConfigMap for the credential issuer to hand out. Scaling happens by adding relay
+addresses (nodes, or secondary IPs), never by adding replicas behind an address.
 
-## Capacity, in two paragraphs
+## Capacity
 
 Capacity is ports, not processes. A relay can hold as many concurrent
 allocations as there are ports in the range it owns, so a pool's capacity is the
-number of distinct relay addresses times the ports per address. `HostNetwork`
-runs one relay per labelled node on the node's own address and grows with the
-node count; `ExternalIPPool` binds relays to secondary addresses already
-attached to nodes, one relay per address, and grows with the address count;
-`PartitionedIP` lets several relays share one node address, each owning a
-disjoint slice of the port range — that adds concurrency and isolation but no
-capacity, because the slices are still one IP's port space.
+number of distinct relay addresses times the ports per address. Each addressing
+mode finds those addresses differently. `HostNetwork` runs one relay per
+labelled node on the node's own address, and grows with the node count.
+`ExternalIPPool`
+binds relays to secondary addresses already attached to nodes, one relay per
+address, and grows with the address count. `PodIP` gives each relay the address
+its own pod holds, on the default network or on a Multus attachment, and grows
+with the addresses the node declares. `PartitionedIP` lets several relays share
+one node address, each owning a disjoint slice of the port range: that adds
+concurrency and isolation but no capacity, because the slices are still one IP's
+port space.
 
-Two things follow. First, a port range cannot be exposed through a Kubernetes
-Service or a cloud load balancer: Services have no port range field at all, and
-a load balancer that did support ranges would still hash on the 5-tuple and
-deliver peer packets to the wrong relay. So there is no Service in the relay
-data path, and the relay nodes' firewall must allow the listener ports and the
-relay range directly. Second, exhaustion must be visible per relay: the operator
-reads allocation counts from coturn's own metrics endpoint, publishes
-`turnfleet_relay_ports_in_use` / `turnfleet_relay_ports_total`, counts TURN
-`508 Insufficient Capacity` answers observed by the probe in
-`turnfleet_allocation_failures_total{code="508"}`, and raises
-`CapacityPressure` when a relay is genuinely full. The full model, including
-why an in-cluster probe can pass while external clients cannot connect, is in
+Two things follow:
+
+* A port range cannot be exposed through a Kubernetes Service or a cloud load
+  balancer. Services have no port range field at all, and a load balancer that
+  did support ranges would still hash on the 5-tuple and deliver peer packets to
+  the wrong relay. So there is no Service in the relay data path, and the relay
+  nodes' firewall must allow the listener ports and the relay range directly.
+* Exhaustion must be visible per relay. The operator reads allocation counts
+  from coturn's own metrics endpoint and publishes
+  `turnfleet_relay_ports_in_use` / `turnfleet_relay_ports_total`, counts the
+  TURN `508 Insufficient Capacity` answers the probe observed in
+  `turnfleet_allocation_failures_total{code="508"}`, and raises
+  `CapacityPressure` when a relay is genuinely full.
+
+The full model, including why an in-cluster probe can pass while external
+clients cannot connect, is in
 [`docs/capacity-model.md`](docs/capacity-model.md). What the operator
-deliberately does not do — including the cluster shapes `HostNetwork` cannot
-work on, such as nodes with no public address — is in
+deliberately does not do (including the cluster shapes `HostNetwork` cannot
+work on, such as nodes with no public address) is in
 [`docs/limitations.md`](docs/limitations.md).
 
 ## Scaling a pool
 
-`TURNPool` exposes the Kubernetes scale subresource — `spec.replicas` in,
-`status.readyRelays` out, `status.selector` as the relay pod set — and the port
+`TURNPool` exposes the Kubernetes scale subresource (`spec.replicas` in,
+`status.readyRelays` out, `status.selector` as the relay pod set). The port
 space is published as `turnfleet_relay_ports_in_use` /
 `turnfleet_relay_ports_total`, per relay. `config/samples/scaling-hpa.yaml`
-drives a pool from an HPA on that subresource, and `config/samples/keda/` from a
-KEDA `ScaledObject`; both trigger on ports in use per relay, never on a CPU or
-pod-level metric, because a relay is near its limit long before its process is
-busy. Pick one or the other: KEDA's admission webhook refuses a ScaledObject for
-a workload an HPA already manages.
+drives a pool from an HPA on that subresource, and `config/samples/keda/` does
+the same from a KEDA `ScaledObject`. Both trigger on ports in use per relay,
+never on a CPU or pod-level metric: a relay is near its limit long before its
+process is busy. Pick one or the other, because KEDA's admission webhook refuses
+a ScaledObject for a workload an HPA already manages.
 
 The caveat is the whole point of the project: **scaling does not add ports to an
 address.** A new relay is only useful where the addressing mode has another
-address to place it on — `HostNetwork` needs another labelled relay node,
-`ExternalIPPool` another already attached address, and `PartitionedIP` gains
-nothing at all, because the slices are still one IP's port space. A scaler on a
+address to place it on. `HostNetwork` needs another labelled relay node,
+`ExternalIPPool` another already attached address, `PodIP` another address
+declared on a relay node, and `PartitionedIP` gains nothing at all, because the
+slices are still one IP's port space. A scaler on a
 pool with nowhere left to place a relay sits at `maxReplicas` while the pool
 stays at `CapacityPressure`; add addresses, not replicas. Scale-down is bounded
 by draining, which is why both examples slow the scale-down path.
@@ -82,8 +92,8 @@ Scaling changes the relay set, so the credential issuer must re-read
 
 ## Quickstart on kind
 
-Prerequisites: Docker, Go (the version pinned in `go.mod`), and `make`. `kind`
-and `kubectl` are also needed; `make kind-up` uses the `kind` binary from your
+Prerequisites: Docker, Go (the version pinned in `go.mod`), and `make`. You also
+need `kind` and `kubectl`; `make kind-up` uses the `kind` binary from your
 `PATH`.
 
 ```sh
@@ -95,21 +105,21 @@ make deploy             # deploy the controller (config/default: no admission we
 ```
 
 Or install the controller from the chart, which is the same controller with the
-kustomize step done for you — CRDs, RBAC, the manager, the metrics Service and,
-with `--set webhook.enabled=true` on a cluster that has cert-manager, the
-admission webhooks:
+kustomize step done for you: CRDs, RBAC, the manager, the metrics Service and,
+on a cluster that has cert-manager, the admission webhooks (`--set
+webhook.enabled=true`).
 
 ```sh
 make helm-install       # chart install: CRDs, RBAC, the controller, metrics
 ```
 
-`make helm-install` passes the image the Makefile just built and loaded, so it is
-the same dev image `make deploy` runs. It renders what `config/default` renders;
-`charts/turnfleet/values.yaml` lists what is configurable, `make helm-lint`
-lints it, and `make helm-drift` is the guard that checks it against `config/`
-(it fails when the two stop agreeing). Installing from the chart replaces the
-two steps above, so run `make install`/`make deploy` or `make helm-install`, not
-both.
+`make helm-install` passes the image the Makefile just built and loaded, so it
+is the same dev image `make deploy` runs. It renders what `config/default`
+renders. `charts/turnfleet/values.yaml` lists what is configurable,
+`make helm-lint` lints the chart, and `make helm-drift` checks it against
+`config/`, failing when the two stop agreeing. Installing from the chart replaces
+the two steps above, so run `make install`/`make deploy` or `make helm-install`,
+not both.
 
 A release publishes the same chart as an OCI artifact on ghcr.io, at the
 release's version, so a consumer with no checkout installs the released chart:
@@ -125,7 +135,7 @@ release notes carry the chart's digest and the commands that verify it.
 
 Upgrading is one step more than installing. Helm installs the files under
 `crds/` on the first install and never updates an existing CRD, so a release
-that changes the schema needs `make helm-crds-apply` before `helm upgrade`; the
+that changes the schema needs `make helm-crds-apply` before `helm upgrade`. The
 kustomize path gets the same thing from `make install`.
 
 Then create a pool. A minimal `HostNetwork` pool with three relays:
@@ -186,8 +196,8 @@ kubectl --context kind-turnfleet -n default get turnpool demo \
 ```
 
 The runner's pod is on the cluster's network, so this exercises the delivery
-path and the condition, not external reachability: for that the same command has
-to run from outside the cluster
+path and the condition, not external reachability. For that, the same command
+has to run from outside the cluster
 ([`docs/adr/0015-vantage-result-delivery.md`](docs/adr/0015-vantage-result-delivery.md)).
 
 `make test-e2e` runs the full suite against this cluster, including the
@@ -214,9 +224,9 @@ saturation and peer-policy cases.
 here reads it.
 
 The agent harness is harness-agnostic: the skills, the subagent definitions and
-the hook policy live once under `.agents/` and `hack/agent/`, and `.claude/`
-(Claude Code) and `.omp/` (omp) only wire them in — see `docs/adr/0010`. Editing
-an alias instead of the canonical file fails `make verify`.
+the hook policy live once under `.agents/` and `hack/agent/`. `.claude/` (Claude
+Code) and `.omp/` (omp) only wire them in; see `docs/adr/0010`. Editing an alias
+instead of the canonical file fails `make verify`.
 
 ## Development
 
@@ -236,9 +246,11 @@ AGPL-3.0-only. See [LICENSE](LICENSE). The TURN data plane is the upstream
 `coturn/coturn` image, unmodified, under its own BSD-3-Clause license; nothing
 from coturn is vendored into this repository.
 
+## Naming
+
 The Go module is `github.com/Hazmi35/turnfleet` and the API group is
 `turnfleet.hzmi.dev` (version `v1alpha1`, kind `TURNPool`). The project's own
-labels, annotations and finalizers — the relay-node label, the relay-address and
-config-hash annotations, the drain finalizer — carry the `turnfleet.hzmi.dev/`
+labels, annotations and finalizers (the relay-node label, the relay-address and
+config-hash annotations, the drain finalizer) carry the `turnfleet.hzmi.dev/`
 prefix; the objects a pool owns also carry the standard `app.kubernetes.io/*`
 labels.

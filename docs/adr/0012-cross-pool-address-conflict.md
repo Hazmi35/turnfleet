@@ -6,7 +6,7 @@
 ## Context
 
 A relay identity is `(relayAddress, portRange)`, and it has to be unique across
-the cluster: two TURN processes that own the same ports on one address bind the
+the cluster. Two TURN processes that own the same ports on one address bind the
 same sockets, so the second one serves a fraction of what it reports and the
 first one loses ports it is relaying on. ADR 1
 (`docs/adr/0001-addressing-modes.md`) makes the identities inside one pool
@@ -14,11 +14,11 @@ disjoint by construction, and the validating webhook rejects a pool whose own
 addressing would collide.
 
 Across pools there was nothing. ADR 1 recorded that as a known limitation,
-because a validating webhook sees one object: the other pool may not exist yet,
+because a validating webhook sees one object. The other pool may not exist yet,
 may be mid-edit, and the cache the webhook could read is not a trustworthy
 picture of the cluster. The limitation asked the operator to use distinct
 addresses or disjoint ranges, and nothing detected a violation, which is the
-part that matters: the failure was silent — both pools reported `Ready` while
+part that matters. The failure was silent: both pools reported `Ready` while
 they served less than the sum of their relays.
 
 ## Decision
@@ -57,10 +57,10 @@ about another pool is cached, and no spec field carries the answer.
 **The other pool has to be woken.** The pool that has to clear its condition is
 the one that did *not* change, so the reconciler watches TURNPools. The map
 function enqueues every pool holding a relay on one of the changed pool's
-addresses — controller-runtime maps both the old and the new object of an
-update, so the peers a pool just left are enqueued too — and the predicate
-passes for a create or a delete and, on an update, only when the set of held
-identities changed. A status write that only reports a probe result or a port
+addresses, and controller-runtime maps both the old and the new object of an
+update, so the peers a pool just left are enqueued too. The predicate passes for
+a create or a delete, and on an update only when the set of held identities
+changed. A status write that only reports a probe result or a port
 count wakes no peer, so a pool does not take on the probe cadence of every pool
 it shares an address with. The requeue interval is unchanged: a peer's identity
 change adds one reconcile to a pool, it does not give the pool a faster
@@ -86,8 +86,8 @@ operator can make, and the condition names both sides.
   least one relay, plus one watch whose handler only fires when a pool's held
   identities change.
 * The operator's move is bounded by immutability: `relayPortRange` and
-  addressing mode cannot change in place, so clearing a conflict means removing
-  a declared address (`ExternalIPPool`) or creating a new pool. The condition
+  addressing mode cannot change in place. Clearing a conflict means removing a
+  declared address (`ExternalIPPool`) or creating a new pool. The condition
   message names the pool to move.
 * This supersedes the "Cross-pool overlap is not validated" limitation in
   `docs/adr/0001-addressing-modes.md` and the entry in `docs/limitations.md`.

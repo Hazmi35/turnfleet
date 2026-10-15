@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Turnfleet Authors
 #
 # Pull request template. The checklist is the short version of the definition of
-# done in AGENTS.md: what has to be true before a change lands.
+# done in AGENTS.md. It lists what has to be true before a change lands.
 
 ## What and why
 

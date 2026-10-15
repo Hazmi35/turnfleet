@@ -6,7 +6,7 @@ description: What must be true before tagging a Turnfleet release. Use when prep
 # Release check
 
 Do not create the release until every line below is true. Report the command
-output as evidence for each one; "looks fine" is not evidence.
+output as evidence for each one. "looks fine" is not evidence.
 
 ## Required
 
@@ -18,7 +18,7 @@ output as evidence for each one; "looks fine" is not evidence.
    policy, drain with an active allocation, and `turnfleet-probe` against a real
    relay. **`make test-e2e-chart`** green too: the chart has to install the CRDs
    and the controller and probe a relay from that install, which `make
-   helm-verify` does not exercise (it lints and compares renders, it installs
+   helm-verify` does not exercise (it lints and compares renders, and installs
    nothing).
 4. **`charts/turnfleet`'s `version` and `appVersion` are the release version**,
    on the commit being released: `version` is the chart's semver (`X.Y.Z`) and
@@ -30,7 +30,7 @@ output as evidence for each one; "looks fine" is not evidence.
    the release does not carry.
 5. **Version pins agree**: each pin's copies in `go.mod`, `tools/go.mod`, the
    `Makefile`, `.custom-gcl.yml`, the Dockerfiles and the workflows hold the same
-   value, and the held modules, vulnerability floors and the held cosign pin
+   value. The held modules, vulnerability floors and the held cosign pin
    described in `docs/versions.md` still describe what is in the tree. Diff them.
 6. **`docs/api.md` and the CRDs** are regenerated from the tagged commit
    (`make verify` is the check).
@@ -49,7 +49,7 @@ output as evidence for each one; "looks fine" is not evidence.
 10. **The release is what starts the pipeline**: create it for the version being
     released (`gh release create vX.Y.Z --title "Turnfleet vX.Y.Z" --notes …`),
     which is also what creates the tag. `image.yaml` then builds and pushes both
-    images for that tag, and `release.yaml` waits for their digests, signs them
+    images for that tag. `release.yaml` waits for their digests, signs them
     keyless, attaches the SPDX SBOM and the SLSA provenance, publishes the chart
     to `oci://ghcr.io/hazmi35/turnfleet-chart/turnfleet` at the release's
     version and signs it at its own digest, and writes the release body
@@ -62,19 +62,19 @@ output as evidence for each one; "looks fine" is not evidence.
 * Confirm the release body carries the digest of both published images and the
   chart's version and digest.
 * Watch the Release workflow for the tag. It waits for the Image workflow to
-  publish `ghcr.io/hazmi35/turnfleet-{controller,probe}:<tag>`, signs both index
-  digests keyless, attaches an SPDX SBOM and SLSA provenance to each, publishes
-  and signs the chart at the digest its own push reported, verifies all of it
-  with the identity it records, and writes the release body from the digests and
-  the commands. It fails loudly if the digests never appear (look at the Image
-  run for the tag), if the tag resolves to an image built from another commit
-  (the check reads `org.opencontainers.image.revision` against the tagged
-  commit, so a tag still carrying a previous release's build fails the run
-  instead of being signed), if the chart's `version` or `appVersion` is not the
-  release version (nothing is pushed in that case), or if one of its own
-  verifications fails.
+  publish `ghcr.io/hazmi35/turnfleet-{controller,probe}:<tag>`. It then signs
+  both index digests keyless, attaches an SPDX SBOM and SLSA provenance to each,
+  publishes and signs the chart at the digest its own push reported, verifies
+  all of it with the identity it records, and writes the release body from the
+  digests and the commands. It fails loudly if the digests never appear (look
+  at the Image run for the tag), if the tag resolves to an image built from
+  another commit (the check reads `org.opencontainers.image.revision` against
+  the tagged commit, so a tag still carrying a previous release's build fails
+  the run instead of being signed), if the chart's `version` or `appVersion`
+  is not the release version (nothing is pushed in that case), or if one of its
+  own verifications fails.
 * Check what it published rather than trusting it. The release notes carry the
-  digests, the certificate identity and the exact commands; `identity` is
+  digests, the certificate identity and the exact commands. `identity` is
   `https://github.com/Hazmi35/turnfleet/.github/workflows/release.yaml@refs/tags/<tag>`:
 
   ```sh
@@ -92,8 +92,9 @@ output as evidence for each one; "looks fine" is not evidence.
   The first command proves the signature, the second prints the commit the
   provenance names (it must be the tagged commit) and the third prints the pinned
   coturn digest. Repeat for `turnfleet-probe`. A consumer that holds a public key
-  instead of trusting the Fulcio identity uses `cosign verify --key cosign.pub
-  <ref>`, which needs a key-based signature this repository does not produce.
+  instead of trusting the Fulcio identity would need `cosign verify --key
+  cosign.pub <ref>`, which requires a key-based signature this repository does
+  not produce.
 * The chart was published with the same identity and verifies the same way, at
   `oci://ghcr.io/hazmi35/turnfleet-chart/turnfleet`, version `<tag without its v>`.
   Pull it and check its digest, which the release body records, rather than the
@@ -106,7 +107,8 @@ output as evidence for each one; "looks fine" is not evidence.
   ```
 
   Its provenance and its SPDX document verify with the `slsaprovenance` and
-  `spdxjson` commands above, against the same reference. #39's acceptance —
-  installing from that published reference on a fresh cluster and probing a relay
-  — needs a release to have happened, the way the image digest checks above do.
+  `spdxjson` commands above, against the same reference. #39's acceptance,
+  installing from that published reference on a fresh cluster and probing a
+  relay, needs a release to have happened, the way the image digest checks above
+  do.
 * Re-run `make verify` on the tag: a tag is a commit, not a branch state.

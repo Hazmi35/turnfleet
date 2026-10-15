@@ -11,11 +11,11 @@ planner partitions it and the webhook rejects a pool whose range cannot be
 split.
 
 The *listener* ports were not. `spec.listeners[].port` is one port per pool
-(3478, say), and a listening socket can only be bound once per address. Two
-relays on one address both asking coturn to bind `3478` means the second one
-fails to start: the pool would report relays that exist on paper while serving
-a fraction of the capacity it claims — the exact silent failure this project
-exists to remove.
+(3478, say), and a listening socket can only be bound once per address. If two
+relays on one address both ask coturn to bind `3478`, the second one fails to
+start. The pool would then report relays that exist on paper while serving only
+a fraction of the capacity it claims, which is the exact silent failure this
+project exists to remove.
 
 ## Decision
 
@@ -27,8 +27,8 @@ and so on. `Relay.ListenerPortOffset` carries the slot, and the renderer, the
 and nothing changes.
 
 The same offset applies to coturn's metrics port
-(`Relay.MetricsPort()`): two relays on one node address cannot both bind 9641,
-and the Kubernetes scheduler treats the ports a `hostNetwork` pod declares as
+(`Relay.MetricsPort()`): two relays on one node address cannot both bind 9641.
+The Kubernetes scheduler also treats the ports a `hostNetwork` pod declares as
 host ports, so a second partitioned relay would not even be *scheduled* while
 the first one held 9641. That failure mode is worth naming: the pod sat
 `Pending` with "didn't have free ports for the requested pod ports" while
@@ -38,15 +38,15 @@ Clients never see this: they are handed the URI of a specific relay
 (`turn:203.0.113.10:3479?transport=udp`), so the offset is an implementation
 detail of sharing an address. The webhook rejects a pool whose listener port
 span (`port` .. `port + relaysPerNode - 1`) intersects `relayPortRange`, or
-runs past 65535, which is the other half of keeping listeners and allocations
-from colliding.
+runs past 65535. That check is the other half of keeping listeners and
+allocations from colliding.
 
 ## Consequences
 
 * `PartitionedIP` actually works: every relay binds its own listening port and
   the first relay to start no longer starves the rest.
 * The pool's listener ports occupy `relaysPerNode` consecutive ports per
-  address. That is a bounded, declared cost — the validation rule names it.
+  address. That is a bounded, declared cost, and the validation rule names it.
 * The rendered configuration, the status URIs and the probe all derive the port
   from the relay, not from the pool, so there is one place (`Relay`) where the
   offset lives and one function (`ListenerPort`) that applies it.

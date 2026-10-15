@@ -60,7 +60,7 @@ var (
 	relayPortsTotal = prometheus.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: metricNamespace,
 		Name:      "relay_ports_total",
-		Help:      "Relay ports this relay owns. Capacity is this number, not the replica count.",
+		Help:      "Relay ports this relay owns. Capacity is this number, not the number of relays.",
 	}, labelNames)
 
 	allocationFailures = prometheus.NewCounterVec(prometheus.CounterOpts{

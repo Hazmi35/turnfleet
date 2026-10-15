@@ -11,9 +11,11 @@ operator's job is placement, addressing, capacity accounting and observability,
 not the relay itself.
 
 The project is licensed AGPL-3.0-only. Vendoring a third-party data plane into
-the repository would pull that code under the project's license header
-conventions, force us to patch and track upstream, and create a second place
-where relay behaviour is defined.
+the repository would have three results:
+
+* the vendored code would come under the project's license header conventions;
+* the project would have to patch it and track upstream;
+* relay behaviour would be defined in a second place.
 
 ## Decision
 
@@ -29,20 +31,20 @@ sources, and the image keeps its own BSD-3-Clause license. The operator only
 writes coturn configuration (mounted from a Secret, see ADR 20) and passes a
 small set of flags verified against that exact image.
 
-`spec.dataplane.image` must be a digest-pinned reference: the field is required
+`spec.dataplane.image` must be a digest-pinned reference. The field is required
 and has no default, and the validating webhook rejects an empty or tag-only
-image, so a pool always names the image it runs and can never silently float to
-a new relay version.
+image. A pool therefore always names the image it runs, and can never silently
+float to a new relay version.
 
 ## Consequences
 
 * Relay upgrades are explicit: bump the digest in the pool spec, relays roll
   one at a time with drain (ADR 6).
 * The operator cannot work around a coturn limitation by patching coturn. Flags
-  that do not exist in the pinned version are simply not available: the
+  that do not exist in the pinned version are not available, because the
   renderer only emits flags that appear in the pinned image's `turnserver
-  --help` output, which is captured as
+  --help` output. That output is captured as
   `internal/relay/testdata/coturn-4.18.0-r0-help.txt` and asserted by a unit
   test.
-* Metrics are whatever coturn exposes (ADR 5); allocation failure codes that
+* Metrics are whatever coturn exposes (ADR 5). Allocation failure codes that
   coturn does not expose are derived from the probe instead.

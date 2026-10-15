@@ -49,8 +49,9 @@ const (
 	// short because the drain is what makes a rollout take as long as it does.
 	drainPollInterval = time.Second
 
-	// capacityPressurePercent is the percentage of a relay's ports that must be
-	// in use before CapacityPressure is raised, before a probe observes a 508.
+	// capacityPressurePercent is the share of a relay's ports that must be in
+	// use for CapacityPressure to be raised, so the condition appears before a
+	// probe observes a 508.
 	capacityPressurePercent = 90
 
 	// scrapeTimeout bounds reading one relay's metrics endpoint.

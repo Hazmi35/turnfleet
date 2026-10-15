@@ -2,38 +2,40 @@
 
 Turnfleet is a Kubernetes operator (`turnfleet-controller`) for TURN relay
 fleets and a standalone relay probe (`turnfleet-probe`). A `TURNPool` declares
-realm, auth, listeners, relay port range and an addressing mode; the operator
-places **relays** — one TURN process per public relay identity `(IP, port
-range)` — on nodes labelled `turnfleet.hzmi.dev/relay-node=true`, renders
-coturn configuration for each, publishes per-relay `turn:` URIs, and keeps
-them reachable and observable. Capacity is bounded per public IP by the port
+realm, auth, listeners, relay port range and an addressing mode. The operator
+places **relays** on nodes labelled `turnfleet.hzmi.dev/relay-node=true`, one
+TURN process per public relay identity `(IP, port range)`. It renders a coturn
+configuration for each relay, publishes per-relay `turn:` URIs, and keeps the
+fleet reachable and observable. Capacity is bounded per public IP by the port
 space, never by the number of pods: adding replicas behind one address adds
 nothing. This file is the only instruction file for every agent.
 
 ## Glossary
 
-* **Pool** — one `TURNPool` resource: relays sharing a realm and auth.
-* **Relay** — one TURN process with its own relay identity. Never "instance",
-  "replica" or "server" in API, code, docs or metrics.
-* **Allocation** — a TURN allocation held on a relay; it occupies one port.
-* **Relay address** — the public IP a relay advertises in
-  `XOR-RELAYED-ADDRESS`.
-* **Declared address** — one of the addresses an operator reserves for a
-  `PodIP` relay on a relay node, in the node annotation
+* **Pool**: one `TURNPool` resource whose relays share a realm and auth.
+* **Relay**: one TURN process with its own relay identity. Never "instance",
+  "replica" or "server" for one relay, in API, code, docs or metrics; *replicas*
+  is only ever the Kubernetes count of a relay set (`spec.replicas`, "adding
+  replicas behind one address adds nothing").
+* **Allocation**: a TURN allocation held on a relay, occupying one port.
+* **Relay address**: the public IP a relay advertises in `XOR-RELAYED-ADDRESS`.
+* **Declared address**: one of the addresses an operator reserves for a `PodIP`
+  relay on a relay node, in the node annotation
   `turnfleet.hzmi.dev/relay-pod-addresses`. The operator owns the IPAM and
   attaches the address; the relay binds and advertises it. A declaration may
   carry the prefix length the pod's attachment should request.
-* **Attachment** — the Multus `NetworkAttachmentDefinition` a `PodIP` relay pod
-  is attached to (`spec.addressing.podIP.attachmentRef`). It is where a
-  declared address reaches the pod; without one the pod uses its own address on
-  the default network.
-* **Relay node** — a node labelled `turnfleet.hzmi.dev/relay-node=true`.
-* **Draining** — a relay on its way out: removed from `turnURIs`, readiness
-  false, deleted only when allocations reach zero or `drainTimeout` expires.
-* **Vantage point** — the network position a probe runs from. In-cluster for
+* **Attachment**: the Multus `NetworkAttachmentDefinition` a `PodIP` relay pod
+  is attached to (`spec.addressing.podIP.attachmentRef`). It is where a declared
+  address reaches the pod; without one the pod uses its own address on the
+  default network.
+* **Relay node**: a node labelled `turnfleet.hzmi.dev/relay-node=true`.
+* **Draining**: a relay on its way out. It is removed from `turnURIs`, its
+  readiness goes false, and it is deleted only when allocations reach zero or
+  `drainTimeout` expires.
+* **Vantage point**: the network position a probe runs from. In-cluster for
   configuration and capacity; outside the cluster's network for reachability,
   where hairpin NAT and a firewall are visible.
-* **Vantage runner** — the process that probes every listener URI a pool
+* **Vantage runner**: the process that probes every listener URI a pool
   publishes from a vantage point and publishes the result, so the controller
   reports it as `ReachableFromVantage`.
 
@@ -42,8 +44,7 @@ Conventions that are load-bearing: API group `turnfleet.hzmi.dev`, version
 annotation and finalizer prefix `turnfleet.hzmi.dev/`; metric prefix
 `turnfleet_`; pod names `<pool>-relay-<5-char hash>`; relay config Secret
 `<pool>-relay-config`; URI ConfigMap `<pool>-turn-uris`; vantage result
-ConfigMap `<pool>-vantage`; kind cluster
-`turnfleet`, context `kind-turnfleet`.
+ConfigMap `<pool>-vantage`; kind cluster `turnfleet`, context `kind-turnfleet`.
 
 ## Commands
 
@@ -59,9 +60,9 @@ make test                 # unit + envtest (KUBEBUILDER_ASSETS is set for you)
 make test-fuzz            # fuzz the renderer and the webhook validators
 make build                # bin/turnfleet-controller, bin/turnfleet-probe
 make kind-up kind-down    # local 1 control-plane + 3 relay-node workers
-make install deploy undeploy
-make helm-install        # install the controller from charts/turnfleet
-make helm-lint helm-drift  # lint the chart, fail when it drifts from config/
+make install deploy undeploy  # apply, deploy and remove the manifests
+make helm-install         # install the controller from charts/turnfleet
+make helm-lint helm-drift # lint the chart, fail when it drifts from config/
 make test-e2e             # full kind suite; loads images, installs, deploys
 make test-e2e-chart       # kind suite for the chart install: helm, then probe
 make verify               # generated files, headers, no diff
@@ -81,7 +82,7 @@ change affects relay behaviour, rendering, drain, or the probe.
 | `internal/probe/` | Real TURN `Allocate` against a relay listener on `pion/turn`; result type shared by controller and CLI. |
 | `internal/vantage/` | The result a vantage runner publishes and where: the `<pool>-vantage` ConfigMap, its labels and its payload. |
 | `internal/metrics/` | `turnfleet_` metric registration and the coturn scrape/parse helpers. |
-|`internal/controller/`|Reconcile: planner + renderer + pods + the configuration Secret + ConfigMaps + status, drain state machine, config-hash rollout.|
+| `internal/controller/` | The reconcile loop: planner + renderer + pods + the configuration Secret + ConfigMaps + status, the drain state machine, the config-hash rollout. |
 | `internal/webhook/v1alpha1/` | Defaulting and validating webhooks, immutability, mode-specific validation. |
 | `cmd/turnfleet-controller/`, `cmd/turnfleet-probe/` | Binaries; flag parsing and wiring only. |
 | `test/e2e/` | kind end-to-end suite (build-tagged `e2e`), `test/fixtures/` holds cluster fixtures. |
@@ -139,9 +140,16 @@ Single-context: the vocabulary is the "Glossary" section of this file, the decis
   what rolls.
 * Tests: table-driven where it fits, golden files for the renderer (one per
   addressing mode), `Eventually` with explicit timeouts, no `time.Sleep` for
-  synchronisation, fixed seeds in fuzz seeds.
+  synchronisation, fixed seeds in the fuzz targets.
 * Naming lives in the "Glossary" section above. If you need a new term, add it
   there in the same change.
+* Prose is written for a first-pass reader: one idea per sentence, the subject
+  first, the plain word over the metaphor, no filler. Where two clauses meet,
+  write a comma, a colon, parentheses or a second sentence; an em dash or an en
+  dash is not one of the choices. This covers `README.md`, `docs/`, the skills
+  this repository owns, code comments and commit messages. The skills vendored
+  from `mattpocock/skills` keep their upstream wording, so their findings go
+  upstream with them.
 
 ## Definition of done
 
@@ -152,14 +160,15 @@ Single-context: the vocabulary is the "Glossary" section of this file, the decis
    api-docs`), and `docs/api.md` reflects API changes.
 4. Docs and an ADR are updated: `docs/architecture.md`, `docs/capacity-model.md`
    or `docs/limitations.md` as applicable; a decision that was not obvious gets
-   `docs/adr/NNNN-title.md`. Work that is planned but not done belongs in the
-   issue tracker, never as a section in a document.
-5. A version bump that moves a pin `docs/versions.md` records as held (a held
-   module, a vulnerability floor, an image digest) updates that note in the same
-   pull request.
+   `docs/adr/NNNN-title.md`. Prose written in the change follows the writing rule
+   under Conventions. Work that is planned but not done belongs in the issue
+   tracker, never as a section in a document.
+5. When a version bump moves a pin that `docs/versions.md` records as held (a
+   held module, a vulnerability floor, an image digest), update that note in the
+   same pull request.
 6. Commits are Conventional Commits with `git commit -s` (DCO). Renovate's
    commits carry the trailer too, through the `:gitSignOff` preset in
-   `renovate.json`: a dependency pull request is not an exception, and the
+   `renovate.json`. A dependency pull request is not an exception, and the
    sign-off is the identity Renovate commits as.
 
 ## Never

@@ -11,7 +11,7 @@ import (
 
 // AddressingMode selects how relay addresses are assigned to nodes.
 //
-// The choice decides capacity, not just placement: a relay's capacity is the
+// The choice decides capacity, not just placement. A relay's capacity is the
 // number of ports in its own range, so only modes that add relay addresses add
 // capacity. See docs/capacity-model.md.
 //
@@ -31,23 +31,23 @@ const (
 
 	// AddressingModePartitionedIP runs several relays per node on the node's
 	// single address, each owning a disjoint slice of the relay port range. It
-	// adds concurrency and isolation but NOT capacity: the sum of the slices is
+	// adds concurrency and isolation but NOT capacity. The sum of the slices is
 	// still one IP's port space.
 	AddressingModePartitionedIP AddressingMode = "PartitionedIP"
 
 	// AddressingModePodIP runs one relay per address the relay nodes reserve
-	// for the pool, in an ordinary pod (hostNetwork: false) that binds and
-	// advertises the address the pod itself holds — on the cluster's default
-	// network, or on a Multus NetworkAttachmentDefinition named by
-	// addressing.podIP.attachmentRef. Capacity grows with the number of
-	// reserved addresses, exactly as in ExternalIPPool. See
+	// for the pool. Each relay runs in an ordinary pod (hostNetwork: false)
+	// that binds and advertises the address the pod itself holds, on the
+	// cluster's default network or on a Multus NetworkAttachmentDefinition
+	// named by addressing.podIP.attachmentRef. Capacity grows with the number
+	// of reserved addresses, exactly as in ExternalIPPool. See
 	// docs/adr/0018-addressing-mode-podip.md.
 	AddressingModePodIP AddressingMode = "PodIP"
 )
 
 // AddressingFamily selects the address family of a pool's relay addresses.
 //
-// A family is part of an address, not an extra port space: a node's IPv4 and
+// A family is part of an address, not an extra port space. A node's IPv4 and
 // IPv6 addresses are two relay addresses with two port spaces each, and a
 // second family never adds ports to one address. See docs/capacity-model.md.
 //
@@ -56,24 +56,24 @@ type AddressingFamily string
 
 const (
 	// AddressingFamilyIPv4 places relays on IPv4 addresses only. It is the
-	// default, and what every pool planned before this field existed does.
+	// default, and every pool planned before this field existed uses it.
 	AddressingFamilyIPv4 AddressingFamily = "IPv4"
 
 	// AddressingFamilyIPv6 places relays on IPv6 addresses only.
 	AddressingFamilyIPv6 AddressingFamily = "IPv6"
 
 	// AddressingFamilyDualStack plans the mode's relay set once per family. On
-	// a node that has both addresses that is one relay identity per family,
-	// and each of them owns the whole port range: two addresses, two port
-	// spaces.
+	// a node that has both addresses, that is one relay identity per family,
+	// and each relay identity owns the whole port range, so two addresses give
+	// two port spaces.
 	AddressingFamilyDualStack AddressingFamily = "DualStack"
 )
 
 // ListenerProtocol is the transport a relay listener accepts.
 //
-// coturn serves UDP and TCP on the same "plain" listening port and TLS/DTLS on
-// its own port, so a pool may declare at most one listener of each protocol and
-// its UDP and TCP listeners must share a port.
+// coturn serves UDP and TCP on the same "plain" listening port, and TLS/DTLS on
+// its own port. A pool may therefore declare at most one listener of each
+// protocol, and its UDP and TCP listeners must share a port.
 //
 // +kubebuilder:validation:Enum=udp;tcp;tls
 type ListenerProtocol string
@@ -89,11 +89,14 @@ const (
 	ListenerProtocolTLS ListenerProtocol = "tls"
 )
 
-// PortRange is an inclusive range of UDP ports a relay may allocate.
+// PortRange is an inclusive range of ports a relay may allocate, for both relay
+// transports, because coturn builds its UDP and TCP relay port maps from this
+// one range. A TCP relay endpoint therefore consumes the same port space as a
+// UDP one.
 //
 // A relay's capacity in concurrent allocations equals the number of ports in
-// its range. Ranges of relays that share one address must not overlap; the
-// planner partitions them and the webhook rejects a pool that cannot be
+// its range. Ranges of relays that share one address must not overlap. The
+// planner partitions them, and the webhook rejects a pool that cannot be
 // partitioned.
 type PortRange struct {
 	// start is the first port of the range, inclusive.
@@ -120,14 +123,14 @@ type DataplaneSpec struct {
 	Image string `json:"image,omitempty"`
 
 	// resources is the resource request and limit for each relay container.
-	// Relay capacity is bounded by ports, not CPU, so this is about keeping the
+	// Relay capacity is bounded by ports, not CPU, so this setting keeps the
 	// process responsive under allocation churn.
 	// +optional
 	Resources *corev1.ResourceRequirements `json:"resources,omitempty"`
 
 	// extraArgs are appended verbatim to the rendered coturn configuration.
 	// They are hashed into the relay's config-hash like any other change, but
-	// they are not validated against the pinned image: use them for flags the
+	// they are not validated against the pinned image. Use them for flags the
 	// API does not model.
 	// +listType=atomic
 	// +optional
@@ -151,7 +154,7 @@ type ExternalAddress struct {
 // ExternalIPPoolSpec configures AddressingModeExternalIPPool.
 type ExternalIPPoolSpec struct {
 	// addresses are the secondary addresses available to the pool, one relay per
-	// address. Each entry must be attached to the named node; the operator does
+	// address. Each entry must be attached to the named node. The operator does
 	// not attach addresses. The webhook requires at least one address when the
 	// pool's mode is ExternalIPPool.
 	// +listType=map
@@ -163,7 +166,7 @@ type ExternalIPPoolSpec struct {
 // PartitionedIPSpec configures AddressingModePartitionedIP.
 type PartitionedIPSpec struct {
 	// relaysPerNode is how many relays share one node address. The pool's relay
-	// port range is split into that many disjoint slices; their sum is still one
+	// port range is split into that many disjoint slices. Their sum is still one
 	// IP's port space, so this setting adds concurrency, not capacity.
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=64
@@ -176,35 +179,35 @@ type PartitionedIPSpec struct {
 //
 // The addresses themselves are declared by the operator on the relay nodes, in
 // the turnfleet.hzmi.dev/relay-pod-addresses annotation (one address per relay,
-// stable and reserved), because IPAM is a prerequisite this operator does not
-// own and cannot enumerate: the operator attaches the address, the operator
+// stable and reserved). IPAM is a prerequisite this operator does not own and
+// cannot enumerate, so the operator attaches the address, and the operator
 // declares it. The controller reads each scheduled pod's own address back and
 // treats a relay whose address changed as a drain, never as a silent
 // re-advertise (docs/adr/0006-drain-semantics.md).
 //
-// The block names an attachment or it says nothing: it is optional, and its one
-// field must be set whenever the block is, so `podIP: {}` is not a third state
-// the API accepts. The union marker carries that requirement because the field
-// cannot: a non-pointer struct with required fields must itself be declared
-// required (kubeapilinter's nonpointerstructs), and podIP is forbidden for the
-// other modes.
+// The block either names an attachment or says nothing. It is optional, and its
+// one field must be set whenever the block is, so `podIP: {}` is not a third
+// state the API accepts. The union marker carries that requirement because the
+// field cannot: a non-pointer struct with required fields must itself be
+// declared required (kubeapilinter's nonpointerstructs), and podIP is forbidden
+// for the other modes.
 //
 // +kubebuilder:validation:AtLeastOneOf=attachmentRef
 type PodIPSpec struct {
 	// attachmentRef names the Multus NetworkAttachmentDefinition the relay pods
 	// attach, in the pool's namespace ("name") or in another one
 	// ("namespace/name"). The attachment is where the declared address reaches
-	// the pod. It is immutable, like mode and family: a different attachment
-	// changes which address a relay holds.
+	// the pod. It is immutable, like mode and family, because a different
+	// attachment changes which address a relay holds.
 	//
 	// A non-empty attachmentRef is the statement that the relay uses an
-	// attachment, and the block's zero value is the other, only other
-	// spelling: no secondary interface, with the relay binding its own pod
-	// address on the cluster's default network, which must likewise be
-	// reserved and individually routable. The block refuses the empty value and
-	// the schema refuses `podIP: {}`, so neither is a spelling at all. The
-	// minimum length is also what lets a plain string, rather than a pointer,
-	// mean this: "" cannot be "set".
+	// attachment. The block's zero value is the mode's only other spelling: no
+	// secondary interface, with the relay binding its own pod address on the
+	// cluster's default network. That address must likewise be reserved and
+	// individually routable. The block refuses the empty value and the schema
+	// refuses `podIP: {}`, so neither is a spelling at all. The minimum length
+	// is also what lets a plain string, rather than a pointer, mean this: ""
+	// cannot be "set".
 	// +kubebuilder:validation:MinLength=1
 	// +optional
 	AttachmentRef string `json:"attachmentRef,omitempty"`
@@ -218,8 +221,8 @@ type AddressingSpec struct {
 	Mode AddressingMode `json:"mode,omitempty"`
 
 	// family is the address family the pool's relay addresses belong to. It is
-	// immutable for the same reason mode is: changing it changes the address,
-	// or half the addresses, of every relay and strands live allocations.
+	// immutable for the same reason mode is. Changing it changes the address,
+	// or half the addresses, of every relay, and strands live allocations.
 	//
 	// IPv4 keeps the pool on the node's IPv4 addresses. IPv6 plans on IPv6
 	// addresses only. DualStack plans the mode's relay set once per family,
@@ -241,11 +244,11 @@ type AddressingSpec struct {
 	PartitionedIP *PartitionedIPSpec `json:"partitionedIP,omitempty"`
 
 	// podIP configures AddressingModePodIP and is forbidden for the other
-	// modes. For PodIP it is optional and binary: a non-empty attachmentRef
-	// names the attachment whose address the relay binds and advertises, and
-	// the zero value is the mode's other, only other spelling — the relay
-	// binds its own pod address on the cluster's default network. `podIP: {}`
-	// is neither and the schema refuses it.
+	// modes. For PodIP it is optional and binary. A non-empty attachmentRef
+	// names the attachment whose address the relay binds and advertises. The
+	// zero value is the mode's only other spelling: the relay binds its own
+	// pod address on the cluster's default network. `podIP: {}` is neither,
+	// and the schema refuses it.
 	// +optional
 	PodIP PodIPSpec `json:"podIP,omitzero"`
 }
@@ -264,20 +267,20 @@ type ListenerSpec struct {
 	Protocol ListenerProtocol `json:"protocol,omitempty"`
 
 	// port is the base listener port. Relays that own their address serve
-	// exactly this port; in PartitionedIP mode, where several relays share one
+	// exactly this port. In PartitionedIP mode, where several relays share one
 	// address, each relay serves port + its slot index, because a listening
 	// socket can only be bound once per address. The ports a pool uses must not
-	// overlap spec.relayPortRange: a listener and an allocation cannot share a
-	// port.
+	// overlap spec.relayPortRange, because a listener and an allocation cannot
+	// share a port.
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=65535
 	// +required
 	Port int32 `json:"port,omitempty"`
 
 	// tlsSecretRef is the Secret holding the listener's certificate, with the
-	// usual tls.crt and tls.key keys. Required for protocol tls, forbidden
-	// otherwise. Rotating it changes every relay's config hash and rolls the
-	// pool one relay at a time.
+	// usual tls.crt and tls.key keys. It is required for protocol tls and
+	// forbidden otherwise. Rotating it changes every relay's config hash and
+	// rolls the pool one relay at a time.
 	// +optional
 	TLSSecretRef *corev1.LocalObjectReference `json:"tlsSecretRef,omitempty"`
 }
@@ -302,10 +305,10 @@ type AuthSpec struct {
 // PeerPolicySpec restricts which peers a relay may send to.
 //
 // A relay must never be able to reach in-cluster or metadata addresses unless a
-// pool explicitly allows it: an allocation that peers can point anywhere is an
+// pool explicitly allows it. An allocation that peers can point anywhere is an
 // SSRF pivot into the cluster.
 type PeerPolicySpec struct {
-	// deniedCIDRs are rendered as coturn --denied-peer-ip entries. When empty
+	// deniedCIDRs are rendered as coturn --denied-peer-ip entries. When empty,
 	// the webhook defaults them to RFC 1918, RFC 6598, loopback and link-local
 	// (including 169.254.169.254), which also covers the cluster pod and service
 	// CIDRs in the common case. The controller always appends the pod CIDRs it
@@ -352,11 +355,11 @@ type PlacementSpec struct {
 // TURNPoolSpec defines the desired state of TURNPool.
 type TURNPoolSpec struct {
 	// replicas is the desired number of relays. It is explicit rather than
-	// optional because the number of relays is the capacity decision: the value
+	// optional because the number of relays is the capacity decision. The value
 	// is capped by the addresses the addressing mode makes available, and the
 	// Ready condition says when it cannot be reached. The upper bound reflects
-	// where the rendered relay configurations stop fitting in one Secret;
-	// pools that need more relays than that need more than one pool.
+	// where the rendered relay configurations stop fitting in one Secret.
+	// Pools that need more relays than that need more than one pool.
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=256
 	// +required
@@ -366,13 +369,14 @@ type TURNPoolSpec struct {
 	// +required
 	Dataplane DataplaneSpec `json:"dataplane,omitzero"`
 
-	// addressing selects how relays are placed and addressed. Immutable.
+	// addressing selects how relays are placed and addressed. It is immutable.
 	// +required
 	Addressing AddressingSpec `json:"addressing,omitzero"`
 
 	// relayPortRange is the pool's UDP port space. Each relay owns a disjoint
-	// slice of it; for HostNetwork and ExternalIPPool that slice is the whole
-	// range. Immutable: changing it invalidates live allocations.
+	// slice of it, and for HostNetwork and ExternalIPPool that slice is the
+	// whole range. It is immutable, because changing it invalidates live
+	// allocations.
 	// +required
 	RelayPortRange PortRange `json:"relayPortRange,omitzero"`
 
@@ -418,9 +422,9 @@ type ProbeStatus struct {
 	// +optional
 	Succeeded *bool `json:"succeeded,omitempty"`
 
-	// latencyMillis is the probe duration in milliseconds. Milliseconds rather
-	// than seconds so short probes stay readable, and an integer because the API
-	// has no floats.
+	// latencyMillis is the probe duration in milliseconds. The value is in
+	// milliseconds rather than seconds so short probes stay readable, and it is
+	// an integer because the API has no floats.
 	// +optional
 	LatencyMillis *int64 `json:"latencyMillis,omitempty"`
 
@@ -432,8 +436,8 @@ type ProbeStatus struct {
 
 // RelayStatus is the observed state of one relay.
 type RelayStatus struct {
-	// name is the relay identity: stable across restarts and controller
-	// failover, derived from the relay's address and port range.
+	// name is the relay identity. It is stable across restarts and controller
+	// failover, and it is derived from the relay's address and port range.
 	// +kubebuilder:validation:MinLength=1
 	// +required
 	Name string `json:"name,omitempty"`
@@ -461,8 +465,8 @@ type RelayStatus struct {
 	// +optional
 	TurnURIs []string `json:"turnURIs,omitempty"`
 
-	// ready reports whether the relay is serving: pod ready and last probe
-	// successful.
+	// ready reports whether the relay is serving. A serving relay has a ready
+	// pod and a successful last probe.
 	// +optional
 	Ready *bool `json:"ready,omitempty"`
 
@@ -477,13 +481,13 @@ type RelayStatus struct {
 	Allocations *int32 `json:"allocations,omitempty"`
 
 	// portsInUse is the number of relay ports currently held by allocations. One
-	// allocation occupies one port, so this equals allocations; it is reported
+	// allocation occupies one port, so this equals allocations. It is reported
 	// separately because consumers reason about ports.
 	// +optional
 	PortsInUse *int32 `json:"portsInUse,omitempty"`
 
-	// portsTotal is the number of ports this relay owns. Capacity is portsTotal;
-	// the ratio consumers compute is portsInUse/portsTotal.
+	// portsTotal is the number of ports this relay owns. Capacity is portsTotal.
+	// The ratio consumers compute is portsInUse/portsTotal.
 	// +optional
 	PortsTotal *int32 `json:"portsTotal,omitempty"`
 
@@ -509,11 +513,16 @@ type TURNPoolStatus struct {
 	//   - PodAddressUnusable: a relay node declares a PodIP relay address that
 	//     cannot work at all (unspecified, loopback, link-local or multicast).
 	//     The address is dropped from the plan.
-	//   - Degraded: fewer relays than desired, a relay is failing to converge,
-	//     or a relay identity overlaps another pool's.
+	//   - ReachableFromVantage: every listener URI the pool publishes answered a
+	//     TURN Allocate where the vantage runner ran. False when one did not,
+	//     unknown while no current result has been published.
+	//   - Degraded: relays that could not be placed, a missing pod, an unusable
+	//     auth Secret, a relay identity that overlaps another pool's, or a
+	//     vantage point that cannot reach the relays.
 	//
-	// Ready and ProbeSucceeded are normal-true; CapacityPressure,
-	// AddressConflict, PodAddressUnusable and Degraded are abnormal-true.
+	// Ready, ProbeSucceeded and ReachableFromVantage are normal-true.
+	// CapacityPressure, AddressConflict, PodAddressUnusable and Degraded are
+	// abnormal-true.
 	// +listType=map
 	// +listMapKey=type
 	// +optional

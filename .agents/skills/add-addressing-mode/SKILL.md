@@ -11,7 +11,7 @@ does not change capacity accounting is not a new mode.
 
 1. **Extend the enum.** `api/v1alpha1/AddressingMode` plus the
    `+kubebuilder:validation:Enum` marker. Adding a value breaks every `switch`
-   over the type by design; fix them all (`exhaustive` enforces it).
+   over the type by design, so fix them all (`exhaustive` enforces it).
 2. **Implement `internal/relay.Planner`** for the mode:
    - Deterministic ordering (sort nodes and addresses) so identities are stable
      across restarts and controller failover.
@@ -24,12 +24,12 @@ does not change capacity accounting is not a new mode.
 3. **Implement `internal/relay.Renderer`** for the mode: listening address,
    relay address, `-E`/`-X` mapping, port range, listeners, realm, secret,
    denied peers. Every coturn flag must already appear in
-   `internal/relay/testdata/coturn-4.18.0-r0-help.txt`; re-capture that file
-   from the pinned image (`docker run --rm <pinned coturn> turnserver --help`)
-   before adding a flag, and update `docs/adr/0008-coturn-config-rendering.md`.
+   `internal/relay/testdata/coturn-4.18.0-r0-help.txt`. Before adding a flag,
+   re-capture that file from the pinned image (`docker run --rm <pinned coturn>
+   turnserver --help`) and update `docs/adr/0008-coturn-config-rendering.md`.
 4. **Golden tests**, one file per mode under `internal/relay/testdata/`, plus a
-   planner test for stability, rebalancing and disjointness, and the fuzz target
-   (`FuzzRenderer`) must still hold.
+   planner test for stability, rebalancing and disjointness. The `FuzzRenderer`
+   target must still pass.
 5. **Webhook validation** for mode-specific config in
    `internal/webhook/v1alpha1/turnpool_webhook.go`: required fields present,
    forbidden fields absent, ranges partitioned without overlap.
