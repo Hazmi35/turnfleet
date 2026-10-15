@@ -1,0 +1,301 @@
+===== e2e iteration 1  11:26:07 =====
+=== RUN   TestHostNetworkMode
+--- PASS: TestHostNetworkMode (7.54s)
+=== RUN   TestPartitionedIPMode
+--- PASS: TestPartitionedIPMode (8.04s)
+=== RUN   TestExternalIPPoolMode
+--- PASS: TestExternalIPPoolMode (8.48s)
+=== RUN   TestSaturationBecomesObservable
+    e2e_test.go:265: kubectl get --raw /api/v1/namespaces/turnfleet-system/services/http:turnfleet-controller-manager-metrics-service:8443/proxy/metrics failed: exit status 1
+        Error from server (BadRequest): the server rejected our request for an unknown reason
+--- FAIL: TestSaturationBecomesObservable (7.50s)
+=== RUN   TestPeerPolicyRefusesClusterAddresses
+--- PASS: TestPeerPolicyRefusesClusterAddresses (8.06s)
+=== RUN   TestScaleDownDrainsRelayWithAnActiveAllocation
+    e2e_test.go:374: probe allocated on the doomed relay; the held allocation is what matters
+--- PASS: TestScaleDownDrainsRelayWithAnActiveAllocation (11.58s)
+=== RUN   TestProbeCLIFromTheHost
+--- PASS: TestProbeCLIFromTheHost (7.55s)
+=== RUN   TestVantageRunnerInCluster
+    vantage_test.go:94: runner Job output:
+        debug: allocating on turn:172.18.0.3:34787?transport=udp as 1792063931:turnfleet-probe
+        debug: relayed address is 172.18.0.3:51700
+        published 1 result(s) in turnfleet-e2e/demo-vantage
+        {
+          "pool": "demo",
+          "observedAt": "2026-10-15T11:27:11.045335357Z",
+          "results": [
+            {
+              "succeeded": true,
+              "uri": "turn:172.18.0.3:34787?transport=udp",
+              "relayedAddress": "172.18.0.3",
+              "relayedPort": 51700,
+              "latencyMillis": 1,
+              "message": "relay allocated and advertised the expected relayed address"
+            }
+          ]
+        }
+    vantage_test.go:104: the runner published 1 result(s) for pool demo at 2026-10-15T11:27:11Z
+    vantage_test.go:107:   turn:172.18.0.3:34787?transport=udp succeeded=true relayed=172.18.0.3:51700 message="relay allocated and advertised the expected relayed address"
+    vantage_test.go:110: after the runner Job, pool demo reports:
+    vantage_test.go:110:   Ready=True reason=RelaysReady message="1 of 1 relays are ready"
+    vantage_test.go:110:   ProbeSucceeded=True reason=ProbeSucceeded message="all 1 ready relay(s) answered a TURN Allocate with the expected relayed address"
+    vantage_test.go:110:   CapacityPressure=False reason=CapacityAvailable message="1 of 11 ports in use across 1 relay(s)"
+    vantage_test.go:110:   AddressConflict=False reason=NoOverlap message="no other pool holds a relay on this pool's addresses with overlapping ports"
+    vantage_test.go:110:   ReachableFromVantage=True reason=ReachableFromVantage message="all 1 listener URI(s) answered a TURN Allocate from the vantage point at 2026-10-15T11:27:11Z"
+    vantage_test.go:110:   PodAddressUnusable=False reason=RelayAddressUsable message="every PodIP relay address the pool's nodes declare is individually routable"
+    vantage_test.go:110:   Degraded=False reason=AsExpected message="every planned relay exists and is placeable"
+    vantage_test.go:130: after a failing result was published, pool demo reports:
+    vantage_test.go:130:   Ready=True reason=RelaysReady message="1 of 1 relays are ready"
+    vantage_test.go:130:   ProbeSucceeded=True reason=ProbeSucceeded message="all 1 ready relay(s) answered a TURN Allocate with the expected relayed address"
+    vantage_test.go:130:   CapacityPressure=False reason=CapacityAvailable message="0 of 11 ports in use across 1 relay(s)"
+    vantage_test.go:130:   AddressConflict=False reason=NoOverlap message="no other pool holds a relay on this pool's addresses with overlapping ports"
+    vantage_test.go:130:   ReachableFromVantage=False reason=UnreachableFromVantage message="1 of 1 listener URIs did not answer from the vantage point at 2026-10-15T11:27:13Z: turn:172.18.0.3:34787?transport=udp (cannot reach the relay listener: simulated failure from outside the cluster)"
+    vantage_test.go:130:   PodAddressUnusable=False reason=RelayAddressUsable message="every PodIP relay address the pool's nodes declare is individually routable"
+    vantage_test.go:130:   Degraded=True reason=UnreachableFromVantage message="the vantage point could not reach turn:172.18.0.3:34787?transport=udp: cannot reach the relay listener: simulated failure from outside the cluster"
+--- PASS: TestVantageRunnerInCluster (12.59s)
+FAIL
+FAIL	github.com/Hazmi35/turnfleet/test/e2e	71.390s
+FAIL
+iteration 1 exit=1 seconds=73.5
+===== e2e iteration 2  11:27:21 =====
+=== RUN   TestHostNetworkMode
+--- PASS: TestHostNetworkMode (8.54s)
+=== RUN   TestPartitionedIPMode
+--- PASS: TestPartitionedIPMode (8.03s)
+=== RUN   TestExternalIPPoolMode
+--- PASS: TestExternalIPPoolMode (8.96s)
+=== RUN   TestSaturationBecomesObservable
+    e2e_test.go:265: kubectl get --raw /api/v1/namespaces/turnfleet-system/services/http:turnfleet-controller-manager-metrics-service:8443/proxy/metrics failed: exit status 1
+        Error from server (BadRequest): the server rejected our request for an unknown reason
+--- FAIL: TestSaturationBecomesObservable (8.00s)
+=== RUN   TestPeerPolicyRefusesClusterAddresses
+--- PASS: TestPeerPolicyRefusesClusterAddresses (7.54s)
+=== RUN   TestScaleDownDrainsRelayWithAnActiveAllocation
+    e2e_test.go:374: probe allocated on the doomed relay; the held allocation is what matters
+--- PASS: TestScaleDownDrainsRelayWithAnActiveAllocation (13.09s)
+=== RUN   TestProbeCLIFromTheHost
+--- PASS: TestProbeCLIFromTheHost (8.05s)
+=== RUN   TestVantageRunnerInCluster
+    vantage_test.go:94: runner Job output:
+        debug: allocating on turn:172.18.0.3:34787?transport=udp as 1792064007:turnfleet-probe
+        debug: relayed address is 172.18.0.3:51709
+        published 1 result(s) in turnfleet-e2e/demo-vantage
+        {
+          "pool": "demo",
+          "observedAt": "2026-10-15T11:28:27.880449364Z",
+          "results": [
+            {
+              "succeeded": true,
+              "uri": "turn:172.18.0.3:34787?transport=udp",
+              "relayedAddress": "172.18.0.3",
+              "relayedPort": 51709,
+              "latencyMillis": 1,
+              "message": "relay allocated and advertised the expected relayed address"
+            }
+          ]
+        }
+    vantage_test.go:104: the runner published 1 result(s) for pool demo at 2026-10-15T11:28:27Z
+    vantage_test.go:107:   turn:172.18.0.3:34787?transport=udp succeeded=true relayed=172.18.0.3:51709 message="relay allocated and advertised the expected relayed address"
+    vantage_test.go:110: after the runner Job, pool demo reports:
+    vantage_test.go:110:   Ready=True reason=RelaysReady message="1 of 1 relays are ready"
+    vantage_test.go:110:   ProbeSucceeded=True reason=ProbeSucceeded message="all 1 ready relay(s) answered a TURN Allocate with the expected relayed address"
+    vantage_test.go:110:   CapacityPressure=False reason=CapacityAvailable message="1 of 11 ports in use across 1 relay(s)"
+    vantage_test.go:110:   AddressConflict=False reason=NoOverlap message="no other pool holds a relay on this pool's addresses with overlapping ports"
+    vantage_test.go:110:   ReachableFromVantage=True reason=ReachableFromVantage message="all 1 listener URI(s) answered a TURN Allocate from the vantage point at 2026-10-15T11:28:27Z"
+    vantage_test.go:110:   PodAddressUnusable=False reason=RelayAddressUsable message="every PodIP relay address the pool's nodes declare is individually routable"
+    vantage_test.go:110:   Degraded=False reason=AsExpected message="every planned relay exists and is placeable"
+    vantage_test.go:130: after a failing result was published, pool demo reports:
+    vantage_test.go:130:   Ready=True reason=RelaysReady message="1 of 1 relays are ready"
+    vantage_test.go:130:   ProbeSucceeded=True reason=ProbeSucceeded message="all 1 ready relay(s) answered a TURN Allocate with the expected relayed address"
+    vantage_test.go:130:   CapacityPressure=False reason=CapacityAvailable message="0 of 11 ports in use across 1 relay(s)"
+    vantage_test.go:130:   AddressConflict=False reason=NoOverlap message="no other pool holds a relay on this pool's addresses with overlapping ports"
+    vantage_test.go:130:   ReachableFromVantage=False reason=UnreachableFromVantage message="1 of 1 listener URIs did not answer from the vantage point at 2026-10-15T11:28:31Z: turn:172.18.0.3:34787?transport=udp (cannot reach the relay listener: simulated failure from outside the cluster)"
+    vantage_test.go:130:   PodAddressUnusable=False reason=RelayAddressUsable message="every PodIP relay address the pool's nodes declare is individually routable"
+    vantage_test.go:130:   Degraded=True reason=UnreachableFromVantage message="the vantage point could not reach turn:172.18.0.3:34787?transport=udp: cannot reach the relay listener: simulated failure from outside the cluster"
+--- PASS: TestVantageRunnerInCluster (13.05s)
+FAIL
+FAIL	github.com/Hazmi35/turnfleet/test/e2e	75.304s
+FAIL
+iteration 2 exit=1 seconds=77.3
+===== e2e iteration 3  11:28:38 =====
+=== RUN   TestHostNetworkMode
+--- PASS: TestHostNetworkMode (8.54s)
+=== RUN   TestPartitionedIPMode
+--- PASS: TestPartitionedIPMode (7.53s)
+=== RUN   TestExternalIPPoolMode
+--- PASS: TestExternalIPPoolMode (8.46s)
+=== RUN   TestSaturationBecomesObservable
+    e2e_test.go:265: kubectl get --raw /api/v1/namespaces/turnfleet-system/services/http:turnfleet-controller-manager-metrics-service:8443/proxy/metrics failed: exit status 1
+        Error from server (BadRequest): the server rejected our request for an unknown reason
+--- FAIL: TestSaturationBecomesObservable (8.09s)
+=== RUN   TestPeerPolicyRefusesClusterAddresses
+--- PASS: TestPeerPolicyRefusesClusterAddresses (7.54s)
+=== RUN   TestScaleDownDrainsRelayWithAnActiveAllocation
+    e2e_test.go:374: probe allocated on the doomed relay; the held allocation is what matters
+--- PASS: TestScaleDownDrainsRelayWithAnActiveAllocation (13.10s)
+=== RUN   TestProbeCLIFromTheHost
+--- PASS: TestProbeCLIFromTheHost (8.05s)
+=== RUN   TestVantageRunnerInCluster
+    vantage_test.go:94: runner Job output:
+        debug: allocating on turn:172.18.0.3:34787?transport=udp as 1792064084:turnfleet-probe
+        debug: relayed address is 172.18.0.3:51703
+        {
+          "pool": "demo",
+          "observedAt": "2026-10-15T11:29:44.233855427Z",
+          "results": [
+            {
+              "succeeded": true,
+              "uri": "turn:172.18.0.3:34787?transport=udp",
+              "relayedAddress": "172.18.0.3",
+              "relayedPort": 51703,
+              "latencyMillis": 1,
+              "message": "relay allocated and advertised the expected relayed address"
+            }
+          ]
+        }
+        published 1 result(s) in turnfleet-e2e/demo-vantage
+    vantage_test.go:104: the runner published 1 result(s) for pool demo at 2026-10-15T11:29:44Z
+    vantage_test.go:107:   turn:172.18.0.3:34787?transport=udp succeeded=true relayed=172.18.0.3:51703 message="relay allocated and advertised the expected relayed address"
+    vantage_test.go:110: after the runner Job, pool demo reports:
+    vantage_test.go:110:   Ready=True reason=RelaysReady message="1 of 1 relays are ready"
+    vantage_test.go:110:   ProbeSucceeded=True reason=ProbeSucceeded message="all 1 ready relay(s) answered a TURN Allocate with the expected relayed address"
+    vantage_test.go:110:   CapacityPressure=False reason=CapacityAvailable message="1 of 11 ports in use across 1 relay(s)"
+    vantage_test.go:110:   AddressConflict=False reason=NoOverlap message="no other pool holds a relay on this pool's addresses with overlapping ports"
+    vantage_test.go:110:   ReachableFromVantage=True reason=ReachableFromVantage message="all 1 listener URI(s) answered a TURN Allocate from the vantage point at 2026-10-15T11:29:44Z"
+    vantage_test.go:110:   PodAddressUnusable=False reason=RelayAddressUsable message="every PodIP relay address the pool's nodes declare is individually routable"
+    vantage_test.go:110:   Degraded=False reason=AsExpected message="every planned relay exists and is placeable"
+    vantage_test.go:130: after a failing result was published, pool demo reports:
+    vantage_test.go:130:   Ready=True reason=RelaysReady message="1 of 1 relays are ready"
+    vantage_test.go:130:   ProbeSucceeded=True reason=ProbeSucceeded message="all 1 ready relay(s) answered a TURN Allocate with the expected relayed address"
+    vantage_test.go:130:   CapacityPressure=False reason=CapacityAvailable message="0 of 11 ports in use across 1 relay(s)"
+    vantage_test.go:130:   AddressConflict=False reason=NoOverlap message="no other pool holds a relay on this pool's addresses with overlapping ports"
+    vantage_test.go:130:   ReachableFromVantage=False reason=UnreachableFromVantage message="1 of 1 listener URIs did not answer from the vantage point at 2026-10-15T11:29:46Z: turn:172.18.0.3:34787?transport=udp (cannot reach the relay listener: simulated failure from outside the cluster)"
+    vantage_test.go:130:   PodAddressUnusable=False reason=RelayAddressUsable message="every PodIP relay address the pool's nodes declare is individually routable"
+    vantage_test.go:130:   Degraded=True reason=UnreachableFromVantage message="the vantage point could not reach turn:172.18.0.3:34787?transport=udp: cannot reach the relay listener: simulated failure from outside the cluster"
+--- PASS: TestVantageRunnerInCluster (7.07s)
+FAIL
+FAIL	github.com/Hazmi35/turnfleet/test/e2e	68.428s
+FAIL
+iteration 3 exit=1 seconds=70.4
+===== e2e iteration 4  11:29:49 =====
+=== RUN   TestHostNetworkMode
+--- PASS: TestHostNetworkMode (8.04s)
+=== RUN   TestPartitionedIPMode
+--- PASS: TestPartitionedIPMode (8.04s)
+=== RUN   TestExternalIPPoolMode
+--- PASS: TestExternalIPPoolMode (8.47s)
+=== RUN   TestSaturationBecomesObservable
+    e2e_test.go:265: kubectl get --raw /api/v1/namespaces/turnfleet-system/services/http:turnfleet-controller-manager-metrics-service:8443/proxy/metrics failed: exit status 1
+        Error from server (BadRequest): the server rejected our request for an unknown reason
+--- FAIL: TestSaturationBecomesObservable (8.59s)
+=== RUN   TestPeerPolicyRefusesClusterAddresses
+--- PASS: TestPeerPolicyRefusesClusterAddresses (7.04s)
+=== RUN   TestScaleDownDrainsRelayWithAnActiveAllocation
+    e2e_test.go:374: probe allocated on the doomed relay; the held allocation is what matters
+--- PASS: TestScaleDownDrainsRelayWithAnActiveAllocation (12.57s)
+=== RUN   TestProbeCLIFromTheHost
+--- PASS: TestProbeCLIFromTheHost (7.05s)
+=== RUN   TestVantageRunnerInCluster
+    vantage_test.go:94: runner Job output:
+        debug: allocating on turn:172.18.0.3:34787?transport=udp as 1792064153:turnfleet-probe
+        debug: relayed address is 172.18.0.3:51707
+        published 1 result(s) in turnfleet-e2e/demo-vantage
+        {
+          "pool": "demo",
+          "observedAt": "2026-10-15T11:30:53.136002246Z",
+          "results": [
+            {
+              "succeeded": true,
+              "uri": "turn:172.18.0.3:34787?transport=udp",
+              "relayedAddress": "172.18.0.3",
+              "relayedPort": 51707,
+              "latencyMillis": 1,
+              "message": "relay allocated and advertised the expected relayed address"
+            }
+          ]
+        }
+    vantage_test.go:104: the runner published 1 result(s) for pool demo at 2026-10-15T11:30:53Z
+    vantage_test.go:107:   turn:172.18.0.3:34787?transport=udp succeeded=true relayed=172.18.0.3:51707 message="relay allocated and advertised the expected relayed address"
+    vantage_test.go:110: after the runner Job, pool demo reports:
+    vantage_test.go:110:   Ready=True reason=RelaysReady message="1 of 1 relays are ready"
+    vantage_test.go:110:   ProbeSucceeded=True reason=ProbeSucceeded message="all 1 ready relay(s) answered a TURN Allocate with the expected relayed address"
+    vantage_test.go:110:   CapacityPressure=False reason=CapacityAvailable message="1 of 11 ports in use across 1 relay(s)"
+    vantage_test.go:110:   AddressConflict=False reason=NoOverlap message="no other pool holds a relay on this pool's addresses with overlapping ports"
+    vantage_test.go:110:   ReachableFromVantage=True reason=ReachableFromVantage message="all 1 listener URI(s) answered a TURN Allocate from the vantage point at 2026-10-15T11:30:53Z"
+    vantage_test.go:110:   PodAddressUnusable=False reason=RelayAddressUsable message="every PodIP relay address the pool's nodes declare is individually routable"
+    vantage_test.go:110:   Degraded=False reason=AsExpected message="every planned relay exists and is placeable"
+    vantage_test.go:130: after a failing result was published, pool demo reports:
+    vantage_test.go:130:   Ready=True reason=RelaysReady message="1 of 1 relays are ready"
+    vantage_test.go:130:   ProbeSucceeded=True reason=ProbeSucceeded message="all 1 ready relay(s) answered a TURN Allocate with the expected relayed address"
+    vantage_test.go:130:   CapacityPressure=False reason=CapacityAvailable message="0 of 11 ports in use across 1 relay(s)"
+    vantage_test.go:130:   AddressConflict=False reason=NoOverlap message="no other pool holds a relay on this pool's addresses with overlapping ports"
+    vantage_test.go:130:   ReachableFromVantage=False reason=UnreachableFromVantage message="1 of 1 listener URIs did not answer from the vantage point at 2026-10-15T11:30:55Z: turn:172.18.0.3:34787?transport=udp (cannot reach the relay listener: simulated failure from outside the cluster)"
+    vantage_test.go:130:   PodAddressUnusable=False reason=RelayAddressUsable message="every PodIP relay address the pool's nodes declare is individually routable"
+    vantage_test.go:130:   Degraded=True reason=UnreachableFromVantage message="the vantage point could not reach turn:172.18.0.3:34787?transport=udp: cannot reach the relay listener: simulated failure from outside the cluster"
+--- PASS: TestVantageRunnerInCluster (12.55s)
+FAIL
+FAIL	github.com/Hazmi35/turnfleet/test/e2e	72.400s
+FAIL
+iteration 4 exit=1 seconds=74.4
+===== e2e iteration 5  11:31:03 =====
+=== RUN   TestHostNetworkMode
+--- PASS: TestHostNetworkMode (8.04s)
+=== RUN   TestPartitionedIPMode
+--- PASS: TestPartitionedIPMode (7.54s)
+=== RUN   TestExternalIPPoolMode
+--- PASS: TestExternalIPPoolMode (7.45s)
+=== RUN   TestSaturationBecomesObservable
+    e2e_test.go:265: kubectl get --raw /api/v1/namespaces/turnfleet-system/services/http:turnfleet-controller-manager-metrics-service:8443/proxy/metrics failed: exit status 1
+        Error from server (BadRequest): the server rejected our request for an unknown reason
+--- FAIL: TestSaturationBecomesObservable (8.04s)
+=== RUN   TestPeerPolicyRefusesClusterAddresses
+--- PASS: TestPeerPolicyRefusesClusterAddresses (7.58s)
+=== RUN   TestScaleDownDrainsRelayWithAnActiveAllocation
+    e2e_test.go:374: probe allocated on the doomed relay; the held allocation is what matters
+--- PASS: TestScaleDownDrainsRelayWithAnActiveAllocation (13.07s)
+=== RUN   TestProbeCLIFromTheHost
+--- PASS: TestProbeCLIFromTheHost (8.05s)
+=== RUN   TestVantageRunnerInCluster
+    vantage_test.go:94: runner Job output:
+        debug: allocating on turn:172.18.0.3:34787?transport=udp as 1792064227:turnfleet-probe
+        debug: relayed address is 172.18.0.3:51700
+        published 1 result(s) in turnfleet-e2e/demo-vantage
+        {
+          "pool": "demo",
+          "observedAt": "2026-10-15T11:32:07.549833461Z",
+          "results": [
+            {
+              "succeeded": true,
+              "uri": "turn:172.18.0.3:34787?transport=udp",
+              "relayedAddress": "172.18.0.3",
+              "relayedPort": 51700,
+              "latencyMillis": 2,
+              "message": "relay allocated and advertised the expected relayed address"
+            }
+          ]
+        }
+    vantage_test.go:104: the runner published 1 result(s) for pool demo at 2026-10-15T11:32:07Z
+    vantage_test.go:107:   turn:172.18.0.3:34787?transport=udp succeeded=true relayed=172.18.0.3:51700 message="relay allocated and advertised the expected relayed address"
+    vantage_test.go:110: after the runner Job, pool demo reports:
+    vantage_test.go:110:   Ready=True reason=RelaysReady message="1 of 1 relays are ready"
+    vantage_test.go:110:   ProbeSucceeded=True reason=ProbeSucceeded message="all 1 ready relay(s) answered a TURN Allocate with the expected relayed address"
+    vantage_test.go:110:   CapacityPressure=False reason=CapacityAvailable message="1 of 11 ports in use across 1 relay(s)"
+    vantage_test.go:110:   AddressConflict=False reason=NoOverlap message="no other pool holds a relay on this pool's addresses with overlapping ports"
+    vantage_test.go:110:   ReachableFromVantage=True reason=ReachableFromVantage message="all 1 listener URI(s) answered a TURN Allocate from the vantage point at 2026-10-15T11:32:07Z"
+    vantage_test.go:110:   PodAddressUnusable=False reason=RelayAddressUsable message="every PodIP relay address the pool's nodes declare is individually routable"
+    vantage_test.go:110:   Degraded=False reason=AsExpected message="every planned relay exists and is placeable"
+    vantage_test.go:130: after a failing result was published, pool demo reports:
+    vantage_test.go:130:   Ready=True reason=RelaysReady message="1 of 1 relays are ready"
+    vantage_test.go:130:   ProbeSucceeded=True reason=ProbeSucceeded message="all 1 ready relay(s) answered a TURN Allocate with the expected relayed address"
+    vantage_test.go:130:   CapacityPressure=False reason=CapacityAvailable message="0 of 11 ports in use across 1 relay(s)"
+    vantage_test.go:130:   AddressConflict=False reason=NoOverlap message="no other pool holds a relay on this pool's addresses with overlapping ports"
+    vantage_test.go:130:   ReachableFromVantage=False reason=UnreachableFromVantage message="1 of 1 listener URIs did not answer from the vantage point at 2026-10-15T11:32:10Z: turn:172.18.0.3:34787?transport=udp (cannot reach the relay listener: simulated failure from outside the cluster)"
+    vantage_test.go:130:   PodAddressUnusable=False reason=RelayAddressUsable message="every PodIP relay address the pool's nodes declare is individually routable"
+    vantage_test.go:130:   Degraded=True reason=UnreachableFromVantage message="the vantage point could not reach turn:172.18.0.3:34787?transport=udp: cannot reach the relay listener: simulated failure from outside the cluster"
+--- PASS: TestVantageRunnerInCluster (13.07s)
+FAIL
+FAIL	github.com/Hazmi35/turnfleet/test/e2e	72.877s
+FAIL
+iteration 5 exit=1 seconds=74.8
+DONE

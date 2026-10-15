@@ -1,0 +1,71 @@
+===== iteration seed=1101  11:42:57 =====
+--- internal/controller (envtest, plain go test) ---
+ok  	github.com/Hazmi35/turnfleet/internal/controller	20.404s
+--- internal/webhook/v1alpha1 (Ginkgo, randomized, seed 1101) ---
+ok  	github.com/Hazmi35/turnfleet/internal/webhook/v1alpha1	9.287s
+--- pure unit packages ---
+ok  	github.com/Hazmi35/turnfleet/internal/relay	1.053s
+ok  	github.com/Hazmi35/turnfleet/internal/probe	1.063s
+ok  	github.com/Hazmi35/turnfleet/internal/vantage	1.045s
+ok  	github.com/Hazmi35/turnfleet/internal/version	1.012s
+?   	github.com/Hazmi35/turnfleet/cmd/turnfleet-controller	[no test files]
+ok  	github.com/Hazmi35/turnfleet/cmd/turnfleet-probe	1.068s
+?   	github.com/Hazmi35/turnfleet/api/v1alpha1	[no test files]
+iteration seed=1101 exit=0 seconds=44.2
+===== iteration seed=2202  11:43:41 =====
+--- internal/controller (envtest, plain go test) ---
+ok  	github.com/Hazmi35/turnfleet/internal/controller	19.518s
+--- internal/webhook/v1alpha1 (Ginkgo, randomized, seed 2202) ---
+ok  	github.com/Hazmi35/turnfleet/internal/webhook/v1alpha1	8.733s
+--- pure unit packages ---
+ok  	github.com/Hazmi35/turnfleet/internal/relay	1.049s
+ok  	github.com/Hazmi35/turnfleet/internal/probe	1.054s
+ok  	github.com/Hazmi35/turnfleet/internal/vantage	1.019s
+ok  	github.com/Hazmi35/turnfleet/internal/version	1.013s
+?   	github.com/Hazmi35/turnfleet/cmd/turnfleet-controller	[no test files]
+ok  	github.com/Hazmi35/turnfleet/cmd/turnfleet-probe	1.064s
+?   	github.com/Hazmi35/turnfleet/api/v1alpha1	[no test files]
+iteration seed=2202 exit=0 seconds=42.0
+===== iteration seed=3303  11:44:23 =====
+--- internal/controller (envtest, plain go test) ---
+ok  	github.com/Hazmi35/turnfleet/internal/controller	19.693s
+--- internal/webhook/v1alpha1 (Ginkgo, randomized, seed 3303) ---
+ok  	github.com/Hazmi35/turnfleet/internal/webhook/v1alpha1	8.960s
+--- pure unit packages ---
+ok  	github.com/Hazmi35/turnfleet/internal/relay	1.042s
+ok  	github.com/Hazmi35/turnfleet/internal/probe	1.053s
+ok  	github.com/Hazmi35/turnfleet/internal/vantage	1.026s
+ok  	github.com/Hazmi35/turnfleet/internal/version	1.014s
+?   	github.com/Hazmi35/turnfleet/cmd/turnfleet-controller	[no test files]
+ok  	github.com/Hazmi35/turnfleet/cmd/turnfleet-probe	1.061s
+?   	github.com/Hazmi35/turnfleet/api/v1alpha1	[no test files]
+iteration seed=3303 exit=0 seconds=42.5
+===== iteration seed=4404  11:45:06 =====
+--- internal/controller (envtest, plain go test) ---
+ok  	github.com/Hazmi35/turnfleet/internal/controller	19.726s
+--- internal/webhook/v1alpha1 (Ginkgo, randomized, seed 4404) ---
+ok  	github.com/Hazmi35/turnfleet/internal/webhook/v1alpha1	8.556s
+--- pure unit packages ---
+ok  	github.com/Hazmi35/turnfleet/internal/relay	1.070s
+ok  	github.com/Hazmi35/turnfleet/internal/probe	1.048s
+ok  	github.com/Hazmi35/turnfleet/internal/vantage	1.023s
+ok  	github.com/Hazmi35/turnfleet/internal/version	1.011s
+?   	github.com/Hazmi35/turnfleet/cmd/turnfleet-controller	[no test files]
+ok  	github.com/Hazmi35/turnfleet/cmd/turnfleet-probe	1.066s
+?   	github.com/Hazmi35/turnfleet/api/v1alpha1	[no test files]
+iteration seed=4404 exit=0 seconds=41.1
+===== iteration seed=5505  11:45:47 =====
+--- internal/controller (envtest, plain go test) ---
+ok  	github.com/Hazmi35/turnfleet/internal/controller	19.580s
+--- internal/webhook/v1alpha1 (Ginkgo, randomized, seed 5505) ---
+ok  	github.com/Hazmi35/turnfleet/internal/webhook/v1alpha1	9.276s
+--- pure unit packages ---
+ok  	github.com/Hazmi35/turnfleet/internal/relay	1.084s
+ok  	github.com/Hazmi35/turnfleet/internal/probe	1.047s
+ok  	github.com/Hazmi35/turnfleet/internal/vantage	1.026s
+ok  	github.com/Hazmi35/turnfleet/internal/version	1.016s
+?   	github.com/Hazmi35/turnfleet/cmd/turnfleet-controller	[no test files]
+ok  	github.com/Hazmi35/turnfleet/cmd/turnfleet-probe	1.064s
+?   	github.com/Hazmi35/turnfleet/api/v1alpha1	[no test files]
+iteration seed=5505 exit=0 seconds=42.9
+DONE
