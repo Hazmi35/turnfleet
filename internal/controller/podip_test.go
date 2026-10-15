@@ -26,7 +26,7 @@ func podIPPool(attachment string) *turnfleetv1alpha1.TURNPool {
 	pool.Namespace = "turnfleet"
 	pool.Spec.Addressing = turnfleetv1alpha1.AddressingSpec{
 		Mode:  turnfleetv1alpha1.AddressingModePodIP,
-		PodIP: &turnfleetv1alpha1.PodIPSpec{AttachmentRef: new(attachment)},
+		PodIP: turnfleetv1alpha1.PodIPSpec{AttachmentRef: attachment},
 	}
 	return pool
 }
@@ -334,27 +334,31 @@ func TestNodePodAddresses(t *testing.T) {
 }
 
 // TestUsablePodAddressesEnforcesRoutability is the reconcile-time half of the
-// admission rule: an address a node declares that no peer could reach is
-// dropped from the plan and reported, so an edit behind admission's back is
-// still enforced.
+// admission rule: an address a node declares that cannot work at all is dropped
+// from the plan and reported, so an edit behind admission's back is still
+// enforced. A private address is kept — whether the peers route it is the
+// operator's judgement, and the vantage point is what proves it.
 func TestUsablePodAddressesEnforcesRoutability(t *testing.T) {
 	t.Parallel()
 
 	pool := podIPPool("relay-pods")
 	observed := &nodeObservation{relays: []relay.Node{{
 		Name:         "worker-1",
-		PodAddresses: []string{"203.0.113.21", "10.0.0.5", "rubbish"},
+		PodAddresses: []string{"203.0.113.21", "10.0.0.5", "127.0.0.5", "rubbish"},
 	}}}
 
 	problems := usablePodAddresses(pool, observed)
 	if len(problems) != 2 {
 		t.Fatalf("problems = %v, want one per unusable declaration", problems)
 	}
-	if !strings.Contains(problems[0], "10.0.0.5") || !strings.Contains(problems[0], "RFC 1918") {
-		t.Errorf("the private address problem does not name the address and the reason: %q", problems[0])
+	if !strings.Contains(problems[0], "127.0.0.5") || !strings.Contains(problems[0], "loopback") {
+		t.Errorf("the loopback address problem does not name the address and the reason: %q", problems[0])
 	}
-	if got := observed.relays[0].PodAddresses; len(got) != 1 || got[0] != "203.0.113.21" {
-		t.Errorf("declared addresses kept = %v, want only the routable one", got)
+	if !strings.Contains(problems[1], "rubbish") || !strings.Contains(problems[1], "not an IP address") {
+		t.Errorf("the malformed declaration problem does not name the declaration and the reason: %q", problems[1])
+	}
+	if got := observed.relays[0].PodAddresses; len(got) != 2 || got[0] != "203.0.113.21" || got[1] != "10.0.0.5" {
+		t.Errorf("declared addresses kept = %v, want the public and the private one", got)
 	}
 
 	// Another mode declares no pod addresses, so nothing is filtered or

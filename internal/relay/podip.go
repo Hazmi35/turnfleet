@@ -66,19 +66,22 @@ func PodIPAttachmentParts(ref, poolNamespace string) (namespace, name string, ok
 	return poolNamespace, ref, true
 }
 
-// carrierGradeNAT is RFC 6598's shared address space, which netip's IsPrivate
-// does not cover.
-var carrierGradeNAT = netip.MustParsePrefix("100.64.0.0/10")
-
 // IndividuallyRoutable reports whether an address may be a PodIP relay
 // address, and the reason it may not.
 //
 // A PodIP relay advertises the address the pod itself holds and no load
 // balancer is in the path, so the address has to be one a peer's network can
-// route to on its own. Addresses that are reserved for private, carrier-grade
-// NAT, loopback, link-local, multicast or unspecified use cannot be, and
-// admitting one would produce a relay that allocates, probes healthy
-// in-cluster, and is unreachable from every peer.
+// route to on its own. Whether it is, is the operator's judgement and the
+// external vantage point (docs/adr/0007-probe-vantage-point.md) is what proves
+// it: an address inside a private range (RFC 1918), the carrier-grade NAT
+// range (RFC 6598) or an IPv6 unique local range (RFC 4193) is legal when the
+// peers route it, which is a hub-and-spoke cluster whose pod CIDR is peered
+// while the node subnet is not.
+//
+// This function therefore refuses only the addresses that cannot work at all —
+// unspecified, loopback, link-local unicast and multicast — where admitting
+// one would produce a relay that allocates, probes healthy in-cluster, and is
+// unreachable from every peer.
 func IndividuallyRoutable(address string) (routable bool, reason string) {
 	addr, err := netip.ParseAddr(strings.TrimSpace(address))
 	if err != nil {
@@ -95,10 +98,6 @@ func IndividuallyRoutable(address string) (routable bool, reason string) {
 		return false, "is a link-local address (RFC 3927 or RFC 4291)"
 	case addr.IsMulticast():
 		return false, "is a multicast address"
-	case addr.IsPrivate():
-		return false, "is a private address (RFC 1918, or an IPv6 unique local address, RFC 4193)"
-	case carrierGradeNAT.Contains(addr):
-		return false, "is a carrier-grade NAT address (RFC 6598)"
 	}
 	return true, ""
 }

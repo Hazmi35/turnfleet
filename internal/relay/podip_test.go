@@ -18,12 +18,12 @@ func podIPNode(name string, declared ...string) Node {
 }
 
 // podIPSpec is a PodIP pool with two replicas, planning on the declared
-// addresses of its nodes.
+// addresses of its nodes. It names no attachment: the block is what names one,
+// and its absence is the mode's default-network spelling.
 func podIPSpec() turnfleetv1alpha1.TURNPoolSpec {
 	spec := baseSpec()
 	spec.Addressing = turnfleetv1alpha1.AddressingSpec{
-		Mode:  turnfleetv1alpha1.AddressingModePodIP,
-		PodIP: &turnfleetv1alpha1.PodIPSpec{},
+		Mode: turnfleetv1alpha1.AddressingModePodIP,
 	}
 	return spec
 }
@@ -240,7 +240,14 @@ func TestPodAddress(t *testing.T) {
 func TestIndividuallyRoutable(t *testing.T) {
 	t.Parallel()
 
-	routable := []string{"203.0.113.21", "198.51.100.7", "2001:db8:100::21"}
+	// A private, carrier-grade NAT or unique local address is legal: the
+	// peers may route it, and the external vantage point is what proves they
+	// do. This is the hub-and-spoke cluster unblocked here.
+	routable := []string{
+		"203.0.113.21", "198.51.100.7", "2001:db8:100::21",
+		"10.0.0.5", "172.16.5.5", "192.168.1.5", "100.64.0.5",
+		"fd00::1", "fc00::1",
+	}
 	for _, address := range routable {
 		if ok, reason := IndividuallyRoutable(address); !ok {
 			t.Errorf("IndividuallyRoutable(%q) = false (%s), want true", address, reason)
@@ -248,17 +255,13 @@ func TestIndividuallyRoutable(t *testing.T) {
 	}
 
 	// Each of these is a reason told to the operator, so the reason is checked
-	// too: it is what the rejection message names.
+	// too: it is what the rejection message names. These are the addresses that
+	// cannot work at all, however the peers are routed.
 	unroutable := map[string]string{
-		"10.0.0.5":        "RFC 1918",
-		"172.16.5.5":      "RFC 1918",
-		"192.168.1.5":     "RFC 1918",
-		"100.64.0.5":      "RFC 6598",
 		"169.254.169.254": "link-local",
 		"127.0.0.1":       "loopback",
 		"0.0.0.0":         "unspecified",
 		"224.0.0.1":       "multicast",
-		"fd00::1":         "RFC 4193",
 		"fe80::1":         "link-local",
 		"::1":             "loopback",
 		"not-an-ip":       "not an IP address",

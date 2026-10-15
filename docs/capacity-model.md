@@ -63,6 +63,9 @@ nodes have no address a peer can route to (Azure Kubernetes Service with
 Cilium, and Multus secondary networks); see
 `docs/adr/0018-addressing-mode-podip.md`, and note that its per-address ingress
 rules, routable pod network and stable IPAM are prerequisites the operator owns.
+A private address is allowed — admission refuses only the addresses that cannot
+work at all — so making it routable from the peers is the operator's
+responsibility, and the external vantage point is the check.
 
 Growing capacity:
 

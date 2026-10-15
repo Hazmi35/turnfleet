@@ -87,10 +87,14 @@ its statement and gains a pointer to the issue.
   stable IPAM are prerequisites the operator owns: without stable IPAM the pod
   comes up on another address and the relay drains in a loop
   (`RelayAddressChanged` events and the `PodAddressUnusable` condition say so).
-  Admission cannot prove routability, so the mode is gated on the external
-  vantage point like every other one; a network whose inbound traffic arrives
-  only through a load balancer is a hard blocker unless the pod addresses are
-  themselves public and permitted. Kind as `make kind-up` configures it has no
+  Admission proves routability only negatively: it refuses the addresses that
+  cannot work at all (unspecified, loopback, link-local, multicast) and lets a
+  private address through, because routing it to the peers — peering, routes,
+  per-address ingress rules — is the operator's responsibility. The external
+  vantage point is the check that it was done, and a network whose inbound
+  traffic arrives only through a load balancer is a hard blocker unless the pod
+  addresses are themselves reachable from the peers and permitted. Kind as
+  `make kind-up` configures it has no
   Multus and no secondary address for a pod, so the mode is proven by unit,
   envtest and golden-file tests rather than by `make test-e2e` today; the
   fixture that would exercise it is tracked in #19.

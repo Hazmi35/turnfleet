@@ -648,9 +648,9 @@ type statusInputs struct {
 	conflicts []addressConflict
 
 	// podAddressProblems are the PodIP addresses the pool's relay nodes declare
-	// that cannot be advertised (a private, carrier-grade NAT, link-local or
-	// loopback address), each with the node and the reason. They are dropped
-	// from the plan and reported, so an edit behind admission's back is still
-	// enforced and visible.
+	// that cannot work at all (unspecified, loopback, link-local or multicast),
+	// each with the node and the reason. They are dropped from the plan and
+	// reported, so an edit behind admission's back is still enforced and
+	// visible.
 	podAddressProblems []string
 }

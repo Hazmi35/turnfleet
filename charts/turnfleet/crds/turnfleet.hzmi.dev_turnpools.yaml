@@ -147,8 +147,11 @@ spec:
                   podIP:
                     description: |-
                       podIP configures AddressingModePodIP and is forbidden for the other
-                      modes. It may be omitted for PodIP: without an attachment the relay binds
-                      the pod's own address on the default network.
+                      modes. For PodIP it is optional and binary: a non-empty attachmentRef
+                      names the attachment whose address the relay binds and advertises, and
+                      the zero value is the mode's other, only other spelling — the relay
+                      binds its own pod address on the cluster's default network. `podIP: {}`
+                      is neither and the schema refuses it.
                     properties:
                       attachmentRef:
                         description: |-
@@ -158,11 +161,21 @@ spec:
                           the pod. It is immutable, like mode and family: a different attachment
                           changes which address a relay holds.
 
-                          When it is unset (nil) the relay has no secondary interface and binds its
-                          own pod address on the cluster's default network, which must likewise be
-                          reserved and individually routable.
+                          A non-empty attachmentRef is the statement that the relay uses an
+                          attachment, and the block's zero value is the other, only other
+                          spelling: no secondary interface, with the relay binding its own pod
+                          address on the cluster's default network, which must likewise be
+                          reserved and individually routable. The block refuses the empty value and
+                          the schema refuses `podIP: {}`, so neither is a spelling at all. The
+                          minimum length is also what lets a plain string, rather than a pointer,
+                          mean this: "" cannot be "set".
+                        minLength: 1
                         type: string
                     type: object
+                    x-kubernetes-validations:
+                    - message: at least one of the fields in [attachmentRef] must
+                        be set
+                      rule: has(self.attachmentRef)
                 required:
                 - mode
                 type: object
@@ -513,10 +526,9 @@ spec:
                       holds, on the same address and with overlapping ports. Two relays
                       cannot own the same ports on one address, so the affected pools serve
                       less than they report. Disjoint ranges on a shared address are legal.
-                    - PodAddressUnusable: a relay node declares a PodIP relay address the
-                      pool cannot advertise (a private, carrier-grade NAT, link-local,
-                      loopback, multicast or unspecified address). The address is dropped
-                      from the plan.
+                    - PodAddressUnusable: a relay node declares a PodIP relay address that
+                      cannot work at all (unspecified, loopback, link-local or multicast).
+                      The address is dropped from the plan.
                     - Degraded: fewer relays than desired, a relay is failing to converge,
                       or a relay identity overlaps another pool's.
 

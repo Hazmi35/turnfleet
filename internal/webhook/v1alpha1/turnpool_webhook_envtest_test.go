@@ -13,6 +13,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -135,11 +136,11 @@ var _ = Describe("TURNPool admission through the API server", func() {
 	Context("when a PodIP pool is validated against the cluster", func() {
 		newPodIPPool := func(name, attachment string) *turnfleetv1alpha1.TURNPool {
 			pool := newPool(name)
+			// An empty attachment is the block's zero value: no attachment, and
+			// the relay binds the pod's own address on the default network.
 			pool.Spec.Addressing = turnfleetv1alpha1.AddressingSpec{
-				Mode: turnfleetv1alpha1.AddressingModePodIP,
-			}
-			if attachment != "" {
-				pool.Spec.Addressing.PodIP = &turnfleetv1alpha1.PodIPSpec{AttachmentRef: new(attachment)}
+				Mode:  turnfleetv1alpha1.AddressingModePodIP,
+				PodIP: turnfleetv1alpha1.PodIPSpec{AttachmentRef: attachment},
 			}
 			return pool
 		}
@@ -198,6 +199,28 @@ var _ = Describe("TURNPool admission through the API server", func() {
 			})
 		})
 
+		It("rejects podIP without an attachmentRef", func() {
+			// The block is a spelling of "use an attachment" only when it
+			// names one: its one field must be set whenever the block is, and
+			// the reference must be non-empty, so `podIP: {}` is refused by the
+			// schema — through admission as well, where the defaulting patch
+			// leaves the refusal to the schema rather than filling the field
+			// in.
+			pool := newPodIPPool("admission-podip-empty-block", "")
+			object, err := runtime.DefaultUnstructuredConverter.ToUnstructured(pool)
+			Expect(err).NotTo(HaveOccurred())
+			object["apiVersion"] = turnfleetv1alpha1.GroupVersion.String()
+			object["kind"] = "TURNPool"
+			// ToUnstructured writes the zero block as an absent one; set the
+			// literal `podIP: {}` a pool must not be able to send.
+			Expect(unstructured.SetNestedField(object, map[string]any{}, "spec", "addressing", "podIP")).To(Succeed())
+
+			err = k8sClient.Create(ctx, &unstructured.Unstructured{Object: object})
+			Expect(err).To(HaveOccurred())
+			Expect(apierrors.IsInvalid(err)).To(BeTrue(), "error was %v", err)
+			Expect(err.Error()).To(ContainSubstring("at least one of the fields in [attachmentRef] must be set"))
+		})
+
 		It("rejects a declared attachment that does not exist", func() {
 			err := k8sClient.Create(ctx, newPodIPPool("admission-podip-missing", "podip-not-created"))
 			Expect(err).To(HaveOccurred())
@@ -214,15 +237,29 @@ var _ = Describe("TURNPool admission through the API server", func() {
 			})
 		})
 
+		It("admits a pool whose nodes declare private addresses", func() {
+			// Admission refuses only what cannot work at all. A private,
+			// carrier-grade NAT or IPv6 unique local address is the operator's
+			// judgement — a hub-and-spoke cluster whose pod CIDR is peered
+			// while the node subnet is not routes it — and the external
+			// vantage point (ADR 7) is what proves reachability.
+			createDeclaringNode("podip-node-private", "10.0.0.5/24,100.64.0.5/10,fd00::5/64")
+			pool := newPodIPPool("admission-podip-private", "")
+			Expect(k8sClient.Create(ctx, pool)).To(Succeed())
+			DeferCleanup(func() {
+				_ = k8sClient.Delete(context.Background(), pool)
+			})
+		})
+
 		for _, rejected := range []struct {
 			name     string
 			declared string
 			reason   string
 		}{
-			{"a private address", "10.0.0.5/24", "RFC 1918"},
-			{"a carrier-grade NAT address", "100.64.0.5/10", "RFC 6598"},
 			{"a link-local address", "169.254.10.10/16", "link-local"},
 			{"a loopback address", "127.0.0.5", "loopback"},
+			{"a multicast address", "224.0.0.1", "multicast"},
+			{"an unspecified address", "0.0.0.0", "unspecified"},
 		} {
 			It("rejects a node that declares "+rejected.name, func() {
 				createDeclaringNode("podip-node-unusable", rejected.declared)
@@ -252,7 +289,7 @@ var _ = Describe("TURNPool admission through the API server", func() {
 
 			stored := &turnfleetv1alpha1.TURNPool{}
 			Expect(k8sClient.Get(ctx, key("admission-podip-immutable"), stored)).To(Succeed())
-			stored.Spec.Addressing.PodIP.AttachmentRef = new("podip-relay-pods-v2")
+			stored.Spec.Addressing.PodIP.AttachmentRef = "podip-relay-pods-v2"
 			err := k8sClient.Update(ctx, stored)
 			Expect(err).To(HaveOccurred())
 			Expect(apierrors.IsInvalid(err)).To(BeTrue(), "error was %v", err)

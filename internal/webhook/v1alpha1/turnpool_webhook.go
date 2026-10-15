@@ -346,12 +346,14 @@ func validateAddressing(spec *turnfleetv1alpha1.TURNPoolSpec, path *field.Path) 
 	case turnfleetv1alpha1.AddressingModePodIP:
 		// Nothing is required: the addresses are declared on the relay nodes
 		// (relay.PodAddressesAnnotation), which a TURNPool does not own, and
-		// the attachment is optional — without one the relay binds the pod's
-		// own address on the default network. A pool whose nodes declare no
-		// address is admitted and reports the replicas it could not place,
-		// exactly as ExternalIPPool does for addresses it cannot use. The
-		// attachment's existence and the declared addresses are checked
-		// against the cluster state, and re-checked by the reconciler.
+		// podIP is optional — its zero value means no attachment, with the
+		// relay binding the pod's own address on the default network, while a
+		// non-empty attachmentRef names the attachment it binds. A pool whose
+		// nodes declare no address is admitted and reports the replicas it
+		// could not place, exactly as ExternalIPPool does for addresses it
+		// cannot use. The attachment's existence and the declared addresses
+		// are checked against the cluster state, and re-checked by the
+		// reconciler.
 		errs = append(errs, otherModeConfiguration(addressing, turnfleetv1alpha1.AddressingModePodIP, path)...)
 
 	default:
@@ -377,13 +379,12 @@ var networkAttachmentDefinitionKind = schema.GroupVersionKind{
 }
 
 // podIPAttachmentRef is the pool's attachment reference, or "" when the pool
-// names no attachment and its relays bind their own pod address on the
-// default network.
+// names no attachment — an absent podIP block, i.e. the block's zero value —
+// and its relays bind their own pod address on the default network. podIP
+// requires a non-empty reference inside it, but the guard stays for objects
+// that never met admission, where "" still means the default network.
 func podIPAttachmentRef(spec *turnfleetv1alpha1.TURNPoolSpec) string {
-	if spec.Addressing.PodIP == nil || spec.Addressing.PodIP.AttachmentRef == nil {
-		return ""
-	}
-	return strings.TrimSpace(*spec.Addressing.PodIP.AttachmentRef)
+	return strings.TrimSpace(spec.Addressing.PodIP.AttachmentRef)
 }
 
 // validatePodIPDeployment checks the PodIP mode against cluster state, which a
@@ -482,7 +483,7 @@ func otherModeConfiguration(addressing turnfleetv1alpha1.AddressingSpec, mode tu
 		errs = append(errs, field.Forbidden(path.Child("partitionedIP"),
 			"only applies to mode PartitionedIP"))
 	}
-	if mode != turnfleetv1alpha1.AddressingModePodIP && addressing.PodIP != nil {
+	if mode != turnfleetv1alpha1.AddressingModePodIP && strings.TrimSpace(addressing.PodIP.AttachmentRef) != "" {
 		errs = append(errs, field.Forbidden(path.Child("podIP"),
 			"only applies to mode PodIP"))
 	}

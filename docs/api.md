@@ -78,7 +78,7 @@ _Appears in:_
 | `family` _[AddressingFamily](#addressingfamily)_ | family is the address family the pool's relay addresses belong to. It is<br />immutable for the same reason mode is: changing it changes the address,<br />or half the addresses, of every relay and strands live allocations.<br />IPv4 keeps the pool on the node's IPv4 addresses. IPv6 plans on IPv6<br />addresses only. DualStack plans the mode's relay set once per family,<br />so a node with both addresses runs two relays and offers two port<br />spaces. | IPv4 | Enum: [IPv4 IPv6 DualStack] <br />Optional: \{\} <br /> |
 | `externalIPPool` _[ExternalIPPoolSpec](#externalippoolspec)_ | externalIPPool configures AddressingModeExternalIPPool and must be set<br />(with at least one address) when mode is ExternalIPPool. Forbidden for the<br />other modes. |  | Optional: \{\} <br /> |
 | `partitionedIP` _[PartitionedIPSpec](#partitionedipspec)_ | partitionedIP configures AddressingModePartitionedIP and must be set when<br />mode is PartitionedIP. Forbidden for the other modes. |  | Optional: \{\} <br /> |
-| `podIP` _[PodIPSpec](#podipspec)_ | podIP configures AddressingModePodIP and is forbidden for the other<br />modes. It may be omitted for PodIP: without an attachment the relay binds<br />the pod's own address on the default network. |  | Optional: \{\} <br /> |
+| `podIP` _[PodIPSpec](#podipspec)_ | podIP configures AddressingModePodIP and is forbidden for the other<br />modes. For PodIP it is optional and binary: a non-empty attachmentRef<br />names the attachment whose address the relay binds and advertises, and<br />the zero value is the mode's other, only other spelling — the relay<br />binds its own pod address on the cluster's default network. `podIP: \{\}`<br />is neither and the schema refuses it. |  | AtLeastOneOf: [attachmentRef] <br />Optional: \{\} <br /> |
 
 
 #### AuthSpec
@@ -259,14 +259,22 @@ declares it. The controller reads each scheduled pod's own address back and
 treats a relay whose address changed as a drain, never as a silent
 re-advertise (docs/adr/0006-drain-semantics.md).
 
+The block names an attachment or it says nothing: it is optional, and its one
+field must be set whenever the block is, so `podIP: {}` is not a third state
+the API accepts. The union marker carries that requirement because the field
+cannot: a non-pointer struct with required fields must itself be declared
+required (kubeapilinter's nonpointerstructs), and podIP is forbidden for the
+other modes.
 
+_Validation:_
+- AtLeastOneOf: [attachmentRef]
 
 _Appears in:_
 - [AddressingSpec](#addressingspec)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `attachmentRef` _string_ | attachmentRef names the Multus NetworkAttachmentDefinition the relay pods<br />attach, in the pool's namespace ("name") or in another one<br />("namespace/name"). The attachment is where the declared address reaches<br />the pod. It is immutable, like mode and family: a different attachment<br />changes which address a relay holds.<br />When it is unset (nil) the relay has no secondary interface and binds its<br />own pod address on the cluster's default network, which must likewise be<br />reserved and individually routable. |  | Optional: \{\} <br /> |
+| `attachmentRef` _string_ | attachmentRef names the Multus NetworkAttachmentDefinition the relay pods<br />attach, in the pool's namespace ("name") or in another one<br />("namespace/name"). The attachment is where the declared address reaches<br />the pod. It is immutable, like mode and family: a different attachment<br />changes which address a relay holds.<br />A non-empty attachmentRef is the statement that the relay uses an<br />attachment, and the block's zero value is the other, only other<br />spelling: no secondary interface, with the relay binding its own pod<br />address on the cluster's default network, which must likewise be<br />reserved and individually routable. The block refuses the empty value and<br />the schema refuses `podIP: \{\}`, so neither is a spelling at all. The<br />minimum length is also what lets a plain string, rather than a pointer,<br />mean this: "" cannot be "set". |  | MinLength: 1 <br />Optional: \{\} <br /> |
 
 
 #### PortRange
@@ -435,7 +443,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v/#condition-v1-meta) array_ | conditions represent the current state of the TURNPool resource.<br />The condition types are:<br />  - Ready: the desired number of relays exist, are ready and are not<br />    draining.<br />  - ProbeSucceeded: every ready relay last probed successfully.<br />  - CapacityPressure: a relay is near or at its port limit, or a probe<br />    observed TURN error 508.<br />  - AddressConflict: this pool holds a relay identity another pool also<br />    holds, on the same address and with overlapping ports. Two relays<br />    cannot own the same ports on one address, so the affected pools serve<br />    less than they report. Disjoint ranges on a shared address are legal.<br />  - PodAddressUnusable: a relay node declares a PodIP relay address the<br />    pool cannot advertise (a private, carrier-grade NAT, link-local,<br />    loopback, multicast or unspecified address). The address is dropped<br />    from the plan.<br />  - Degraded: fewer relays than desired, a relay is failing to converge,<br />    or a relay identity overlaps another pool's.<br />Ready and ProbeSucceeded are normal-true; CapacityPressure,<br />AddressConflict, PodAddressUnusable and Degraded are abnormal-true. |  | Optional: \{\} <br /> |
+| `conditions` _[Condition](https://kubernetes.io/docs/reference/generated/kubernetes-api/v/#condition-v1-meta) array_ | conditions represent the current state of the TURNPool resource.<br />The condition types are:<br />  - Ready: the desired number of relays exist, are ready and are not<br />    draining.<br />  - ProbeSucceeded: every ready relay last probed successfully.<br />  - CapacityPressure: a relay is near or at its port limit, or a probe<br />    observed TURN error 508.<br />  - AddressConflict: this pool holds a relay identity another pool also<br />    holds, on the same address and with overlapping ports. Two relays<br />    cannot own the same ports on one address, so the affected pools serve<br />    less than they report. Disjoint ranges on a shared address are legal.<br />  - PodAddressUnusable: a relay node declares a PodIP relay address that<br />    cannot work at all (unspecified, loopback, link-local or multicast).<br />    The address is dropped from the plan.<br />  - Degraded: fewer relays than desired, a relay is failing to converge,<br />    or a relay identity overlaps another pool's.<br />Ready and ProbeSucceeded are normal-true; CapacityPressure,<br />AddressConflict, PodAddressUnusable and Degraded are abnormal-true. |  | Optional: \{\} <br /> |
 | `relays` _[RelayStatus](#relaystatus) array_ | relays is the per-relay observed state, keyed by relay name. |  | Optional: \{\} <br /> |
 | `portsInUse` _integer_ | portsInUse is the total number of relay ports held by allocations across<br />the pool. |  | Optional: \{\} <br /> |
 | `portsTotal` _integer_ | portsTotal is the total number of relay ports the pool owns. Capacity is<br />bounded by distinct relay addresses times ports per address, not by the<br />number of relays. |  | Optional: \{\} <br /> |
