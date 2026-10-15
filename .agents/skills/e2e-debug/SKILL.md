@@ -26,13 +26,15 @@ kind-turnfleet describe turnpool <pool>` shows the conditions:
 ## 2. Rendered config
 
 ```sh
-kubectl --context kind-turnfleet -n <ns> get cm <pool>-relay-<hash> -o yaml
+kubectl --context kind-turnfleet -n <ns> get secret <pool>-relay-config \
+  -o jsonpath='{.data.<relay>}' | base64 -d
 ```
 
-Check the listening address, `--relay-ip`/`--external-ip`, `--min-port`/
-`--max-port`, realm, and that `--static-auth-secret` matches the Secret the
-issuer uses. If the config looks right but the relay does not, the pod is
-probably not running on a labelled node.
+The Secret carries one key per relay, named after its pod. Check the listening
+address, `--relay-ip`/`--external-ip`, `--min-port`/`--max-port`, realm, and
+that `--static-auth-secret` matches the Secret the issuer uses. If the config
+looks right but the relay does not, the pod is probably not running on a
+labelled node.
 
 ## 3. Relay process
 

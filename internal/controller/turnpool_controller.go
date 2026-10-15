@@ -88,7 +88,7 @@ type TURNPoolReconciler struct {
 // +kubebuilder:rbac:groups=turnfleet.hzmi.dev,resources=turnpools/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=pods,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update
 // +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
 
@@ -174,7 +174,7 @@ func (r *TURNPoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, err
 	}
 
-	if err := r.reconcileRelayConfigMap(ctx, pool, states); err != nil {
+	if err := r.reconcileRelayConfig(ctx, pool, states); err != nil {
 		return ctrl.Result{}, fmt.Errorf("reconciling the relay configuration: %w", err)
 	}
 
@@ -484,6 +484,11 @@ func (r *TURNPoolReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		For(&turnfleetv1alpha1.TURNPool{}).
 		Owns(&corev1.Pod{}).
 		Owns(&corev1.ConfigMap{}).
+		// The rendered relay configuration is a Secret (ADR 20), so it is
+		// watched the same way: a relay pod whose configuration object was
+		// deleted gets it back on the next pass rather than at the next
+		// resync.
+		Owns(&corev1.Secret{}).
 		// The vantage result is written by a runner the operator does not own
 		// and does not schedule, so it carries no owner reference and is
 		// matched by its labels instead. A runner's write lands in the pool's

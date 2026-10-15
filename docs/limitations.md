@@ -52,10 +52,14 @@ its statement and gains a pointer to the issue.
   covered by envtest, which serves its own certificates.
 * **`nodurations` is disabled in kube-api-linter.** `drainTimeout` and the probe
   timings are `metav1.Duration` by design; see `.golangci.yml`.
-* **One ConfigMap holds every relay's configuration per pool.** Each rendered
-  config is ~1.5 KB and a ConfigMap is capped at 1 MiB, which is why
-  `spec.replicas` is bounded at 256. A pool that needs more relays needs more
-  than one pool.
+* **One Secret holds every relay's configuration per pool.** Each rendered
+  config is ~1 KB, and a Secret is capped at 1 MiB like a ConfigMap (`base64`
+  costs a third on top), which is why `spec.replicas` is bounded at 256: a pool
+  that needs more relays needs more than one pool. Reading a relay's
+  configuration needs `get` on Secrets in the pool's namespace, and the
+  operator needs `create` and `update` on Secrets there, because the rendered
+  configuration embeds the shared HMAC secret
+  (`docs/adr/0020-relay-config-secret.md`).
 * **Partitioned relays need consecutive listener ports.** `relaysPerNode`
   relays on one address serve `spec.listeners[].port` up to
   `port + relaysPerNode - 1`, and that span must stay outside

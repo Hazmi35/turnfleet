@@ -418,7 +418,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `replicas` _integer_ | replicas is the desired number of relays. It is explicit rather than<br />optional because the number of relays is the capacity decision: the value<br />is capped by the addresses the addressing mode makes available, and the<br />Ready condition says when it cannot be reached. The upper bound reflects<br />where the rendered relay configurations stop fitting in one ConfigMap;<br />pools that need more relays than that need more than one pool. |  | Maximum: 256 <br />Minimum: 1 <br />Required: \{\} <br /> |
+| `replicas` _integer_ | replicas is the desired number of relays. It is explicit rather than<br />optional because the number of relays is the capacity decision: the value<br />is capped by the addresses the addressing mode makes available, and the<br />Ready condition says when it cannot be reached. The upper bound reflects<br />where the rendered relay configurations stop fitting in one Secret;<br />pools that need more relays than that need more than one pool. |  | Maximum: 256 <br />Minimum: 1 <br />Required: \{\} <br /> |
 | `dataplane` _[DataplaneSpec](#dataplanespec)_ | dataplane configures the relay processes. |  | Required: \{\} <br /> |
 | `addressing` _[AddressingSpec](#addressingspec)_ | addressing selects how relays are placed and addressed. Immutable. |  | Required: \{\} <br /> |
 | `relayPortRange` _[PortRange](#portrange)_ | relayPortRange is the pool's UDP port space. Each relay owns a disjoint<br />slice of it; for HostNetwork and ExternalIPPool that slice is the whole<br />range. Immutable: changing it invalidates live allocations. |  | Required: \{\} <br /> |

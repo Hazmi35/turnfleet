@@ -40,8 +40,9 @@ nothing. This file is the only instruction file for every agent.
 Conventions that are load-bearing: API group `turnfleet.hzmi.dev`, version
 `v1alpha1`, kind `TURNPool` (plural `turnpools`, short `tpool`); label,
 annotation and finalizer prefix `turnfleet.hzmi.dev/`; metric prefix
-`turnfleet_`; pod names `<pool>-relay-<5-char hash>`; URI ConfigMap
-`<pool>-turn-uris`; vantage result ConfigMap `<pool>-vantage`; kind cluster
+`turnfleet_`; pod names `<pool>-relay-<5-char hash>`; relay config Secret
+`<pool>-relay-config`; URI ConfigMap `<pool>-turn-uris`; vantage result
+ConfigMap `<pool>-vantage`; kind cluster
 `turnfleet`, context `kind-turnfleet`.
 
 ## Commands
@@ -80,7 +81,7 @@ change affects relay behaviour, rendering, drain, or the probe.
 | `internal/probe/` | Real TURN `Allocate` against a relay listener on `pion/turn`; result type shared by controller and CLI. |
 | `internal/vantage/` | The result a vantage runner publishes and where: the `<pool>-vantage` ConfigMap, its labels and its payload. |
 | `internal/metrics/` | `turnfleet_` metric registration and the coturn scrape/parse helpers. |
-| `internal/controller/` | Reconcile: planner + renderer + pods + ConfigMaps + status, drain state machine, config-hash rollout. |
+|`internal/controller/`|Reconcile: planner + renderer + pods + the configuration Secret + ConfigMaps + status, drain state machine, config-hash rollout.|
 | `internal/webhook/v1alpha1/` | Defaulting and validating webhooks, immutability, mode-specific validation. |
 | `cmd/turnfleet-controller/`, `cmd/turnfleet-probe/` | Binaries; flag parsing and wiring only. |
 | `test/e2e/` | kind end-to-end suite (build-tagged `e2e`), `test/fixtures/` holds cluster fixtures. |

@@ -14,6 +14,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -27,11 +28,12 @@ import (
 //
 // It covers everything that decides what the relay process runs and where: the
 // rendered coturn configuration (which already contains the listeners, the port
-// range, the realm, the secret and the peer policy), the content of the serving
-// certificate the pod mounts (coturn reads it when it starts, so a rotation has
-// to roll the relay — ADR 4), plus the pod fields the configuration does not
-// carry, so changing the image, the resources or the placement rolls the relay
-// just like changing the config does.
+// range, the realm, the secret and the peer policy), the object that
+// configuration is read from, the content of the serving certificate the pod
+// mounts (coturn reads it when it starts, so a rotation has to roll the relay —
+// ADR 4), plus the pod fields the configuration does not carry, so changing the
+// image, the resources or the placement rolls the relay just like changing the
+// config does.
 func relayHash(pool *turnfleetv1alpha1.TURNPool, state *relayState, tlsSecretHash string) (string, error) {
 	projection := struct {
 		Config    string
@@ -39,17 +41,24 @@ func relayHash(pool *turnfleetv1alpha1.TURNPool, state *relayState, tlsSecretHas
 		Resources *corev1.ResourceRequirements
 		Placement *turnfleetv1alpha1.PlacementSpec
 		NodeName  string
+		// ConfigSource names the object the pod mounts the configuration from.
+		// It is deliberately not omitempty: a relay that still mounts the
+		// object an earlier operator wrote has to be replaced even when the
+		// bytes it reads are identical, so moving the configuration rolls every
+		// fleet once, under drain (ADR 20).
+		ConfigSource string
 		// omitempty matters: a pool without a TLS listener hashes exactly as it
 		// did before this field existed, so upgrading the operator does not roll
 		// a fleet that never had a certificate to rotate.
 		TLSSecret string `json:"TLSSecret,omitempty"`
 	}{
-		Config:    state.config,
-		Image:     pool.Spec.Dataplane.Image,
-		Resources: pool.Spec.Dataplane.Resources,
-		Placement: pool.Spec.Placement,
-		NodeName:  state.relay.NodeName,
-		TLSSecret: tlsSecretHash,
+		Config:       state.config,
+		Image:        pool.Spec.Dataplane.Image,
+		Resources:    pool.Spec.Dataplane.Resources,
+		Placement:    pool.Spec.Placement,
+		NodeName:     state.relay.NodeName,
+		ConfigSource: "Secret/" + RelayConfigSecretName(pool),
+		TLSSecret:    tlsSecretHash,
 	}
 	encoded, err := json.Marshal(projection)
 	if err != nil {
@@ -58,31 +67,64 @@ func relayHash(pool *turnfleetv1alpha1.TURNPool, state *relayState, tlsSecretHas
 	return relay.ConfigHash(string(encoded)), nil
 }
 
-// reconcileRelayConfigMap keeps one ConfigMap holding every relay's rendered
-// coturn configuration, keyed by relay name. Each pod projects its own key to
-// the path coturn reads, so a pool is one object instead of one per relay.
-func (r *TURNPoolReconciler) reconcileRelayConfigMap(ctx context.Context, pool *turnfleetv1alpha1.TURNPool, states []*relayState) error {
-	data := make(map[string]string, len(states))
+// reconcileRelayConfig keeps one Secret holding every relay's rendered coturn
+// configuration, keyed by relay name. Each pod projects its own key to the path
+// coturn reads, so a pool is one object instead of one per relay.
+//
+// A Secret and not a ConfigMap because the rendered configuration embeds the
+// shared HMAC secret: as a ConfigMap, anything allowed to read ConfigMaps in
+// the namespace could mint credentials for the pool's relays (ADR 20).
+func (r *TURNPoolReconciler) reconcileRelayConfig(ctx context.Context, pool *turnfleetv1alpha1.TURNPool, states []*relayState) error {
+	data := make(map[string][]byte, len(states))
 	for _, state := range states {
 		if state.planned {
-			data[state.relay.Name] = state.config
+			data[state.relay.Name] = []byte(state.config)
 		}
 	}
 
-	configMap := &corev1.ConfigMap{}
-	configMap.Name = RelayConfigMapName(pool)
-	configMap.Namespace = pool.Namespace
-	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, configMap, func() error {
-		if configMap.Labels == nil {
-			configMap.Labels = map[string]string{}
+	secret := &corev1.Secret{}
+	secret.Name = RelayConfigSecretName(pool)
+	secret.Namespace = pool.Namespace
+	_, err := controllerutil.CreateOrUpdate(ctx, r.Client, secret, func() error {
+		if secret.Labels == nil {
+			secret.Labels = map[string]string{}
 		}
-		maps.Copy(configMap.Labels, Labels(pool))
-		configMap.Data = data
-		return controllerutil.SetControllerReference(pool, configMap, r.Scheme)
+		maps.Copy(secret.Labels, Labels(pool))
+		secret.Data = data
+		return controllerutil.SetControllerReference(pool, secret, r.Scheme)
 	})
 	if err != nil {
-		return fmt.Errorf("reconciling configmap %s/%s: %w", pool.Namespace, RelayConfigMapName(pool), err)
+		return fmt.Errorf("reconciling secret %s/%s: %w", pool.Namespace, RelayConfigSecretName(pool), err)
 	}
+	return r.deleteSupersededConfigMap(ctx, pool)
+}
+
+// deleteSupersededConfigMap removes the ConfigMap the releases before ADR 20
+// kept the rendered configuration in. It holds the shared secret in the clear,
+// so an upgrade has to take it away instead of leaving it next to the Secret; a
+// relay pod that still mounts it keeps the file it read at startup and is
+// replaced by the same pass, which changes the configuration hash.
+//
+// A ConfigMap of that name the pool does not own is left alone. This can go
+// once no upgrade path starts from a release that wrote it.
+func (r *TURNPoolReconciler) deleteSupersededConfigMap(ctx context.Context, pool *turnfleetv1alpha1.TURNPool) error {
+	name := RelayConfigSecretName(pool)
+	configMap := &corev1.ConfigMap{}
+	err := r.Get(ctx, types.NamespacedName{Namespace: pool.Namespace, Name: name}, configMap)
+	switch {
+	case apierrors.IsNotFound(err):
+		return nil
+	case err != nil:
+		return fmt.Errorf("reading the superseded configmap %s/%s: %w", pool.Namespace, name, err)
+	case !metav1.IsControlledBy(configMap, pool):
+		return nil
+	}
+
+	if err := r.Delete(ctx, configMap); err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("deleting the superseded configmap %s/%s: %w", pool.Namespace, name, err)
+	}
+	logf.FromContext(ctx).Info("deleted the relay configuration ConfigMap an earlier release wrote",
+		"pool", pool.Name, "namespace", pool.Namespace, "configmap", name)
 	return nil
 }
 
@@ -316,7 +358,7 @@ func podSpec(pool *turnfleetv1alpha1.TURNPool, state *relayState) corev1.PodSpec
 			{
 				Name: configVolumeName,
 				VolumeSource: corev1.VolumeSource{
-					ConfigMap: configMapVolumeSource(RelayConfigMapName(pool), state.relay.Name),
+					Secret: secretVolumeSource(RelayConfigSecretName(pool), state.relay.Name),
 				},
 			},
 			// The relay runs with a read-only root filesystem, so it gets a
@@ -336,8 +378,6 @@ func podSpec(pool *turnfleetv1alpha1.TURNPool, state *relayState) corev1.PodSpec
 	return spec
 }
 
-// configMapVolumeSource projects one relay's key out of the pool's
-// configuration ConfigMap, at the path coturn reads.
 // emptyDirVolume is a scratch volume.
 func emptyDirVolume(name string) corev1.Volume {
 	return corev1.Volume{
@@ -346,9 +386,11 @@ func emptyDirVolume(name string) corev1.Volume {
 	}
 }
 
-func configMapVolumeSource(configMapName, relayName string) *corev1.ConfigMapVolumeSource {
-	source := &corev1.ConfigMapVolumeSource{}
-	source.Name = configMapName
+// secretVolumeSource projects one relay's key out of the pool's configuration
+// Secret, at the path coturn reads.
+func secretVolumeSource(secretName, relayName string) *corev1.SecretVolumeSource {
+	source := &corev1.SecretVolumeSource{}
+	source.SecretName = secretName
 	source.Items = []corev1.KeyToPath{{Key: relayName, Path: "turnserver.conf"}}
 	return source
 }
