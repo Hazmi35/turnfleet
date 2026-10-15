@@ -36,13 +36,13 @@ func hostNetworkPool(name string, replicas int32) *turnfleetv1alpha1.TURNPool {
 	}
 }
 
-// hostNetworkPoolOn is hostNetworkPool with a relay port range of its own. The
-// identity check compares pools across the whole cluster and envtest never
-// finishes terminating a namespace, so a pool an earlier test left behind still
-// holds an address and a range: without a range of its own, a pool here would
-// conflict with a pool that has nothing to do with it.
-func hostNetworkPoolOn(name string, replicas, portStart int32) *turnfleetv1alpha1.TURNPool {
-	pool := hostNetworkPool(name, replicas)
+// hostNetworkPoolOn is hostNetworkPool with one relay and a relay port range of
+// its own. The identity check compares pools across the whole cluster and
+// envtest never finishes terminating a namespace, so a pool an earlier test left
+// behind still holds an address and a range: without a range of its own, a pool
+// here would conflict with a pool that has nothing to do with it.
+func hostNetworkPoolOn(name string, portStart int32) *turnfleetv1alpha1.TURNPool {
+	pool := hostNetworkPool(name, 1)
 	pool.Spec.RelayPortRange = turnfleetv1alpha1.PortRange{Start: portStart, End: portStart + 20}
 	return pool
 }

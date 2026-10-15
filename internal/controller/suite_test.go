@@ -221,27 +221,27 @@ func (f *testFixture) pods(pool string) []corev1.Pod {
 }
 
 // relayConfig returns the rendered coturn configuration of a pool's relays, as
-// the controller published it in the pool's relay ConfigMap.
+// the controller published it in the pool's relay Secret.
 func (f *testFixture) relayConfig(pool string) string {
 	f.t.Helper()
 
-	name := RelayConfigMapName(&turnfleetv1alpha1.TURNPool{ObjectMeta: metav1.ObjectMeta{Name: pool}})
-	configMap := &corev1.ConfigMap{}
-	if err := k8sClient.Get(f.ctx, types.NamespacedName{Namespace: f.namespace, Name: name}, configMap); err != nil {
-		f.t.Fatalf("getting configmap %s: %v", name, err)
+	name := RelayConfigSecretName(&turnfleetv1alpha1.TURNPool{ObjectMeta: metav1.ObjectMeta{Name: pool}})
+	secret := &corev1.Secret{}
+	if err := k8sClient.Get(f.ctx, types.NamespacedName{Namespace: f.namespace, Name: name}, secret); err != nil {
+		f.t.Fatalf("getting secret %s: %v", name, err)
 	}
-	if len(configMap.Data) == 0 {
-		f.t.Fatalf("configmap %s holds no relay configuration", name)
+	if len(secret.Data) == 0 {
+		f.t.Fatalf("secret %s holds no relay configuration", name)
 	}
 
-	keys := make([]string, 0, len(configMap.Data))
-	for key := range configMap.Data {
+	keys := make([]string, 0, len(secret.Data))
+	for key := range secret.Data {
 		keys = append(keys, key)
 	}
 	slices.Sort(keys)
 	rendered := make([]string, 0, len(keys))
 	for _, key := range keys {
-		rendered = append(rendered, configMap.Data[key])
+		rendered = append(rendered, string(secret.Data[key]))
 	}
 	return strings.Join(rendered, "\n")
 }

@@ -28,10 +28,19 @@ rules:
   - ""
   resources:
   - nodes
-  - secrets
   verbs:
   - get
   - list
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - get
+  - list
+  - update
   - watch
 - apiGroups:
   - k8s.cni.cncf.io

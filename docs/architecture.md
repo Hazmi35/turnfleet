@@ -59,7 +59,7 @@ address of their own (ADR 18).
 | `internal/probe` | A real TURN `Allocate` (plus optional `CreatePermission`/`Send` round trip) against a relay listener on `pion/turn`, asserting the relayed address and range. |
 | `internal/vantage` | The result a vantage runner publishes and where it publishes it: the `<pool>-vantage` ConfigMap, its labels and its JSON payload. |
 | `internal/metrics` | `turnfleet_` collectors and the coturn scrape/parse helpers. |
-| `internal/controller` | Reconciles a `TURNPool`: planner + renderer + relay pods + config ConfigMap + `<pool>-turn-uris` ConfigMap + status; runs the drain state machine, the rolling config-hash update and the periodic probe. |
+| `internal/controller` | Reconciles a `TURNPool`: planner + renderer + relay pods + the configuration Secret + `<pool>-turn-uris` ConfigMap + status; runs the drain state machine, the rolling config-hash update and the periodic probe. |
 | `internal/webhook/v1alpha1` | Defaulting, validation, immutability, mode-specific rules. |
 | `cmd/turnfleet-probe` | The same probe as a CLI with JSON output, so the check can run from outside the cluster. With `--uris-configmap`/`--publish-configmap` it is also the vantage runner: it probes every URI the pool publishes and writes the result where the controller reads it. |
 | `config/` | The kustomize manifests for the controller: `config/default` runs it without admission webhooks, `config/with-webhook` adds them and their cert-manager certificates. Source of truth for what the controller is deployed as. |
@@ -71,10 +71,10 @@ address of their own (ADR 18).
 ```mermaid
 stateDiagram-v2
   [*] --> Observe
-  Observe: list labelled nodes, relay pods, Secret, ConfigMaps, the published vantage result
+  Observe: list labelled nodes, relay pods, Secrets, ConfigMaps, the published vantage result
   Observe --> Plan: plan desired relays
   Plan --> Render: per relay: coturn config + config hash
-  Render --> Converge: create/update pods, ConfigMap
+  Render --> Converge: create/update the configuration Secret, pods, ConfigMap
   Converge --> Drain: relays that must go: mark draining, drop from turnURIs
   Drain --> Wait: wait allocations == 0 or drainTimeout
   Wait --> Converge: delete drained pods
@@ -86,8 +86,9 @@ stateDiagram-v2
 * **Relay identity and naming.** `(relayAddress, portRange)`; the pod name is
   `<pool>-relay-<5-char hash of the identity>`, so the same identity always maps
   to the same pod and a controller restart or failover does not shuffle relays.
-* **Rollout.** The rendered config and the referenced Secret are hashed into the
-  pod's `turnfleet.hzmi.dev/config-hash` annotation. A change rolls the relays
+* **Rollout.** The rendered config, the object it is read from and the
+  referenced Secret are hashed into the pod's
+  `turnfleet.hzmi.dev/config-hash` annotation. A change rolls the relays
   **one at a time**, each with drain, so capacity loss is bounded to one relay.
 * **Drain.** Draining relays are removed from `turnURIs` and from the
   `<pool>-turn-uris` ConfigMap *before* the pod goes away, then readiness fails,

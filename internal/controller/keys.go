@@ -128,9 +128,11 @@ func Selector(pool *turnfleetv1alpha1.TURNPool) string {
 		AppName, pool.Name, relayComponent)
 }
 
-// RelayConfigMapName is the ConfigMap holding every relay's rendered coturn
-// configuration for a pool.
-func RelayConfigMapName(pool *turnfleetv1alpha1.TURNPool) string {
+// RelayConfigSecretName is the Secret holding every relay's rendered coturn
+// configuration for a pool. It is a Secret and not a ConfigMap because the
+// rendered configuration embeds the shared HMAC secret, and reading a Secret
+// is a different permission than reading a ConfigMap (ADR 20).
+func RelayConfigSecretName(pool *turnfleetv1alpha1.TURNPool) string {
 	return fmt.Sprintf("%s-relay-config", pool.Name)
 }
 

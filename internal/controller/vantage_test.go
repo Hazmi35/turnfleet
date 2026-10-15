@@ -68,7 +68,7 @@ func unpublishedVantage(t *testing.T, name string, portStart int32) *testFixture
 	f := newFixture(t)
 	f.createSecret()
 	f.createNode("tf-worker-1", "203.0.113.21")
-	f.createPool(hostNetworkPoolOn(name, 1, portStart))
+	f.createPool(hostNetworkPoolOn(name, portStart))
 	f.reconcileUntil(name, "the relay to be ready", func() bool {
 		return conditionStatus(f.pool(name), ConditionReady) == string(metav1.ConditionTrue)
 	})

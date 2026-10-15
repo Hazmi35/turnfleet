@@ -26,7 +26,7 @@ coturn/coturn:4.18.0-r0@sha256:bbefd3e1fdfdc0d58770fe01b581fd8b00d9f3a5580d00acb
 
 It is used as-is. Nothing in this repository builds, patches or vendors coturn
 sources, and the image keeps its own BSD-3-Clause license. The operator only
-writes coturn configuration (mounted as a ConfigMap, see ADR 8) and passes a
+writes coturn configuration (mounted from a Secret, see ADR 20) and passes a
 small set of flags verified against that exact image.
 
 `spec.dataplane.image` must be a digest-pinned reference: the field is required

@@ -2,6 +2,9 @@
 
 * Status: accepted
 * Date: 2026-10-13
+* Superseded on one point by [0020](0020-relay-config-secret.md): the rendered
+  configuration is delivered as a Secret, because it embeds the shared HMAC
+  secret. The flags, the golden files and the help-text check below stand.
 
 ## Context
 

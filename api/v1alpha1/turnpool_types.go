@@ -355,7 +355,7 @@ type TURNPoolSpec struct {
 	// optional because the number of relays is the capacity decision: the value
 	// is capped by the addresses the addressing mode makes available, and the
 	// Ready condition says when it cannot be reached. The upper bound reflects
-	// where the rendered relay configurations stop fitting in one ConfigMap;
+	// where the rendered relay configurations stop fitting in one Secret;
 	// pools that need more relays than that need more than one pool.
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=256

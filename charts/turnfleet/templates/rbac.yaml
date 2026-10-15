@@ -2,8 +2,9 @@
 # Copyright (C) 2026 Turnfleet Authors
 #
 # What the controller itself needs: the manager role (relay pods, the rendered
-# ConfigMaps, the shared secret, the TURNPool and its status), the leader
-# election lease and the RBAC that protects the metrics endpoint.
+# configuration Secret and the ConfigMaps it publishes, the shared secret, the
+# TURNPool and its status), the leader election lease and the RBAC that protects
+# the metrics endpoint.
 {{- if .Values.rbac.create }}
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
@@ -92,10 +93,19 @@ rules:
       - ""
     resources:
       - nodes
-      - secrets
     verbs:
       - get
       - list
+      - watch
+  - apiGroups:
+      - ""
+    resources:
+      - secrets
+    verbs:
+      - create
+      - get
+      - list
+      - update
       - watch
   - apiGroups:
       - k8s.cni.cncf.io
