@@ -322,6 +322,23 @@ func (f *testFixture) pods(pool string) []corev1.Pod {
 	return list.Items
 }
 
+// publishedURIs reads the URIs the pool publishes in its turn URIs ConfigMap,
+// which is what a credential issuer reads.
+func (f *testFixture) publishedURIs(pool string) []string {
+	f.t.Helper()
+
+	configMap := &corev1.ConfigMap{}
+	if err := k8sClient.Get(f.ctx, namespaced(f.namespace, URIsConfigMapName(
+		&turnfleetv1alpha1.TURNPool{ObjectMeta: metav1.ObjectMeta{Name: pool}})), configMap); err != nil {
+		f.t.Fatalf("reading the turn URIs ConfigMap of pool %s: %v", pool, err)
+	}
+	data := strings.TrimSpace(configMap.Data["uris"])
+	if data == "" {
+		return nil
+	}
+	return strings.Split(data, "\n")
+}
+
 // relayConfig returns the rendered coturn configuration of a pool's relays, as
 // the controller published it in the pool's relay Secret.
 func (f *testFixture) relayConfig(pool string) string {

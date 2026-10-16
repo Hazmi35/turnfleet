@@ -131,26 +131,35 @@ func (r *TURNPoolReconciler) deleteSupersededConfigMap(ctx context.Context, pool
 // reconcilePods converges the relay pods: it drains what must go, deletes what
 // has finished draining, and creates what should exist.
 //
-// Drains are serialized. A rollout or a scale-down therefore removes one
-// relay's capacity from service at a time: the point of draining is that a
-// client's allocation keeps working, and removing several relays at once would
-// trade that away for speed.
+// A relay leaves service in three steps, and never two relays at a time. One
+// pass records the drain on the pod, and that same pass's status and URI
+// ConfigMap write takes the relay out of turnURIs. A later pass deletes the
+// pod, once its allocations are gone. Until the pod is gone the relay holds the
+// drain slot: the next relay is not marked before the previous one's
+// replacement can be created. So a consumer is never handed a URI for a relay
+// whose pod is being deleted, a pod is never deleted before its drain was
+// recorded, and a rollout or a scale-down removes one relay's capacity from
+// service at a time. The point of draining is that a client's allocation keeps
+// working, and removing several relays at once would trade that away for speed.
 //
 // The returned bool reports whether a drain is in flight, so the caller can
 // come back quickly instead of waiting a whole probe interval.
 func (r *TURNPoolReconciler) reconcilePods(ctx context.Context, pool *turnfleetv1alpha1.TURNPool, states []*relayState) (bool, error) {
 	drainInFlight := false
 
+	// Record the drain of the next relay that has to go, if no relay is
+	// already on its way out. A relay whose drain was recorded keeps the slot
+	// until its pod is gone, whether or not it still has to go for the reason
+	// it was marked: what the slot protects is its replacement.
 	for _, state := range states {
-		if state.pod == nil || !drainRequired(state) {
+		if state.pod == nil {
 			continue
 		}
-		if state.draining {
+		if !drainRequired(state) && !state.draining {
+			continue
+		}
+		if state.draining || drainInFlight {
 			drainInFlight = true
-			continue
-		}
-		if drainInFlight {
-			// Another relay is already draining; wait for it.
 			continue
 		}
 		if err := r.startDrain(ctx, pool, state); err != nil {
@@ -159,8 +168,14 @@ func (r *TURNPoolReconciler) reconcilePods(ctx context.Context, pool *turnfleetv
 		drainInFlight = true
 	}
 
+	// Delete the pods whose drain an earlier pass recorded and that have
+	// finished draining. A pod that is already going is left to go: its drain
+	// is over and there is nothing to delete.
 	for _, state := range states {
-		if state.pod == nil || !drainRequired(state) {
+		if state.pod == nil || !state.drainRecorded || !drainRequired(state) {
+			continue
+		}
+		if state.pod.DeletionTimestamp != nil {
 			continue
 		}
 		if !r.drainComplete(ctx, pool, state) {
@@ -174,6 +189,8 @@ func (r *TURNPoolReconciler) reconcilePods(ctx context.Context, pool *turnfleetv
 			"relay %s drained (last known allocations %d) and its pod was deleted", state.relay.Name, state.allocations)
 	}
 
+	// Create the pods of the relays that should exist, which includes the
+	// replacement of a relay whose pod the pass above deleted.
 	for _, state := range states {
 		if state.pod != nil || !state.planned {
 			continue
@@ -202,8 +219,9 @@ func drainRequired(state *relayState) bool {
 }
 
 // startDrain marks a relay as draining. The relay disappears from turnURIs in
-// the same pass (the status is written from this state), so it stops being
-// handed out before its pod is touched.
+// this pass: the status and the URI ConfigMap are written from this state. The
+// pod is only deleted once a later pass has read the drain back from it, so the
+// relay stops being handed out before its pod is touched.
 func (r *TURNPoolReconciler) startDrain(ctx context.Context, pool *turnfleetv1alpha1.TURNPool, state *relayState) error {
 	patch := client.MergeFrom(state.pod.DeepCopy())
 	if state.pod.Annotations == nil {
