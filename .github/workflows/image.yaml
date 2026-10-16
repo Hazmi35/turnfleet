@@ -109,6 +109,14 @@ jobs:
             type=ref,event=tag,enable=${{ github.event_name == 'release' }}
             type=semver,pattern={{version}},enable=${{ github.event_name == 'release' }}
             type=sha,format=long
+          # The action detects the license from LICENSE with GitHub's own
+          # heuristic, which answers the deprecated `AGPL-3.0` rather than the
+          # `AGPL-3.0-only` this repository is under, and a label set here
+          # overrides the one it generated. The value has to be the identifier
+          # the Dockerfile labels, `make licenses` enforces and the SPDX
+          # documents name.
+          labels: |
+            org.opencontainers.image.licenses=AGPL-3.0-only
 
       - name: Derive tags for turnfleet-probe
         id: meta-probe
@@ -120,6 +128,10 @@ jobs:
             type=ref,event=tag,enable=${{ github.event_name == 'release' }}
             type=semver,pattern={{version}},enable=${{ github.event_name == 'release' }}
             type=sha,format=long
+          # As in the controller's step: the action's license detection answers
+          # the deprecated `AGPL-3.0`, and the label set here replaces it.
+          labels: |
+            org.opencontainers.image.licenses=AGPL-3.0-only
 
       - name: Build and push turnfleet-controller
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
@@ -152,3 +164,31 @@ jobs:
             GO_IMAGE=${{ env.GO_IMAGE }}
             RUNTIME_IMAGE=${{ env.RUNTIME_IMAGE }}
             LDFLAGS=${{ env.LDFLAGS_BASE }} -X github.com/Hazmi35/turnfleet/internal/version.date=${{ steps.stamp.outputs.date }}
+
+      # The labels are read back from the pushed digest, not from the action's
+      # output, so this checks the image a consumer pulls. The licence and the
+      # source are the two the release checklist requires of a published image,
+      # and the licence is the one piece of metadata that went wrong unnoticed:
+      # the metadata action answered the deprecated `AGPL-3.0` from LICENSE and
+      # overrode the Dockerfile's `AGPL-3.0-only` with it.
+      - name: Check the published labels
+        run: |
+          set -euo pipefail
+          base="ghcr.io/hazmi35"
+          for name in turnfleet-controller turnfleet-probe; do
+            ref="${base}/${name}:sha-${GITHUB_SHA}"
+            labels="$(docker buildx imagetools inspect "${ref}" --format '{{json .Image}}' \
+              | jq -r '[.. | .config? // empty | .Labels? // empty] | first // {}')"
+            for pair in \
+              "org.opencontainers.image.licenses=AGPL-3.0-only" \
+              "org.opencontainers.image.source=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}"; do
+              key="${pair%%=*}"
+              want="${pair#*=}"
+              got="$(jq -r --arg key "${key}" '.[$key] // ""' <<<"${labels}")"
+              if [ "${got}" != "${want}" ]; then
+                echo "::error::${ref} carries ${key}=${got:-nothing}, not ${want}" >&2
+                exit 1
+              fi
+            done
+            echo "${ref}: licence and source labels check out"
+          done
