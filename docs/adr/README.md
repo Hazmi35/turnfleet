@@ -26,6 +26,7 @@ decision gets a new ADR that says so.
 | [0018](0018-addressing-mode-podip.md) | The `PodIP` addressing mode: relays in their own network namespace, on addresses declared per node, read back from the pod and drained on a mismatch. |
 | [0019](0019-one-address-is-never-split-across-nodes.md) | One address is never split across nodes: the only layers that read the destination port are the node holding the address and a load balancer, which ADR 3 and ADR 4 keep out of the peer's path. |
 | [0020](0020-relay-config-secret.md) | The rendered relay configuration is delivered as a Secret, not a ConfigMap: it embeds the shared HMAC secret. |
+| [0021](0021-drain-before-delete.md) | Drain ordering: a drain is recorded on the pod in one pass and the pod deleted in a later one, one relay at a time. |
 
 Related documents that are not ADRs: [`../architecture.md`](../architecture.md),
 [`../capacity-model.md`](../capacity-model.md),

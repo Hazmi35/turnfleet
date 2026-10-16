@@ -35,8 +35,17 @@ type relayState struct {
 	// pod is the relay's pod, or nil when it does not exist yet.
 	pod *corev1.Pod
 
-	// draining reports whether the relay is going away.
+	// draining reports whether the relay is going away. It is what the status
+	// publishes, and startDrain sets it too, so a drain recorded in this pass
+	// is visible in the status this pass writes.
 	draining bool
+
+	// drainRecorded reports whether the pod already carried the drain
+	// annotation when this pass read it, which means an earlier pass recorded
+	// the drain and wrote the relay out of turnURIs. Only such a relay's pod
+	// may be deleted: the pass that records a drain is not the pass that
+	// deletes the pod.
+	drainRecorded bool
 
 	// addressRequest is the declaration a PodIP relay pod asks its attachment
 	// for, prefix included, so the pod is given the address the relay was
@@ -165,6 +174,7 @@ func (r *TURNPoolReconciler) renderRelays(
 			state.pod = pod
 			state.drainStarted = parseTime(pod.Annotations[DrainStartedAtAnnotation])
 			state.draining = !state.drainStarted.IsZero()
+			state.drainRecorded = state.draining
 			state.observedAddress, _ = relayAddressOnPod(pool, pod)
 			state.addressChanged = relayAddressChanged(pool, &state.relay, pod)
 		}
@@ -243,6 +253,7 @@ func orphanState(pod *corev1.Pod) (*relayState, error) {
 	// beginning of time" would delete a relay that still holds allocations.
 	state.drainStarted = parseTime(pod.Annotations[DrainStartedAtAnnotation])
 	state.draining = !state.drainStarted.IsZero()
+	state.drainRecorded = state.draining
 	return state, nil
 }
 

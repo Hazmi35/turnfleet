@@ -555,6 +555,188 @@ func TestSecretRotationRollsOneRelayAtATime(t *testing.T) {
 	})
 }
 
+// TestRolloutOnIdleRelaysWithdrawsEachRelayBeforeItsPodGoes is the config-hash
+// rollout on an idle pool, where every drain completes as soon as it is
+// recorded. Each relay must leave turnURIs in the pass that records its drain,
+// and only a later pass may delete its pod, one relay at a time. Reading "the
+// drain is complete" as "the pod may go" instead deleted a relay whose URI was
+// still published, and deleted several in the same pass.
+func TestRolloutOnIdleRelaysWithdrawsEachRelayBeforeItsPodGoes(t *testing.T) {
+	const name = "tpool-idle"
+
+	f := newFixture(t)
+	f.createSecret()
+	f.createNode("tf-idle-1", "203.0.113.41")
+	f.createNode("tf-idle-2", "203.0.113.42")
+	f.createNode("tf-idle-3", "203.0.113.43")
+
+	f.createPool(hostNetworkPool(name, 3))
+	f.reconcile(name)
+	f.reconcile(name)
+	f.markPodsReady(name)
+	f.reconcileUntil(name, "three ready relays", func() bool {
+		return readyRelays(t, f, name) == 3
+	})
+
+	// The relays hold no allocation, so nothing slows a drain down: only the
+	// order of the passes decides what a credential issuer is handed.
+	f.scraper.allocations = 0
+	urisOf := publishedURIsByRelay(t, f, name)
+	before := podsByName(f.pods(name))
+
+	f.rotateSecret("0011223344556677")
+
+	for pass := 0; ; pass++ {
+		if pass >= reconcileAttempts {
+			t.Fatalf("the rollout did not finish in %d passes", reconcileAttempts)
+		}
+
+		// What the pass reads: the relay pods that exist, and the relays the
+		// status published as out of the URI list.
+		present := podsByName(f.pods(name))
+		withdrawn := withdrawnRelays(f.pool(name))
+
+		f.reconcile(name)
+		f.markPodsReady(name)
+		f.clock.Advance(time.Second)
+
+		pods := f.pods(name)
+		inService := podsByName(pods)
+
+		gone := missingNames(present, inService)
+		if len(gone) > 1 {
+			t.Fatalf("pass %d deleted %d relay pods at once (%v): a rollout takes one relay's capacity out of service at a time",
+				pass, len(gone), gone)
+		}
+		for _, podName := range gone {
+			if !withdrawn[podName] {
+				t.Errorf("pass %d deleted the pod of relay %s in the same pass the last status published it as serving: a consumer is handed a URI for a relay whose pod is already gone", pass, podName)
+			}
+		}
+
+		status := f.pool(name)
+		if draining := drainingRelays(status.Status); len(draining) > 1 {
+			t.Errorf("pass %d publishes %d draining relays (%v): a pool drains one relay at a time", pass, len(draining), draining)
+		}
+
+		// No URI a consumer can read may point at a relay whose pod is gone.
+		published := f.publishedURIs(name)
+		for _, relayStatus := range status.Status.Relays {
+			if _, serving := inService[relayStatus.Name]; serving {
+				continue
+			}
+			for _, uri := range urisOf[relayStatus.Name] {
+				if slices.Contains(status.Status.TurnURIs, uri) {
+					t.Errorf("pass %d: relay %s has no pod, but status.turnURIs still publishes %s", pass, relayStatus.Name, uri)
+				}
+				if slices.Contains(published, uri) {
+					t.Errorf("pass %d: relay %s has no pod, but %s still publishes %s",
+						pass, relayStatus.Name, URIsConfigMapName(status), uri)
+				}
+			}
+		}
+
+		if rolledOut(inService, before) {
+			return
+		}
+	}
+}
+
+// publishedURIsByRelay records the URIs each relay of a healthy pool publishes,
+// so a spec can tell which relay a URI belongs to after that relay's pod is
+// gone.
+func publishedURIsByRelay(t *testing.T, f *testFixture, name string) map[string][]string {
+	t.Helper()
+
+	pool := f.pool(name)
+	uris := map[string][]string{}
+	if pool.Status == nil {
+		t.Fatalf("pool %s has no status: nothing is published", name)
+	}
+	for _, relayStatus := range pool.Status.Relays {
+		if len(relayStatus.TurnURIs) > 0 {
+			uris[relayStatus.Name] = relayStatus.TurnURIs
+		}
+	}
+	if len(uris) == 0 {
+		t.Fatalf("no relay of pool %s publishes a URI, so no URI can be attributed to one", name)
+	}
+	return uris
+}
+
+// podsByName indexes relay pods by name, leaving out the ones that are being
+// deleted: a pod with a deletion timestamp serves nothing a consumer can reach.
+func podsByName(pods []corev1.Pod) map[string]*corev1.Pod {
+	byName := make(map[string]*corev1.Pod, len(pods))
+	for i := range pods {
+		if pods[i].DeletionTimestamp != nil {
+			continue
+		}
+		byName[pods[i].Name] = &pods[i]
+	}
+	return byName
+}
+
+// missingNames returns the names of the first set the second set does not hold,
+// sorted.
+func missingNames[T any](before, after map[string]T) []string {
+	var missing []string
+	for name := range before {
+		if _, there := after[name]; !there {
+			missing = append(missing, name)
+		}
+	}
+	slices.Sort(missing)
+	return missing
+}
+
+// withdrawnRelays names the relays the pool's status publishes as draining with
+// no URI: the ones a credential issuer can no longer hand out.
+func withdrawnRelays(pool *turnfleetv1alpha1.TURNPool) map[string]bool {
+	withdrawn := map[string]bool{}
+	if pool.Status == nil {
+		return withdrawn
+	}
+	for _, relayStatus := range pool.Status.Relays {
+		if relayStatus.Draining != nil && *relayStatus.Draining && len(relayStatus.TurnURIs) == 0 {
+			withdrawn[relayStatus.Name] = true
+		}
+	}
+	return withdrawn
+}
+
+// drainingRelays names the relays a status publishes as draining.
+func drainingRelays(status *turnfleetv1alpha1.TURNPoolStatus) []string {
+	if status == nil {
+		return nil
+	}
+	var draining []string
+	for _, relayStatus := range status.Relays {
+		if relayStatus.Draining != nil && *relayStatus.Draining {
+			draining = append(draining, relayStatus.Name)
+		}
+	}
+	return draining
+}
+
+// rolledOut reports whether every relay pod of the pool runs a configuration
+// other than the one it ran before the rollout.
+func rolledOut(byName, before map[string]*corev1.Pod) bool {
+	if len(byName) != len(before) {
+		return false
+	}
+	for name, pod := range byName {
+		previous, known := before[name]
+		if !known {
+			return false
+		}
+		if pod.Annotations[ConfigHashAnnotation] == previous.Annotations[ConfigHashAnnotation] {
+			return false
+		}
+	}
+	return true
+}
+
 // TestRotatingATLSSecretRollsTheRelays covers the half of ADR 4 that coturn's
 // startup behaviour makes necessary: a relay reads its serving certificate when
 // it starts, so replacing the certificate has to roll the relay. The Secret's

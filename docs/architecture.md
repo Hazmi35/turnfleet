@@ -78,7 +78,7 @@ stateDiagram-v2
   Render --> Converge: create/update the configuration Secret, pods, ConfigMap
   Converge --> Drain: relays that must go: mark draining, drop from turnURIs
   Drain --> Wait: wait allocations == 0 or drainTimeout
-  Wait --> Converge: delete drained pods
+  Wait --> Converge: a later pass deletes drained pods
   Converge --> Probe: probe ready relays on probe.interval
   Probe --> Status: conditions, relays, portsInUse/portsTotal, turnURIs
   Status --> [*]
@@ -91,12 +91,17 @@ stateDiagram-v2
 * **Rollout.** The rendered config, the object it is read from and the
   referenced Secret are hashed into the pod's
   `turnfleet.hzmi.dev/config-hash` annotation. A change rolls the relays
-  **one at a time**, each with drain, so capacity loss is bounded to one relay.
-* **Drain.** Draining relays are removed from `turnURIs` and from the
-  `<pool>-turn-uris` ConfigMap *before* the pod goes away. Then readiness fails,
-  and the controller waits for the allocation count to reach zero or for
-  `spec.drainTimeout`. The finalizer `turnfleet.hzmi.dev/drain` runs the same
-  sequence for pool deletion. See `docs/adr/0006-drain-semantics.md`.
+  **one at a time**: a relay is drained, its pod is deleted and its replacement
+  is created before the next relay is drained, so only one relay's capacity
+  leaves service at a time. See `docs/adr/0021-drain-before-delete.md`.
+* **Drain.** A pass that records a drain on a pod also removes the relay from
+  `turnURIs` and from the `<pool>-turn-uris` ConfigMap, so the relay is out of
+  everything a consumer reads before any later pass deletes its pod. Readiness
+  fails, the controller waits for the allocation count to reach zero or for
+  `spec.drainTimeout`, and a relay on its way out keeps the next relay from
+  being drained until its pod is gone. The finalizer `turnfleet.hzmi.dev/drain`
+  runs the same sequence for pool deletion. See
+  `docs/adr/0006-drain-semantics.md` and `docs/adr/0021-drain-before-delete.md`.
 * **`turnURIs`.** These list only ready, non-draining relays, mirrored into the
   `<pool>-turn-uris` ConfigMap. The credential issuer therefore hands out
   per-relay URIs, and never a URI for a relay that is saturated or going away.

@@ -47,6 +47,9 @@ with a message saying the wait timed out, instead of reporting a healthy pool.
 Rollouts are serialized: one draining relay per pool at a time. A roll
 therefore never removes more than one relay's worth of capacity from service,
 and the `turnURIs` list is never empty while at least one ready relay exists.
+[0021](0021-drain-before-delete.md) decides how that serialization is
+implemented: a drain is recorded on the pod in one pass, which is the pass that
+writes the status and the ConfigMap, and the pod is deleted in a later pass.
 
 ## Consequences
 
