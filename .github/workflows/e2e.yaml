@@ -34,7 +34,7 @@ concurrency:
 env:
   # Renovate reads this line (customManager in renovate.json) and keeps it in
   # step with the `go` directive in go.mod.
-  GO_VERSION: "1.27.2"
+  GO_VERSION: "1.27.3"
   KIND_VERSION: v0.33.0
   # sha256 of kind-linux-amd64 from the kind v0.33.0 release assets.
   KIND_LINUX_AMD64_SHA256: aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d
