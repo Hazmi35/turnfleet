@@ -120,7 +120,7 @@
       "depNameTemplate": "kindest/node"
     },
     {
-      "description": "The build image, as the Makefile pins it. It carries the Go toolchain (`golang:1.27.2-bookworm`) and the Dockerfiles only say `FROM ${GO_IMAGE}`, so the Makefile is the only place the pin exists.",
+      "description": "The build image, as the Makefile pins it. It carries the Go toolchain (`golang:1.27.3-bookworm`) and the Dockerfiles only say `FROM ${GO_IMAGE}`, so the Makefile is the only place the pin exists.",
       "customType": "regex",
       "managerFilePatterns": ["/^Makefile$/"],
       "matchStrings": [
