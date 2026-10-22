@@ -24,7 +24,7 @@ concurrency:
 env:
   # Renovate reads this line (customManager in renovate.json) and keeps it in
   # step with the `go` directive in go.mod.
-  GO_VERSION: "1.27.2"
+  GO_VERSION: "1.27.3"
 
 jobs:
   ci:

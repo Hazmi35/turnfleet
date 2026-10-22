@@ -23,7 +23,7 @@ manifests cannot express: which pins are deliberately held, and why (ADR 11).
 
 ## Notes on the Go toolchain
 
-* The repository requires Go 1.27.2 (`go.mod` `go`). controller-runtime itself
+* The repository requires Go 1.27.3 (`go.mod` `go`). controller-runtime itself
   requires Go 1.26.0, so the pin is deliberately newer than the floor its
   dependencies set. Therefore, a build cannot silently pick an older toolchain.
 * `go`/`tool` directive support landed in Go 1.24, so the pinned toolchain can

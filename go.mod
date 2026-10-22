@@ -1,6 +1,6 @@
 module github.com/Hazmi35/turnfleet
 
-go 1.27.2
+go 1.27.3
 
 require (
 	github.com/google/licensecheck v0.3.1
