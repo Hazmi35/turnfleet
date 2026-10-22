@@ -7,7 +7,7 @@
 # The golangci-lint version below must equal the one the base binary is built
 # from (the `tool` directive in tools/go.mod); the plugin pins exist only here,
 # so a bump is an edit of both files. docs/versions.md records what is held.
-version: v2.14.0
+version: v2.15.0
 name: golangci-lint-custom
 destination: ./bin
 plugins:
