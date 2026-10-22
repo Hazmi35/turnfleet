@@ -281,8 +281,6 @@ func (r *TURNPoolReconciler) measureRelays(ctx context.Context, pool *turnfleetv
 			result := r.probeOnce(ctx, pool, state)
 			state.lastProbe = probeStatusFrom(&result)
 			state.probeErrorCode = result.ErrorCode
-			metrics.SetProbe(pool.Namespace, pool.Name, state.relay.Name, result.Succeeded,
-				time.Duration(result.LatencyMillis)*time.Millisecond)
 			if !result.Succeeded && result.ErrorCode != 0 {
 				metrics.RecordAllocationFailure(pool.Namespace, pool.Name, state.relay.Name, result.ErrorCode)
 			}
@@ -291,13 +289,37 @@ func (r *TURNPoolReconciler) measureRelays(ctx context.Context, pool *turnfleetv
 		state.portsInUse = state.allocations
 	}
 
-	// Drop the series of relays that no longer exist, then republish: a stale
-	// series is a lie about capacity.
+	// Drop the series of relays that no longer exist, then republish every
+	// gauge: a stale series is a lie about capacity, and about whether the
+	// relay answered its last probe. The probe outcome is published in this
+	// loop and not while probing, because a write before ForgetPool would be
+	// deleted in the same pass and no scraper would ever see it.
 	metrics.ForgetPool(pool.Namespace, pool.Name)
 	for _, state := range states {
 		metrics.SetRelay(pool.Namespace, pool.Name, state.relay.Name,
 			state.allocations, state.portsInUse, state.relay.PortRange.Ports())
+		publishProbe(pool, state)
 	}
+}
+
+// publishProbe republishes a relay's last probe outcome after ForgetPool.
+//
+// It publishes the last result the relay has, including a result read from the
+// status when the probe was not due this pass, rather than only the probes
+// performed this pass: the gauges describe the last probe of a relay, which
+// outlives the pass that ran it.
+func publishProbe(pool *turnfleetv1alpha1.TURNPool, state *relayState) {
+	if state.pod == nil || state.lastProbe.Succeeded == nil {
+		// No relay, or no probe has ever completed: there is no outcome to
+		// publish, and a default of 0 would report a failure that never
+		// happened.
+		return
+	}
+	var latency time.Duration
+	if state.lastProbe.LatencyMillis != nil {
+		latency = time.Duration(*state.lastProbe.LatencyMillis) * time.Millisecond
+	}
+	metrics.SetProbe(pool.Namespace, pool.Name, state.relay.Name, *state.lastProbe.Succeeded, latency)
 }
 
 // probeOnce runs the TURN Allocate check for one relay against the relay's own

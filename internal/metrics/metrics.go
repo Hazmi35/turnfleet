@@ -126,9 +126,14 @@ func RecordAllocationFailure(namespace, pool, relayName string, code int) {
 	}).Inc()
 }
 
-// ForgetPool drops the gauge series of a pool before the caller republishes the
-// relays that still exist, so a deleted relay or pool leaves no stale sample
-// behind.
+// ForgetPool drops every gauge series of a pool before the caller republishes
+// the relays that still exist, so a deleted relay or pool leaves no stale
+// sample behind.
+//
+// It drops all five gauges, the probe outcome included: every one of them has
+// to be written again by the caller for every relay that still exists. A gauge
+// the caller writes before this call does not survive it, so the caller
+// publishes after, never before.
 //
 // The allocation failure counter is deliberately left alone: it is cumulative,
 // and the controller calls ForgetPool on every reconcile, so deleting it would
