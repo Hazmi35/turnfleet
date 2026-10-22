@@ -68,11 +68,11 @@ The released chart needs no checkout:
 
 ```sh
 helm install turnfleet oci://ghcr.io/hazmi35/turnfleet-chart/turnfleet \
-  --version 0.2.1 --namespace turnfleet-system --create-namespace
+  --version 0.2.2 --namespace turnfleet-system --create-namespace
 ```
 
 Installed without `--set`, that chart runs the released
-`turnfleet-controller:0.2.1`, which is the image the release published, and the
+`turnfleet-controller:0.2.2`, which is the image the release published, and the
 release notes carry the chart's digest plus the commands that verify it.
 `charts/turnfleet/values.yaml` lists what is configurable, including
 `--set webhook.enabled=true` for the admission webhooks on a cluster that has
