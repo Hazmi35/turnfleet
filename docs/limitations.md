@@ -24,6 +24,23 @@ its statement and gains a pointer to the issue.
 * **No Service in the data path means firewall work.** Listener ports and the
   relay range must be reachable on each relay node. The operator cannot create
   security-group or firewall rules for an address it does not own.
+* **Some networks cannot be served by any mode.** When inbound traffic arrives
+  only through a load balancer and the pod addresses are private, no relay can
+  own an address the peers reach directly. An overlay network without Multus,
+  on nodes whose addresses the peers cannot route to, leaves no address to
+  give a relay at all. `docs/capacity-model.md` ("Which environments can be
+  served") maps the environments that work and what each needs first.
+* **A peer's own egress policy is invisible from the cluster.** A peer whose
+  network lets only TCP/443 out reaches a relay only through a listener on port
+  443: `tcp`, or `tls` where the network inspects what it lets through. The
+  peer at the other end must still reach the relay range, or use a relay of its
+  own. Nothing inside the cluster can see either constraint; a vantage runner
+  placed in that network is the check.
+* **An attachment's IPAM is trusted, not verified.** Turnfleet cannot tell in
+  advance whether a NetworkAttachmentDefinition gives a `PodIP` relay pod the
+  same address every time. It reads the address back from the pod and drains
+  the relay when it differs (ADR 18), so an unstable IPAM shows up as a drain
+  loop after the fact.
 * **Probes hold a port for their duration, and release it asynchronously.**
   Closing an allocation sends `Refresh` with lifetime zero and does not wait for
   the answer, so the port comes back a moment later. The saturation threshold
