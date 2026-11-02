@@ -50,6 +50,13 @@ its statement and gains a pointer to the issue.
   cert-manager `Certificate`/`Issuer` and the serving certificate mount
   (`make deploy KUSTOMIZE_OVERLAY=config/with-webhook`). Admission behaviour is
   covered by envtest, which serves its own certificates.
+* **The manager's lease keeps controller-runtime's timings by default.** The
+  leader renews its lease every 2s (`--leader-elect-retry-period`), which is one
+  write to the API server each time, and it exits when it cannot renew for 10s
+  (`--leader-elect-renew-deadline`). A restart of a single API server that takes
+  longer than that restarts the controller. Longer timings, such as 60s, 40s and
+  15s, fit one replica or one API server better. They are flags rather than the
+  default because they also slow a standby's takeover after the leader dies.
 * **`nodurations` is disabled in kube-api-linter.** `drainTimeout` and the probe
   timings are `metav1.Duration` by design; see `.golangci.yml`.
 * **One Secret holds every relay's configuration per pool.** Each rendered

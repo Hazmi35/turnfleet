@@ -34,6 +34,16 @@ imagePullSecrets: []
 # Manager flags. The chart derives the flags from these values in the order
 # config/ ends up with them (the metrics flag first, then leader election and
 # the health probe, then the webhook flags).
+#
+# leaderElection: the lease timings stay at controller-runtime's defaults (15s
+# lease, 10s renew deadline, 2s retry), which renew the lease every 2s and
+# restart the manager when the API server is unreachable for longer than 10s. A
+# single replica, or a control plane with one API server, is better served by
+# longer ones, set through extraArgs:
+#   extraArgs:
+#     - --leader-elect-lease-duration=60s
+#     - --leader-elect-renew-deadline=40s
+#     - --leader-elect-retry-period=15s
 leaderElection:
   enabled: true
 
