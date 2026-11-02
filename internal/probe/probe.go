@@ -106,6 +106,12 @@ type Result struct {
 	// exhausted, which is the saturation signal.
 	ErrorCode int `json:"errorCode,omitempty"`
 
+	// Reason names the step the probe ended at: one of the Reason constants, or
+	// a caller's own reason for a probe it could not run. Unlike Message it
+	// carries no error text, so two probes that fail the same way report the
+	// same reason.
+	Reason string `json:"reason,omitempty"`
+
 	// Message explains the result in one sentence.
 	Message string `json:"message"`
 
@@ -113,6 +119,32 @@ type Result struct {
 	// round trip, when one was requested.
 	PeerRoundTrip *bool `json:"peerRoundTrip,omitempty"`
 }
+
+// The reasons a probe reports, one per step it can end at.
+const (
+	// ReasonAllocated is a probe that passed.
+	ReasonAllocated = "Allocated"
+	// ReasonListenerUnreachable is a probe that could not open the client
+	// transport to the listener.
+	ReasonListenerUnreachable = "ListenerUnreachable"
+	// ReasonClientFailed is a probe whose TURN client could not be set up.
+	ReasonClientFailed = "ClientFailed"
+	// ReasonAllocationRefused is an Allocate that failed or was refused;
+	// ErrorCode carries the TURN error code when the relay sent one.
+	ReasonAllocationRefused = "AllocationRefused"
+	// ReasonRelayedAddressUnreadable is an allocation whose relayed address the
+	// probe cannot parse.
+	ReasonRelayedAddressUnreadable = "RelayedAddressUnreadable"
+	// ReasonRelayedAddressUnexpected is an allocation on an address or port the
+	// relay does not own.
+	ReasonRelayedAddressUnexpected = "RelayedAddressUnexpected"
+	// ReasonRoundTripFailed is a requested peer round trip that did not
+	// complete.
+	ReasonRoundTripFailed = "RoundTripFailed"
+	// ReasonURIUnreadable is a listener URI that could not be parsed, so
+	// nothing was probed.
+	ReasonURIUnreadable = "URIUnreadable"
+)
 
 // Allocate probes one relay and returns what happened.
 //
@@ -136,7 +168,7 @@ func Allocate(ctx context.Context, cfg *Config) Result {
 
 	conn, err := dial(ctx, cfg.Endpoint)
 	if err != nil {
-		return finish(&result, start, err, 0, "cannot reach the relay listener")
+		return finish(&result, start, err, 0, ReasonListenerUnreachable, "cannot reach the relay listener")
 	}
 	defer func() { _ = conn.Close() }()
 
@@ -149,19 +181,19 @@ func Allocate(ctx context.Context, cfg *Config) Result {
 		LoggerFactory:  quietLoggerFactory(),
 	})
 	if err != nil {
-		return finish(&result, start, err, 0, "cannot create the TURN client")
+		return finish(&result, start, err, 0, ReasonClientFailed, "cannot create the TURN client")
 	}
 	defer client.Close()
 
 	if err := client.Listen(); err != nil {
-		return finish(&result, start, err, 0, "cannot start the TURN client")
+		return finish(&result, start, err, 0, ReasonClientFailed, "cannot start the TURN client")
 	}
 
 	logger.Debugf("allocating on %s as %s", cfg.Endpoint.String(), cfg.Username)
 
 	alloc, err := allocate(ctx, client, cfg.Endpoint)
 	if err != nil {
-		return finish(&result, start, err, turnErrorCode(err), "the relay refused the allocation")
+		return finish(&result, start, err, turnErrorCode(err), ReasonAllocationRefused, "the relay refused the allocation")
 	}
 	// Closing the allocation sends Refresh with lifetime 0, so the probe does
 	// not hold the capacity it is measuring. The release is asynchronous — the
@@ -172,7 +204,7 @@ func Allocate(ctx context.Context, cfg *Config) Result {
 
 	relayed, err := relayedUDPAddr(alloc.localAddr())
 	if err != nil {
-		return finish(&result, start, err, 0, "the relay answered with an address the probe cannot read")
+		return finish(&result, start, err, 0, ReasonRelayedAddressUnreadable, "the relay answered with an address the probe cannot read")
 	}
 	result.RelayedAddress = relayed.IP.String()
 	// A port from net is 0-65535.
@@ -181,24 +213,25 @@ func Allocate(ctx context.Context, cfg *Config) Result {
 	logger.Debugf("relayed address is %s", net.JoinHostPort(result.RelayedAddress, strconv.Itoa(int(result.RelayedPort))))
 
 	if err := checkExpectations(cfg, relayed); err != nil {
-		return finish(&result, start, err, 0, "the relay answered with an address it does not own")
+		return finish(&result, start, err, 0, ReasonRelayedAddressUnexpected, "the relay answered with an address it does not own")
 	}
 
 	if cfg.PeerAddress != "" || cfg.EchoListen != "" {
 		if alloc.packet == nil {
 			return finish(&result, start,
 				errors.New("a peer round trip needs a udp allocation"),
-				0, "the probe cannot send through a non-udp allocation")
+				0, ReasonRoundTripFailed, "the probe cannot send through a non-udp allocation")
 		}
 		roundTrip, err := peerRoundTrip(ctx, client, alloc.packet, cfg, logger)
 		result.PeerRoundTrip = &roundTrip
 		if err != nil {
-			return finish(&result, start, err, turnErrorCode(err), "the relayed path did not complete a round trip")
+			return finish(&result, start, err, turnErrorCode(err), ReasonRoundTripFailed, "the relayed path did not complete a round trip")
 		}
 	}
 
 	result.Succeeded = true
 	result.LatencyMillis = time.Since(start).Milliseconds()
+	result.Reason = ReasonAllocated
 	result.Message = "relay allocated and advertised the expected relayed address"
 	return result
 }
@@ -431,9 +464,10 @@ func turnErrorCode(err error) int {
 // that need it (the controller counts 508 in turnfleet_allocation_failures_total).
 func TurnErrorCode(err error) int { return turnErrorCode(err) }
 
-func finish(result *Result, start time.Time, err error, code int, explanation string) Result {
+func finish(result *Result, start time.Time, err error, code int, reason, explanation string) Result {
 	result.LatencyMillis = time.Since(start).Milliseconds()
 	result.ErrorCode = code
+	result.Reason = reason
 	if err != nil {
 		result.Message = fmt.Sprintf("%s: %v", explanation, err)
 	} else {

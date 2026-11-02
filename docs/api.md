@@ -324,7 +324,10 @@ _Appears in:_
 
 
 
-ProbeStatus is the outcome of the most recent probe of a relay.
+ProbeStatus is a relay's current probe outcome. It changes when the outcome
+does, not on every probe, so a relay that keeps answering the same way leaves
+the pool's status untouched. The result of every probe, and how long it took,
+are the turnfleet_probe_success and turnfleet_probe_duration_seconds metrics.
 
 
 
@@ -333,10 +336,9 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `time` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v/#time-v1-meta)_ | time is when the probe finished. |  | Optional: \{\} <br /> |
+| `lastTransitionTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v/#time-v1-meta)_ | lastTransitionTime is when succeeded last changed: since when the relay<br />has been passing, or failing, its probe. A relay first reported by a<br />controller that did not yet set this field gets the time of its first<br />probe after the upgrade. |  | Optional: \{\} <br /> |
 | `succeeded` _boolean_ | succeeded reports whether the relay answered the probe with the expected<br />relayed address and range. |  | Optional: \{\} <br /> |
-| `latencyMillis` _integer_ | latencyMillis is the probe duration in milliseconds. The value is in<br />milliseconds rather than seconds so short probes stay readable, and it is<br />an integer because the API has no floats. |  | Optional: \{\} <br /> |
-| `message` _string_ | message explains a failed probe, including the TURN error code when the<br />relay rejected the allocation. |  | Optional: \{\} <br /> |
+| `message` _string_ | message explains the outcome, including the TURN error code when the relay<br />rejected the allocation. It is replaced when a probe fails at another step<br />or with another TURN error code, and by the first probe after the<br />controller starts. Between those it keeps the text of the probe that set<br />it. |  | Optional: \{\} <br /> |
 
 
 #### RelayStatus
@@ -363,7 +365,7 @@ _Appears in:_
 | `allocations` _integer_ | allocations is the number of live allocations on the relay, read from<br />coturn's metrics endpoint. |  | Optional: \{\} <br /> |
 | `portsInUse` _integer_ | portsInUse is the number of relay ports currently held by allocations. One<br />allocation occupies one port, so this equals allocations. It is reported<br />separately because consumers reason about ports. |  | Optional: \{\} <br /> |
 | `portsTotal` _integer_ | portsTotal is the number of ports this relay owns. Capacity is portsTotal.<br />The ratio consumers compute is portsInUse/portsTotal. |  | Optional: \{\} <br /> |
-| `lastProbe` _[ProbeStatus](#probestatus)_ | lastProbe is the most recent probe result, successful or not. |  | Optional: \{\} <br /> |
+| `lastProbe` _[ProbeStatus](#probestatus)_ | lastProbe is the relay's current probe outcome, successful or not. |  | Optional: \{\} <br /> |
 
 
 #### TURNPool

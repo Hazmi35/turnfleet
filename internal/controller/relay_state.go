@@ -10,7 +10,7 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	turnfleetv1alpha1 "github.com/Hazmi35/turnfleet/api/v1alpha1"
@@ -69,7 +69,9 @@ type relayState struct {
 	allocations int32
 	portsInUse  int32
 
-	// lastProbe is the most recent probe result.
+	// lastProbe is the relay's probe outcome as the status reports it: what
+	// this controller last recorded for the relay, or the stored status when it
+	// has recorded nothing since it started.
 	lastProbe turnfleetv1alpha1.ProbeStatus
 
 	// probeErrorCode is the TURN error code the probe observed in this pass, or
@@ -257,29 +259,50 @@ func orphanState(pod *corev1.Pod) (*relayState, error) {
 	return state, nil
 }
 
-// probeDue reports whether a relay should be probed in this pass: relays whose
-// probe result is missing or older than the interval, and relays that are
-// draining.
+// probeDue reports whether a relay should be probed in this pass: a relay with
+// a ready pod that this controller has not probed yet, or last probed at least
+// a probe interval ago.
 func (r *TURNPoolReconciler) probeDue(pool *turnfleetv1alpha1.TURNPool, state *relayState) bool {
 	if state.pod == nil || !podReady(state.pod) {
 		return false
 	}
-	if state.lastProbe.Time == nil {
+	record, ok := r.probes.get(client.ObjectKeyFromObject(pool), state.relay.Name)
+	if !ok {
 		return true
 	}
-	return !r.now().Before(state.lastProbe.Time.Add(probeInterval(pool)))
+	return !r.now().Before(record.at.Add(probeInterval(pool)))
 }
 
 // measureRelays probes the relays that are due and reads every reachable
 // relay's coturn metrics, then republishes the pool's metrics.
 func (r *TURNPoolReconciler) measureRelays(ctx context.Context, pool *turnfleetv1alpha1.TURNPool, states []*relayState) {
+	poolKey := client.ObjectKeyFromObject(pool)
+	current := make(map[string]bool, len(states))
 	for _, state := range states {
+		current[state.relay.Name] = true
+		record, known := r.probes.get(poolKey, state.relay.Name)
+		if known {
+			// What this controller observed wins over what the stored status
+			// says, which lags behind it when a status write failed.
+			state.lastProbe = record.status
+		}
 		if state.pod == nil {
 			continue
 		}
 		if state.probeDue {
 			result := r.probeOnce(ctx, pool, state)
-			state.lastProbe = probeStatusFrom(&result)
+			now := r.now()
+			var previous *probeOutcome
+			if known {
+				previous = &record.outcome
+			}
+			state.lastProbe = nextProbeStatus(state.lastProbe, previous, &result, now)
+			r.probes.set(poolKey, state.relay.Name, &probeRecord{
+				at:      now,
+				latency: time.Duration(result.LatencyMillis) * time.Millisecond,
+				outcome: outcomeOf(&result),
+				status:  state.lastProbe,
+			})
 			state.probeErrorCode = result.ErrorCode
 			if !result.Succeeded && result.ErrorCode != 0 {
 				metrics.RecordAllocationFailure(pool.Namespace, pool.Name, state.relay.Name, result.ErrorCode)
@@ -288,6 +311,7 @@ func (r *TURNPoolReconciler) measureRelays(ctx context.Context, pool *turnfleetv
 		state.allocations = r.scrapeAllocations(ctx, state)
 		state.portsInUse = state.allocations
 	}
+	r.probes.retain(poolKey, current)
 
 	// Drop the series of relays that no longer exist, then republish every
 	// gauge: a stale series is a lie about capacity, and about whether the
@@ -298,28 +322,27 @@ func (r *TURNPoolReconciler) measureRelays(ctx context.Context, pool *turnfleetv
 	for _, state := range states {
 		metrics.SetRelay(pool.Namespace, pool.Name, state.relay.Name,
 			state.allocations, state.portsInUse, state.relay.PortRange.Ports())
-		publishProbe(pool, state)
+		r.publishProbe(pool, state)
 	}
 }
 
-// publishProbe republishes a relay's last probe outcome after ForgetPool.
+// publishProbe republishes a relay's last probe after ForgetPool.
 //
-// It publishes the last result the relay has, including a result read from the
-// status when the probe was not due this pass, rather than only the probes
-// performed this pass: the gauges describe the last probe of a relay, which
-// outlives the pass that ran it.
-func publishProbe(pool *turnfleetv1alpha1.TURNPool, state *relayState) {
-	if state.pod == nil || state.lastProbe.Succeeded == nil {
-		// No relay, or no probe has ever completed: there is no outcome to
-		// publish, and a default of 0 would report a failure that never
+// It publishes the last probe the relay had, including one from an earlier
+// pass, rather than only the probes performed in this pass: the gauges
+// describe the last probe of a relay, which outlives the pass that ran it.
+func (r *TURNPoolReconciler) publishProbe(pool *turnfleetv1alpha1.TURNPool, state *relayState) {
+	if state.pod == nil {
+		return
+	}
+	record, ok := r.probes.get(client.ObjectKeyFromObject(pool), state.relay.Name)
+	if !ok {
+		// No probe has run since this controller started: there is no outcome
+		// to publish, and a default of 0 would report a failure that never
 		// happened.
 		return
 	}
-	var latency time.Duration
-	if state.lastProbe.LatencyMillis != nil {
-		latency = time.Duration(*state.lastProbe.LatencyMillis) * time.Millisecond
-	}
-	metrics.SetProbe(pool.Namespace, pool.Name, state.relay.Name, *state.lastProbe.Succeeded, latency)
+	metrics.SetProbe(pool.Namespace, pool.Name, state.relay.Name, record.outcome.succeeded, record.latency)
 }
 
 // probeOnce runs the TURN Allocate check for one relay against the relay's own
@@ -330,6 +353,7 @@ func (r *TURNPoolReconciler) probeOnce(ctx context.Context, pool *turnfleetv1alp
 		logf.FromContext(ctx).V(1).Info("skipping probe without a usable auth secret", "relay", state.relay.Name)
 		return probe.Result{
 			Succeeded: false,
+			Reason:    reasonProbeUnauthenticated,
 			Message:   "the pool's auth secret could not be read, so the probe cannot authenticate",
 		}
 	}
@@ -391,6 +415,10 @@ func (r *TURNPoolReconciler) scrapeAllocations(ctx context.Context, state *relay
 // port in a relay's range is taken.
 const turnErrorInsufficientCapacity = 508
 
+// reasonProbeUnauthenticated is the probe reason of a relay the controller could
+// not probe because the pool's auth secret could not be read.
+const reasonProbeUnauthenticated = "AuthSecretUnreadable"
+
 // newScrapeClient is the HTTP client used to read relay metrics. It is short:
 // a relay that cannot answer is reported as a scrape error, not waited for.
 func newScrapeClient() *http.Client {
@@ -411,18 +439,4 @@ func listenerPort(listeners []turnfleetv1alpha1.ListenerSpec, portOffset int32) 
 		}
 	}
 	return tlsPort
-}
-
-// probeStatusFrom converts a probe result into the API's probe status.
-func probeStatusFrom(result *probe.Result) turnfleetv1alpha1.ProbeStatus {
-	now := metav1.Now()
-	succeeded := result.Succeeded
-	latency := result.LatencyMillis
-	message := result.Message
-	return turnfleetv1alpha1.ProbeStatus{
-		Time:          &now,
-		Succeeded:     &succeeded,
-		LatencyMillis: &latency,
-		Message:       &message,
-	}
 }

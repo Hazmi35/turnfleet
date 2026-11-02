@@ -411,25 +411,28 @@ type TURNPoolSpec struct {
 	Placement *PlacementSpec `json:"placement,omitempty"`
 }
 
-// ProbeStatus is the outcome of the most recent probe of a relay.
+// ProbeStatus is a relay's current probe outcome. It changes when the outcome
+// does, not on every probe, so a relay that keeps answering the same way leaves
+// the pool's status untouched. The result of every probe, and how long it took,
+// are the turnfleet_probe_success and turnfleet_probe_duration_seconds metrics.
 type ProbeStatus struct {
-	// time is when the probe finished.
+	// lastTransitionTime is when succeeded last changed: since when the relay
+	// has been passing, or failing, its probe. A relay first reported by a
+	// controller that did not yet set this field gets the time of its first
+	// probe after the upgrade.
 	// +optional
-	Time *metav1.Time `json:"time,omitempty"`
+	LastTransitionTime *metav1.Time `json:"lastTransitionTime,omitempty"`
 
 	// succeeded reports whether the relay answered the probe with the expected
 	// relayed address and range.
 	// +optional
 	Succeeded *bool `json:"succeeded,omitempty"`
 
-	// latencyMillis is the probe duration in milliseconds. The value is in
-	// milliseconds rather than seconds so short probes stay readable, and it is
-	// an integer because the API has no floats.
-	// +optional
-	LatencyMillis *int64 `json:"latencyMillis,omitempty"`
-
-	// message explains a failed probe, including the TURN error code when the
-	// relay rejected the allocation.
+	// message explains the outcome, including the TURN error code when the relay
+	// rejected the allocation. It is replaced when a probe fails at another step
+	// or with another TURN error code, and by the first probe after the
+	// controller starts. Between those it keeps the text of the probe that set
+	// it.
 	// +optional
 	Message *string `json:"message,omitempty"`
 }
@@ -491,7 +494,7 @@ type RelayStatus struct {
 	// +optional
 	PortsTotal *int32 `json:"portsTotal,omitempty"`
 
-	// lastProbe is the most recent probe result, successful or not.
+	// lastProbe is the relay's current probe outcome, successful or not.
 	// +optional
 	LastProbe *ProbeStatus `json:"lastProbe,omitempty"`
 }

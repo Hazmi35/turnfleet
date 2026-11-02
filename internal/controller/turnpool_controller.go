@@ -82,6 +82,11 @@ type TURNPoolReconciler struct {
 	// ClusterCIDRs are peer CIDRs the pool's relays must always deny, from the
 	// controller's flags: the cluster's service range when it is not RFC 1918.
 	ClusterCIDRs []string
+
+	// probes is the last probe of every relay this controller probed. It is
+	// the probe schedule and the source of the probe metrics, kept out of the
+	// status so that a probe with an unchanged outcome writes nothing.
+	probes probeMemory
 }
 
 // +kubebuilder:rbac:groups=turnfleet.hzmi.dev,resources=turnpools,verbs=get;list;watch;create;update;patch;delete
@@ -99,6 +104,9 @@ func (r *TURNPoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	pool := &turnfleetv1alpha1.TURNPool{}
 	if err := r.Get(ctx, req.NamespacedName, pool); err != nil {
+		if apierrors.IsNotFound(err) {
+			r.probes.forget(req.NamespacedName)
+		}
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
@@ -581,8 +589,9 @@ func nodeAddressKey(node *corev1.Node) string {
 	return strings.Join(parts, ",")
 }
 
-// lastProbeFromStatus finds the previous probe result for a relay, so a
-// reconcile does not re-probe every relay on every pass.
+// lastProbeFromStatus finds a relay's probe outcome and allocation count in the
+// status the previous pass wrote, so a pass that does not probe the relay keeps
+// reporting its outcome.
 func lastProbeFromStatus(prev []turnfleetv1alpha1.RelayStatus, name string) (probeStatus turnfleetv1alpha1.ProbeStatus, allocations int32) {
 	for i := range prev {
 		if prev[i].Name != name {

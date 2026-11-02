@@ -27,6 +27,7 @@ decision gets a new ADR that says so.
 | [0019](0019-one-address-is-never-split-across-nodes.md) | One address is never split across nodes: the only layers that read the destination port are the node holding the address and a load balancer, which ADR 3 and ADR 4 keep out of the peer's path. |
 | [0020](0020-relay-config-secret.md) | The rendered relay configuration is delivered as a Secret, not a ConfigMap: it embeds the shared HMAC secret. |
 | [0021](0021-drain-before-delete.md) | Drain ordering: a drain is recorded on the pod in one pass and the pod deleted in a later one, one relay at a time. |
+| [0022](0022-probe-status-records-outcomes.md) | A relay's probe status records its outcome and changes only when the outcome does; the probe schedule lives in the controller's memory. |
 
 Related documents that are not ADRs: [`../architecture.md`](../architecture.md),
 [`../capacity-model.md`](../capacity-model.md),
