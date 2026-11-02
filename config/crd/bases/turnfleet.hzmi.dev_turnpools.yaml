@@ -641,30 +641,42 @@ spec:
                         removed from turnURIs before its pod is deleted.
                       type: boolean
                     lastProbe:
-                      description: lastProbe is the most recent probe result, successful
-                        or not.
+                      description: lastProbe is the relay's current probe outcome,
+                        successful or not.
                       properties:
-                        latencyMillis:
+                        lastTransitionTime:
                           description: |-
-                            latencyMillis is the probe duration in milliseconds. The value is in
-                            milliseconds rather than seconds so short probes stay readable, and it is
-                            an integer because the API has no floats.
-                          format: int64
-                          type: integer
+                            lastTransitionTime is when succeeded last changed: since when the relay
+                            has been passing, or failing, its probe. A relay first reported by a
+                            controller that did not yet set this field gets the time of its first
+                            probe after the upgrade.
+                          format: date-time
+                          type: string
                         message:
                           description: |-
-                            message explains a failed probe, including the TURN error code when the
-                            relay rejected the allocation.
+                            message explains the outcome, including the TURN error code when the relay
+                            rejected the allocation. It is replaced when succeeded or reason changes,
+                            and when the TURN error code changes while the controller runs. Between
+                            those it keeps the text of the probe that set it.
+                          type: string
+                        reason:
+                          description: |-
+                            reason names the step the probe ended at. It is a fixed value where
+                            message is free text.
+                          enum:
+                          - Allocated
+                          - ListenerUnreachable
+                          - ClientFailed
+                          - AllocationRefused
+                          - RelayedAddressUnreadable
+                          - RelayedAddressUnexpected
+                          - AuthUnavailable
                           type: string
                         succeeded:
                           description: |-
                             succeeded reports whether the relay answered the probe with the expected
                             relayed address and range.
                           type: boolean
-                        time:
-                          description: time is when the probe finished.
-                          format: date-time
-                          type: string
                       type: object
                     name:
                       description: |-

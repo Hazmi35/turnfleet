@@ -175,7 +175,7 @@ func publishedURIs(ctx context.Context, cluster client.Client, namespace, name s
 func probeListener(ctx context.Context, opts *options, uri, secret string) probe.Result {
 	endpoint, err := probe.ParseURI(uri)
 	if err != nil {
-		return probe.Result{URI: uri, Message: fmt.Sprintf("unreadable TURN URI in the pool's list: %v", err)}
+		return probe.Result{URI: uri, Reason: probe.ReasonURIUnreadable, Message: fmt.Sprintf("unreadable TURN URI in the pool's list: %v", err)}
 	}
 
 	// The credential is issued per probe, as the controller issues it: a pass

@@ -411,25 +411,67 @@ type TURNPoolSpec struct {
 	Placement *PlacementSpec `json:"placement,omitempty"`
 }
 
-// ProbeStatus is the outcome of the most recent probe of a relay.
+// ProbeReason names the step a relay's probe ended at.
+//
+// +kubebuilder:validation:Enum=Allocated;ListenerUnreachable;ClientFailed;AllocationRefused;RelayedAddressUnreadable;RelayedAddressUnexpected;AuthUnavailable
+type ProbeReason string
+
+const (
+	// ProbeReasonAllocated is a probe that passed: the relay allocated on the
+	// address and in the range it owns.
+	ProbeReasonAllocated ProbeReason = "Allocated"
+
+	// ProbeReasonListenerUnreachable is a probe that could not open its
+	// transport to the relay's listener.
+	ProbeReasonListenerUnreachable ProbeReason = "ListenerUnreachable"
+
+	// ProbeReasonClientFailed is a probe whose TURN client could not be set up.
+	ProbeReasonClientFailed ProbeReason = "ClientFailed"
+
+	// ProbeReasonAllocationRefused is an Allocate that failed or that the relay
+	// refused. A refusal's TURN error code is in the message; 508 means the
+	// relay's port range is exhausted.
+	ProbeReasonAllocationRefused ProbeReason = "AllocationRefused"
+
+	// ProbeReasonRelayedAddressUnreadable is an allocation whose relayed
+	// address the probe could not parse.
+	ProbeReasonRelayedAddressUnreadable ProbeReason = "RelayedAddressUnreadable"
+
+	// ProbeReasonRelayedAddressUnexpected is an allocation on an address or a
+	// port the relay does not own, which no peer can use.
+	ProbeReasonRelayedAddressUnexpected ProbeReason = "RelayedAddressUnexpected"
+
+	// ProbeReasonAuthUnavailable is a probe that did not run, because the
+	// pool's auth secret could not be read.
+	ProbeReasonAuthUnavailable ProbeReason = "AuthUnavailable"
+)
+
+// ProbeStatus is a relay's current probe outcome. It changes when the outcome
+// does, not on every probe, so a relay that keeps answering the same way leaves
+// the pool's status untouched. The result of every probe, and how long it took,
+// are the turnfleet_probe_success and turnfleet_probe_duration_seconds metrics.
 type ProbeStatus struct {
-	// time is when the probe finished.
+	// lastTransitionTime is when succeeded last changed: since when the relay
+	// has been passing, or failing, its probe. A relay first reported by a
+	// controller that did not yet set this field gets the time of its first
+	// probe after the upgrade.
 	// +optional
-	Time *metav1.Time `json:"time,omitempty"`
+	LastTransitionTime *metav1.Time `json:"lastTransitionTime,omitempty"`
 
 	// succeeded reports whether the relay answered the probe with the expected
 	// relayed address and range.
 	// +optional
 	Succeeded *bool `json:"succeeded,omitempty"`
 
-	// latencyMillis is the probe duration in milliseconds. The value is in
-	// milliseconds rather than seconds so short probes stay readable, and it is
-	// an integer because the API has no floats.
+	// reason names the step the probe ended at. It is a fixed value where
+	// message is free text.
 	// +optional
-	LatencyMillis *int64 `json:"latencyMillis,omitempty"`
+	Reason ProbeReason `json:"reason,omitempty"`
 
-	// message explains a failed probe, including the TURN error code when the
-	// relay rejected the allocation.
+	// message explains the outcome, including the TURN error code when the relay
+	// rejected the allocation. It is replaced when succeeded or reason changes,
+	// and when the TURN error code changes while the controller runs. Between
+	// those it keeps the text of the probe that set it.
 	// +optional
 	Message *string `json:"message,omitempty"`
 }
@@ -491,7 +533,7 @@ type RelayStatus struct {
 	// +optional
 	PortsTotal *int32 `json:"portsTotal,omitempty"`
 
-	// lastProbe is the most recent probe result, successful or not.
+	// lastProbe is the relay's current probe outcome, successful or not.
 	// +optional
 	LastProbe *ProbeStatus `json:"lastProbe,omitempty"`
 }

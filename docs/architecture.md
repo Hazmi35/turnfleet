@@ -138,8 +138,16 @@ passing in-cluster probe therefore cannot clear a failing observation.
 
 `status.relays[]` carries the per-relay facts: `relayAddress`, `portRange`,
 `ready`, `draining`, `allocations`, `portsInUse`, `portsTotal` and
-`lastProbe{time,succeeded,latencyMillis,message}`. The API has no floats:
+`lastProbe{lastTransitionTime,succeeded,reason,message}`. The API has no floats:
 consumers compute the ratio themselves.
+
+`lastProbe` is the relay's probe outcome, not a record of the last probe. It
+changes when the relay starts or stops passing, or fails at another step
+(`reason`), so a pool whose relays keep answering the same way writes no status
+between probes.
+When each probe ran and how long it took live in the controller's memory and
+in the probe metrics below. A restarted controller probes every relay with a
+ready pod in its first pass. See `docs/adr/0022-probe-status-records-outcomes.md`.
 
 ## Metrics
 

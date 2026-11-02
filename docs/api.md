@@ -303,6 +303,29 @@ _Appears in:_
 | `end` _integer_ | end is the last port of the range, inclusive. It must be greater than or<br />equal to start. |  | Maximum: 65535 <br />Minimum: 1 <br />Required: \{\} <br /> |
 
 
+#### ProbeReason
+
+_Underlying type:_ _string_
+
+ProbeReason names the step a relay's probe ended at.
+
+_Validation:_
+- Enum: [Allocated ListenerUnreachable ClientFailed AllocationRefused RelayedAddressUnreadable RelayedAddressUnexpected AuthUnavailable]
+
+_Appears in:_
+- [ProbeStatus](#probestatus)
+
+| Field | Description |
+| --- | --- |
+| `Allocated` | ProbeReasonAllocated is a probe that passed: the relay allocated on the<br />address and in the range it owns.<br /> |
+| `ListenerUnreachable` | ProbeReasonListenerUnreachable is a probe that could not open its<br />transport to the relay's listener.<br /> |
+| `ClientFailed` | ProbeReasonClientFailed is a probe whose TURN client could not be set up.<br /> |
+| `AllocationRefused` | ProbeReasonAllocationRefused is an Allocate that failed or that the relay<br />refused. A refusal's TURN error code is in the message; 508 means the<br />relay's port range is exhausted.<br /> |
+| `RelayedAddressUnreadable` | ProbeReasonRelayedAddressUnreadable is an allocation whose relayed<br />address the probe could not parse.<br /> |
+| `RelayedAddressUnexpected` | ProbeReasonRelayedAddressUnexpected is an allocation on an address or a<br />port the relay does not own, which no peer can use.<br /> |
+| `AuthUnavailable` | ProbeReasonAuthUnavailable is a probe that did not run, because the<br />pool's auth secret could not be read.<br /> |
+
+
 #### ProbeSpec
 
 
@@ -324,7 +347,10 @@ _Appears in:_
 
 
 
-ProbeStatus is the outcome of the most recent probe of a relay.
+ProbeStatus is a relay's current probe outcome. It changes when the outcome
+does, not on every probe, so a relay that keeps answering the same way leaves
+the pool's status untouched. The result of every probe, and how long it took,
+are the turnfleet_probe_success and turnfleet_probe_duration_seconds metrics.
 
 
 
@@ -333,10 +359,10 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `time` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v/#time-v1-meta)_ | time is when the probe finished. |  | Optional: \{\} <br /> |
+| `lastTransitionTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v/#time-v1-meta)_ | lastTransitionTime is when succeeded last changed: since when the relay<br />has been passing, or failing, its probe. A relay first reported by a<br />controller that did not yet set this field gets the time of its first<br />probe after the upgrade. |  | Optional: \{\} <br /> |
 | `succeeded` _boolean_ | succeeded reports whether the relay answered the probe with the expected<br />relayed address and range. |  | Optional: \{\} <br /> |
-| `latencyMillis` _integer_ | latencyMillis is the probe duration in milliseconds. The value is in<br />milliseconds rather than seconds so short probes stay readable, and it is<br />an integer because the API has no floats. |  | Optional: \{\} <br /> |
-| `message` _string_ | message explains a failed probe, including the TURN error code when the<br />relay rejected the allocation. |  | Optional: \{\} <br /> |
+| `reason` _[ProbeReason](#probereason)_ | reason names the step the probe ended at. It is a fixed value where<br />message is free text. |  | Enum: [Allocated ListenerUnreachable ClientFailed AllocationRefused RelayedAddressUnreadable RelayedAddressUnexpected AuthUnavailable] <br />Optional: \{\} <br /> |
+| `message` _string_ | message explains the outcome, including the TURN error code when the relay<br />rejected the allocation. It is replaced when succeeded or reason changes,<br />and when the TURN error code changes while the controller runs. Between<br />those it keeps the text of the probe that set it. |  | Optional: \{\} <br /> |
 
 
 #### RelayStatus
@@ -363,7 +389,7 @@ _Appears in:_
 | `allocations` _integer_ | allocations is the number of live allocations on the relay, read from<br />coturn's metrics endpoint. |  | Optional: \{\} <br /> |
 | `portsInUse` _integer_ | portsInUse is the number of relay ports currently held by allocations. One<br />allocation occupies one port, so this equals allocations. It is reported<br />separately because consumers reason about ports. |  | Optional: \{\} <br /> |
 | `portsTotal` _integer_ | portsTotal is the number of ports this relay owns. Capacity is portsTotal.<br />The ratio consumers compute is portsInUse/portsTotal. |  | Optional: \{\} <br /> |
-| `lastProbe` _[ProbeStatus](#probestatus)_ | lastProbe is the most recent probe result, successful or not. |  | Optional: \{\} <br /> |
+| `lastProbe` _[ProbeStatus](#probestatus)_ | lastProbe is the relay's current probe outcome, successful or not. |  | Optional: \{\} <br /> |
 
 
 #### TURNPool

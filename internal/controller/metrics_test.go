@@ -39,7 +39,7 @@ func gaugeValue(t *testing.T, metricName, namespace, pool, relay string) (float6
 // probed a relay and then wiped the probe gauges in the same pass, which left
 // turnfleet_probe_success and turnfleet_probe_duration_seconds unscrapeable.
 // The gauge is asserted after the probing pass and again after a later pass
-// that only republishes the last result from the status.
+// that only republishes the last probe the controller remembers.
 func TestProbeMetricsSurviveReconcile(t *testing.T) {
 	f := newFixture(t)
 	f.createSecret()
@@ -75,7 +75,7 @@ func TestProbeMetricsSurviveReconcile(t *testing.T) {
 	assertProbeGauges("after the pass that probed the relay")
 
 	// The fake clock has not advanced, so this pass is not due and republishes
-	// the status's last probe result instead of measuring again.
+	// the last probe the controller remembers instead of measuring again.
 	f.reconcile("tpool-probe-metrics")
 	assertProbeGauges("after a pass that did not probe the relay")
 }

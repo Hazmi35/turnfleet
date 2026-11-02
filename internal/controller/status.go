@@ -350,6 +350,7 @@ func (r *TURNPoolReconciler) reconcileDeletion(ctx context.Context, pool *turnfl
 
 	if len(pods) == 0 {
 		metrics.ForgetPool(pool.Namespace, pool.Name)
+		r.probes.forget(client.ObjectKeyFromObject(pool))
 		if err := r.deleteVantageResult(ctx, pool); err != nil {
 			return ctrl.Result{}, err
 		}
