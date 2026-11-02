@@ -59,8 +59,8 @@ its own port range, delivered without a load balancer.
 | --- | --- | --- | --- | --- |
 | `HostNetwork` | 1 (required anti-affinity) | the node's `ExternalIP` (or the `turnfleet.hzmi.dev/relay-address` annotation) | the whole range | `end - start + 1` |
 | `PartitionedIP` | `addressing.partitionedIP.relaysPerNode` | the node address, shared by all relays on that node | `(end - start + 1) / relaysPerNode`, remainder to the first slices | still `end - start + 1`: **splitting an IP does not create ports** |
-| `ExternalIPPool` | 1 (required anti-affinity, as in `HostNetwork`) | the declared secondary address | the whole range | `end - start + 1` |
-| `PodIP` | 1 | the address the pod holds on the default network or on a Multus attachment, declared per node in `turnfleet.hzmi.dev/relay-pod-addresses` | the whole range | `end - start + 1` |
+| `ExternalIPPool` | one per declared address on the node | the declared secondary address | the whole range | `addresses on the node × (end - start + 1)` |
+| `PodIP` | one per declared address on the node | the address the pod holds on the default network or on a Multus attachment, declared per node in `turnfleet.hzmi.dev/relay-pod-addresses` | the whole range | `addresses on the node × (end - start + 1)` |
 
 Every mode but `PodIP` binds an address that belongs to the node. `PodIP` gives
 the address to the pod itself, which is what makes it usable on clusters whose
@@ -297,3 +297,55 @@ annotation `turnfleet.hzmi.dev/relay-address` or an `ExternalIPPool` entry
 declares the advertised address. The renderer then emits `-X public/private` so
 coturn advertises the public one. coturn maps one address to another within one
 family, so an IPv6 relay renders an IPv6 pair.
+
+## Which environments can be served
+
+The test is not whether an address is public. The test is whether each relay
+address is **individually addressable from the peers' network**. An address no
+peer can route to is a dead relay. A private address inside a network the peers
+already route to is a working one. A node that advertises its `InternalIP` is
+therefore correct when the peers share that private network, and broken when
+they do not.
+
+Two things decide the answer: who owns the relay address (the node or the pod),
+and whether the peers can reach that address.
+
+| Environment | Mode | Must be true first |
+| --- | --- | --- |
+| Nodes with public addresses, peers on the internet | `HostNetwork` | The listener ports and the relay range are open on each node address. |
+| Nodes with private addresses, peers in the same private network | `HostNetwork` | The peers route to the node addresses. `InternalIP` is the right address here. |
+| Nodes with several addresses attached | `ExternalIPPool` | The addresses exist on the nodes, with ingress rules per address. |
+| Pod addresses from a prefix the peers can reach, such as Azure Kubernetes Service with Cilium | `PodIP` without an attachment | Ingress rules per address, and a route from each pod prefix to its node. |
+| A Multus attachment on a network the peers can reach | `PodIP` with an attachment | A NetworkAttachmentDefinition whose IPAM gives each relay pod its declared address. |
+| IPv6 or dual-stack peers | any mode, with `spec.addressing.family` | Each relay address is in the family the peer's path uses. |
+| Nodes that come and go, such as an autoscaling node pool | any mode | Spare capacity. A relay that moves to another node gets another address, which makes it a new relay identity, so each move costs one drain. |
+| Relay nodes shared with other workloads | `PodIP`; the other modes need the ports free on the node | The other modes bind the listener ports and the relay range in the node's own network. `PodIP` binds them in the pod's. |
+
+Some environments cannot be served by any mode:
+
+* **Inbound traffic arrives only through a load balancer, and the pod
+  addresses are private.** A relay must own an address the peers can reach
+  directly, and a load balancer in front of the relay range sends a peer's
+  packets to the wrong relay (ADR 3, ADR 4).
+* **An overlay network without Multus, and node addresses the peers cannot
+  route to.** Neither the node nor the pod has an address to give a relay.
+* **One address shared by relays on several nodes.** Rejected by decision
+  (ADR 19): only the node that holds an address can receive its packets.
+
+A `PodIP` pool whose IPAM gives a pod a new address every time it is recreated
+still works, but every recreation is a drain. That is rarely acceptable for
+long allocations, so reserved or static IPAM is the practical requirement.
+
+### What Turnfleet checks and what the operator owns
+
+| Precondition | Checked by Turnfleet | Owned by |
+| --- | --- | --- |
+| Each relay address is reachable from the peers' network | Only from outside, by a vantage runner placed there (ADR 7, ADR 15) | The operator and the platform |
+| No address translation between the peer and the relay, or a one-to-one mapping that keeps the port | No. The renderer can only declare the mapping with `-X` | The operator |
+| The listener ports and the whole relay range are permitted for each address | No | The operator (security groups, NSGs, firewalls) |
+| No Service or L4 load balancer in the data path | Yes: Turnfleet renders none | Turnfleet |
+| The transports the peers use match the declared listeners | Only the spec side; a peer's own egress policy is out of reach | The operator |
+| Exactly one relay owns an address and port range | Yes: the planner keeps identities disjoint, and overlap between pools is reported (ADR 12) | Turnfleet |
+| The relay can bind its address | Yes: a relay that cannot bind never becomes ready | Turnfleet |
+| A relay's address stays the same across a restart or a reschedule | Yes for `PodIP`: the address is read back from the pod, and a mismatch drains the relay (ADR 6, ADR 18) | The operator's IPAM, then Turnfleet |
+| Capacity is addresses × ports | Yes: `status.portsTotal` and the planner | Turnfleet and the operator's address supply |

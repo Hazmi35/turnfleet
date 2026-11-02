@@ -601,8 +601,8 @@ func affinity(pool *turnfleetv1alpha1.TURNPool, state *relayState) *corev1.Affin
 	// PartitionedIP splits one address between several relays, a DualStack pool
 	// gives each of a node's two addresses its own relay, and PodIP and
 	// ExternalIPPool give every relay an address of its own. Required
-	// anti-affinity stays exactly when one relay per node is the rule — the
-	// HostNetwork mode on a single family — because there the second relay
+	// anti-affinity stays exactly where one relay per node is the rule, the
+	// HostNetwork mode on a single family, because there the second relay
 	// would have to give up the one address the node offers.
 	switch {
 	case pool.Spec.Addressing.Mode == turnfleetv1alpha1.AddressingModePartitionedIP,
