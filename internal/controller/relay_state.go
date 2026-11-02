@@ -292,16 +292,17 @@ func (r *TURNPoolReconciler) measureRelays(ctx context.Context, pool *turnfleetv
 		if state.probeDue {
 			result := r.probeOnce(ctx, pool, state)
 			now := r.now()
-			var previous *probeOutcome
+			var previousErrorCode *int
 			if known {
-				previous = &record.outcome
+				previousErrorCode = &record.errorCode
 			}
-			state.lastProbe = nextProbeStatus(state.lastProbe, previous, &result, now)
+			state.lastProbe = nextProbeStatus(state.lastProbe, previousErrorCode, &result, now)
 			r.probes.set(poolKey, state.relay.Name, &probeRecord{
-				at:      now,
-				latency: time.Duration(result.LatencyMillis) * time.Millisecond,
-				outcome: outcomeOf(&result),
-				status:  state.lastProbe,
+				at:        now,
+				latency:   time.Duration(result.LatencyMillis) * time.Millisecond,
+				succeeded: result.Succeeded,
+				errorCode: result.ErrorCode,
+				status:    state.lastProbe,
 			})
 			state.probeErrorCode = result.ErrorCode
 			if !result.Succeeded && result.ErrorCode != 0 {
@@ -342,7 +343,7 @@ func (r *TURNPoolReconciler) publishProbe(pool *turnfleetv1alpha1.TURNPool, stat
 		// happened.
 		return
 	}
-	metrics.SetProbe(pool.Namespace, pool.Name, state.relay.Name, record.outcome.succeeded, record.latency)
+	metrics.SetProbe(pool.Namespace, pool.Name, state.relay.Name, record.succeeded, record.latency)
 }
 
 // probeOnce runs the TURN Allocate check for one relay against the relay's own
@@ -353,7 +354,7 @@ func (r *TURNPoolReconciler) probeOnce(ctx context.Context, pool *turnfleetv1alp
 		logf.FromContext(ctx).V(1).Info("skipping probe without a usable auth secret", "relay", state.relay.Name)
 		return probe.Result{
 			Succeeded: false,
-			Reason:    reasonProbeUnauthenticated,
+			Reason:    probe.ReasonAuthUnavailable,
 			Message:   "the pool's auth secret could not be read, so the probe cannot authenticate",
 		}
 	}
@@ -414,10 +415,6 @@ func (r *TURNPoolReconciler) scrapeAllocations(ctx context.Context, state *relay
 // turnErrorInsufficientCapacity is the TURN error code coturn answers when every
 // port in a relay's range is taken.
 const turnErrorInsufficientCapacity = 508
-
-// reasonProbeUnauthenticated is the probe reason of a relay the controller could
-// not probe because the pool's auth secret could not be read.
-const reasonProbeUnauthenticated = "AuthSecretUnreadable"
 
 // newScrapeClient is the HTTP client used to read relay metrics. It is short:
 // a relay that cannot answer is reported as a scrape error, not waited for.

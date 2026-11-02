@@ -71,12 +71,15 @@ func (f *probeOutcomeFixture) lastProbe() turnfleetv1alpha1.ProbeStatus {
 }
 
 // expectOutcome fails the test unless the relay's outcome is the one given.
-func (f *probeOutcomeFixture) expectOutcome(what string, succeeded bool, message string, since time.Time) {
+func (f *probeOutcomeFixture) expectOutcome(what string, succeeded bool, reason turnfleetv1alpha1.ProbeReason, message string, since time.Time) {
 	f.t.Helper()
 
 	got := f.lastProbe()
 	if got.Succeeded == nil || *got.Succeeded != succeeded {
 		f.t.Errorf("%s: succeeded = %s, want %t", what, describePointer(got.Succeeded), succeeded)
+	}
+	if got.Reason != reason {
+		f.t.Errorf("%s: reason = %q, want %q", what, got.Reason, reason)
 	}
 	if message != "" && (got.Message == nil || *got.Message != message) {
 		f.t.Errorf("%s: message = %s, want %q", what, describePointer(got.Message), message)
@@ -93,8 +96,8 @@ func describePointer[T any](value *T) string {
 	return fmt.Sprintf("%#v", *value)
 }
 
-func failingProbe(reason, message string) *probe.Result {
-	return &probe.Result{Succeeded: false, Reason: reason, Message: message}
+func failingProbe(reason probe.Reason, errorCode int, message string) *probe.Result {
+	return &probe.Result{Succeeded: false, Reason: reason, ErrorCode: errorCode, Message: message}
 }
 
 // TestProbeStatusChangesOnlyWithTheOutcome is the regression test for issue
@@ -106,8 +109,9 @@ func TestProbeStatusChangesOnlyWithTheOutcome(t *testing.T) {
 	f := newProbeOutcomeFixture(t, "tpool-probe-outcome", "tf-probe-outcome", "203.0.113.79", 52800)
 
 	passing := f.lastProbe()
-	if passing.Succeeded == nil || !*passing.Succeeded || passing.LastTransitionTime == nil {
-		t.Fatalf("the ready relay's probe outcome is %+v, want a pass with its transition time", passing)
+	if passing.Succeeded == nil || !*passing.Succeeded || passing.LastTransitionTime == nil ||
+		passing.Reason != turnfleetv1alpha1.ProbeReasonAllocated {
+		t.Fatalf("the ready relay's probe outcome is %+v, want a pass with its reason and transition time", passing)
 	}
 
 	// The same outcome, probe after probe: nothing is written.
@@ -126,45 +130,60 @@ func TestProbeStatusChangesOnlyWithTheOutcome(t *testing.T) {
 	// the stored one and be written again by every later pass.
 	f.clock.Advance(500 * time.Millisecond)
 	const firstFailure = "cannot reach the relay listener: attempt 1"
-	f.prober.result = failingProbe(probe.ReasonListenerUnreachable, firstFailure)
+	f.prober.result = failingProbe(probe.ReasonListenerUnreachable, 0, firstFailure)
 	if issued := f.probePass("first failure"); len(issued) == 0 {
 		t.Fatal("the probe that first failed wrote nothing: the status still says the relay passes")
 	}
 	failedAt := f.clock.Now().Truncate(time.Second)
-	f.expectOutcome("after the first failure", false, firstFailure, failedAt)
+	f.expectOutcome("after the first failure", false, turnfleetv1alpha1.ProbeReasonListenerUnreachable, firstFailure, failedAt)
 
 	// The same failure with other error text, which is what a TURN client error
 	// carrying a transaction ID looks like: not a transition, nothing written.
-	f.prober.result = failingProbe(probe.ReasonListenerUnreachable, "cannot reach the relay listener: attempt 2")
+	f.prober.result = failingProbe(probe.ReasonListenerUnreachable, 0, "cannot reach the relay listener: attempt 2")
 	if issued := f.probePass("same failure"); len(issued) != 0 {
 		t.Errorf("a failure at the same step with other error text issued %v; it must write nothing", issued)
 	}
-	f.expectOutcome("after the same failure again", false, firstFailure, failedAt)
+	f.expectOutcome("after the same failure again", false, turnfleetv1alpha1.ProbeReasonListenerUnreachable, firstFailure, failedAt)
 
-	// A failure at another step replaces the message, and the relay has been
-	// failing since the first failure all the same.
-	const otherFailure = "the relay refused the allocation"
-	f.prober.result = failingProbe(probe.ReasonAllocationRefused, otherFailure)
+	// A failure at another step replaces the reason and the message, and the
+	// relay has been failing since the first failure all the same.
+	const refused = "the relay refused the allocation: 401 Unauthorized"
+	f.prober.result = failingProbe(probe.ReasonAllocationRefused, 401, refused)
 	if issued := f.probePass("another failure"); len(issued) == 0 {
-		t.Error("a failure at another step wrote nothing: the message still names the old one")
+		t.Error("a failure at another step wrote nothing: the status still names the old one")
 	}
-	f.expectOutcome("after a failure at another step", false, otherFailure, failedAt)
+	f.expectOutcome("after a failure at another step", false, turnfleetv1alpha1.ProbeReasonAllocationRefused, refused, failedAt)
+
+	// The same step refused with another TURN error code is another failure
+	// too, though the reason stays.
+	const forbidden = "the relay refused the allocation: 403 Forbidden"
+	f.prober.result = failingProbe(probe.ReasonAllocationRefused, 403, forbidden)
+	if issued := f.probePass("another error code"); len(issued) == 0 {
+		t.Error("a refusal with another TURN error code wrote nothing: the message still names the old code")
+	}
+	f.expectOutcome("after another error code", false, turnfleetv1alpha1.ProbeReasonAllocationRefused, forbidden, failedAt)
 
 	// The relay recovers: a transition again.
 	f.prober.result = nil
 	if issued := f.probePass("recovery"); len(issued) == 0 {
 		t.Fatal("the probe that passed again wrote nothing: the status still says the relay fails")
 	}
-	f.expectOutcome("after the relay recovered", true, "", f.clock.Now().Truncate(time.Second))
+	f.expectOutcome("after the relay recovered", true, turnfleetv1alpha1.ProbeReasonAllocated, "", f.clock.Now().Truncate(time.Second))
 }
 
 // TestRestartedControllerProbesWithoutWriting covers the boundary the memory
 // adds: a restarted controller remembers no probe, so it probes every relay in
-// its first pass. The outcome it finds is the one the status holds, so that
-// probe writes nothing either.
+// its first pass. The outcome it finds is the one the status holds, down to the
+// reason, so that probe writes nothing either, even though its message text is
+// not the stored one.
 func TestRestartedControllerProbesWithoutWriting(t *testing.T) {
 	f := newProbeOutcomeFixture(t, "tpool-probe-restart", "tf-probe-restart", "203.0.113.89", 52900)
 	before := f.lastProbe()
+	f.prober.result = &probe.Result{
+		Succeeded: true,
+		Reason:    probe.ReasonAllocated,
+		Message:   "relay allocated, in the words of another probe",
+	}
 
 	restarted := &TURNPoolReconciler{
 		Client:   f.api,
@@ -217,7 +236,7 @@ func TestFailedStatusWriteIsMadeByTheNextPass(t *testing.T) {
 	f := newProbeOutcomeFixture(t, "tpool-probe-write-retry", "tf-probe-write-retry", "203.0.113.97", 53000)
 
 	const failure = "cannot reach the relay listener"
-	f.prober.result = failingProbe(probe.ReasonListenerUnreachable, failure)
+	f.prober.result = failingProbe(probe.ReasonListenerUnreachable, 0, failure)
 	working := f.reconciler.Client
 	f.reconciler.Client = statusWriteFailure{Client: working}
 	f.clock.Advance(f.interval)
@@ -232,5 +251,5 @@ func TestFailedStatusWriteIsMadeByTheNextPass(t *testing.T) {
 	if len(f.prober.calls) != calls {
 		t.Fatalf("the pass right after a probe ran %d probe(s), want none: it is not due", len(f.prober.calls)-calls)
 	}
-	f.expectOutcome("after the pass that followed the failed write", false, failure, failedAt)
+	f.expectOutcome("after the pass that followed the failed write", false, turnfleetv1alpha1.ProbeReasonListenerUnreachable, failure, failedAt)
 }

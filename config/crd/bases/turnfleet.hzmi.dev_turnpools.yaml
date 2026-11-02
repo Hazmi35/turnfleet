@@ -655,10 +655,22 @@ spec:
                         message:
                           description: |-
                             message explains the outcome, including the TURN error code when the relay
-                            rejected the allocation. It is replaced when a probe fails at another step
-                            or with another TURN error code, and by the first probe after the
-                            controller starts. Between those it keeps the text of the probe that set
-                            it.
+                            rejected the allocation. It is replaced when succeeded or reason changes,
+                            and when the TURN error code changes while the controller runs. Between
+                            those it keeps the text of the probe that set it.
+                          type: string
+                        reason:
+                          description: |-
+                            reason names the step the probe ended at. It is a fixed value where
+                            message is free text.
+                          enum:
+                          - Allocated
+                          - ListenerUnreachable
+                          - ClientFailed
+                          - AllocationRefused
+                          - RelayedAddressUnreadable
+                          - RelayedAddressUnexpected
+                          - AuthUnavailable
                           type: string
                         succeeded:
                           description: |-

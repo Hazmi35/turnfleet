@@ -411,6 +411,41 @@ type TURNPoolSpec struct {
 	Placement *PlacementSpec `json:"placement,omitempty"`
 }
 
+// ProbeReason names the step a relay's probe ended at.
+//
+// +kubebuilder:validation:Enum=Allocated;ListenerUnreachable;ClientFailed;AllocationRefused;RelayedAddressUnreadable;RelayedAddressUnexpected;AuthUnavailable
+type ProbeReason string
+
+const (
+	// ProbeReasonAllocated is a probe that passed: the relay allocated on the
+	// address and in the range it owns.
+	ProbeReasonAllocated ProbeReason = "Allocated"
+
+	// ProbeReasonListenerUnreachable is a probe that could not open its
+	// transport to the relay's listener.
+	ProbeReasonListenerUnreachable ProbeReason = "ListenerUnreachable"
+
+	// ProbeReasonClientFailed is a probe whose TURN client could not be set up.
+	ProbeReasonClientFailed ProbeReason = "ClientFailed"
+
+	// ProbeReasonAllocationRefused is an Allocate that failed or that the relay
+	// refused. A refusal's TURN error code is in the message; 508 means the
+	// relay's port range is exhausted.
+	ProbeReasonAllocationRefused ProbeReason = "AllocationRefused"
+
+	// ProbeReasonRelayedAddressUnreadable is an allocation whose relayed
+	// address the probe could not parse.
+	ProbeReasonRelayedAddressUnreadable ProbeReason = "RelayedAddressUnreadable"
+
+	// ProbeReasonRelayedAddressUnexpected is an allocation on an address or a
+	// port the relay does not own, which no peer can use.
+	ProbeReasonRelayedAddressUnexpected ProbeReason = "RelayedAddressUnexpected"
+
+	// ProbeReasonAuthUnavailable is a probe that did not run, because the
+	// pool's auth secret could not be read.
+	ProbeReasonAuthUnavailable ProbeReason = "AuthUnavailable"
+)
+
 // ProbeStatus is a relay's current probe outcome. It changes when the outcome
 // does, not on every probe, so a relay that keeps answering the same way leaves
 // the pool's status untouched. The result of every probe, and how long it took,
@@ -428,11 +463,15 @@ type ProbeStatus struct {
 	// +optional
 	Succeeded *bool `json:"succeeded,omitempty"`
 
+	// reason names the step the probe ended at. It is a fixed value where
+	// message is free text.
+	// +optional
+	Reason ProbeReason `json:"reason,omitempty"`
+
 	// message explains the outcome, including the TURN error code when the relay
-	// rejected the allocation. It is replaced when a probe fails at another step
-	// or with another TURN error code, and by the first probe after the
-	// controller starts. Between those it keeps the text of the probe that set
-	// it.
+	// rejected the allocation. It is replaced when succeeded or reason changes,
+	// and when the TURN error code changes while the controller runs. Between
+	// those it keeps the text of the probe that set it.
 	// +optional
 	Message *string `json:"message,omitempty"`
 }

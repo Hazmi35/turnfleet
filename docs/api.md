@@ -303,6 +303,29 @@ _Appears in:_
 | `end` _integer_ | end is the last port of the range, inclusive. It must be greater than or<br />equal to start. |  | Maximum: 65535 <br />Minimum: 1 <br />Required: \{\} <br /> |
 
 
+#### ProbeReason
+
+_Underlying type:_ _string_
+
+ProbeReason names the step a relay's probe ended at.
+
+_Validation:_
+- Enum: [Allocated ListenerUnreachable ClientFailed AllocationRefused RelayedAddressUnreadable RelayedAddressUnexpected AuthUnavailable]
+
+_Appears in:_
+- [ProbeStatus](#probestatus)
+
+| Field | Description |
+| --- | --- |
+| `Allocated` | ProbeReasonAllocated is a probe that passed: the relay allocated on the<br />address and in the range it owns.<br /> |
+| `ListenerUnreachable` | ProbeReasonListenerUnreachable is a probe that could not open its<br />transport to the relay's listener.<br /> |
+| `ClientFailed` | ProbeReasonClientFailed is a probe whose TURN client could not be set up.<br /> |
+| `AllocationRefused` | ProbeReasonAllocationRefused is an Allocate that failed or that the relay<br />refused. A refusal's TURN error code is in the message; 508 means the<br />relay's port range is exhausted.<br /> |
+| `RelayedAddressUnreadable` | ProbeReasonRelayedAddressUnreadable is an allocation whose relayed<br />address the probe could not parse.<br /> |
+| `RelayedAddressUnexpected` | ProbeReasonRelayedAddressUnexpected is an allocation on an address or a<br />port the relay does not own, which no peer can use.<br /> |
+| `AuthUnavailable` | ProbeReasonAuthUnavailable is a probe that did not run, because the<br />pool's auth secret could not be read.<br /> |
+
+
 #### ProbeSpec
 
 
@@ -338,7 +361,8 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `lastTransitionTime` _[Time](https://kubernetes.io/docs/reference/generated/kubernetes-api/v/#time-v1-meta)_ | lastTransitionTime is when succeeded last changed: since when the relay<br />has been passing, or failing, its probe. A relay first reported by a<br />controller that did not yet set this field gets the time of its first<br />probe after the upgrade. |  | Optional: \{\} <br /> |
 | `succeeded` _boolean_ | succeeded reports whether the relay answered the probe with the expected<br />relayed address and range. |  | Optional: \{\} <br /> |
-| `message` _string_ | message explains the outcome, including the TURN error code when the relay<br />rejected the allocation. It is replaced when a probe fails at another step<br />or with another TURN error code, and by the first probe after the<br />controller starts. Between those it keeps the text of the probe that set<br />it. |  | Optional: \{\} <br /> |
+| `reason` _[ProbeReason](#probereason)_ | reason names the step the probe ended at. It is a fixed value where<br />message is free text. |  | Enum: [Allocated ListenerUnreachable ClientFailed AllocationRefused RelayedAddressUnreadable RelayedAddressUnexpected AuthUnavailable] <br />Optional: \{\} <br /> |
+| `message` _string_ | message explains the outcome, including the TURN error code when the relay<br />rejected the allocation. It is replaced when succeeded or reason changes,<br />and when the TURN error code changes while the controller runs. Between<br />those it keeps the text of the probe that set it. |  | Optional: \{\} <br /> |
 
 
 #### RelayStatus

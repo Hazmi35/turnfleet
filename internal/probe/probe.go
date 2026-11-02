@@ -106,11 +106,9 @@ type Result struct {
 	// exhausted, which is the saturation signal.
 	ErrorCode int `json:"errorCode,omitempty"`
 
-	// Reason names the step the probe ended at: one of the Reason constants, or
-	// a caller's own reason for a probe it could not run. Unlike Message it
-	// carries no error text, so two probes that fail the same way report the
-	// same reason.
-	Reason string `json:"reason,omitempty"`
+	// Reason names the step the probe ended at. Unlike Message it carries no
+	// error text, so two probes that fail the same way report the same reason.
+	Reason Reason `json:"reason,omitempty"`
 
 	// Message explains the result in one sentence.
 	Message string `json:"message"`
@@ -120,30 +118,36 @@ type Result struct {
 	PeerRoundTrip *bool `json:"peerRoundTrip,omitempty"`
 }
 
+// Reason names the step a probe ended at.
+type Reason string
+
 // The reasons a probe reports, one per step it can end at.
 const (
 	// ReasonAllocated is a probe that passed.
-	ReasonAllocated = "Allocated"
+	ReasonAllocated Reason = "Allocated"
 	// ReasonListenerUnreachable is a probe that could not open the client
 	// transport to the listener.
-	ReasonListenerUnreachable = "ListenerUnreachable"
+	ReasonListenerUnreachable Reason = "ListenerUnreachable"
 	// ReasonClientFailed is a probe whose TURN client could not be set up.
-	ReasonClientFailed = "ClientFailed"
+	ReasonClientFailed Reason = "ClientFailed"
 	// ReasonAllocationRefused is an Allocate that failed or was refused;
 	// ErrorCode carries the TURN error code when the relay sent one.
-	ReasonAllocationRefused = "AllocationRefused"
+	ReasonAllocationRefused Reason = "AllocationRefused"
 	// ReasonRelayedAddressUnreadable is an allocation whose relayed address the
 	// probe cannot parse.
-	ReasonRelayedAddressUnreadable = "RelayedAddressUnreadable"
+	ReasonRelayedAddressUnreadable Reason = "RelayedAddressUnreadable"
 	// ReasonRelayedAddressUnexpected is an allocation on an address or port the
 	// relay does not own.
-	ReasonRelayedAddressUnexpected = "RelayedAddressUnexpected"
+	ReasonRelayedAddressUnexpected Reason = "RelayedAddressUnexpected"
 	// ReasonRoundTripFailed is a requested peer round trip that did not
 	// complete.
-	ReasonRoundTripFailed = "RoundTripFailed"
+	ReasonRoundTripFailed Reason = "RoundTripFailed"
 	// ReasonURIUnreadable is a listener URI that could not be parsed, so
 	// nothing was probed.
-	ReasonURIUnreadable = "URIUnreadable"
+	ReasonURIUnreadable Reason = "URIUnreadable"
+	// ReasonAuthUnavailable is a probe that did not run because its caller had
+	// nothing to authenticate with. Allocate itself never reports it.
+	ReasonAuthUnavailable Reason = "AuthUnavailable"
 )
 
 // Allocate probes one relay and returns what happened.
@@ -464,7 +468,7 @@ func turnErrorCode(err error) int {
 // that need it (the controller counts 508 in turnfleet_allocation_failures_total).
 func TurnErrorCode(err error) int { return turnErrorCode(err) }
 
-func finish(result *Result, start time.Time, err error, code int, reason, explanation string) Result {
+func finish(result *Result, start time.Time, err error, code int, reason Reason, explanation string) Result {
 	result.LatencyMillis = time.Since(start).Milliseconds()
 	result.ErrorCode = code
 	result.Reason = reason

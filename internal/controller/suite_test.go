@@ -193,6 +193,7 @@ func (p *testProber) probe(_ context.Context, cfg *probe.Config) probe.Result {
 		URI:            cfg.Endpoint.String(),
 		RelayedAddress: cfg.ExpectAddress,
 		RelayedPort:    cfg.ExpectPortRange.Start,
+		Reason:         probe.ReasonAllocated,
 		Message:        "relay allocated and advertised the expected relayed address",
 	}
 }

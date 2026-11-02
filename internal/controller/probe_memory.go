@@ -34,7 +34,13 @@ type probeRecord struct {
 	// latency is how long the probe took, for turnfleet_probe_duration_seconds.
 	latency time.Duration
 
-	outcome probeOutcome
+	// succeeded is whether the probe passed, for turnfleet_probe_success.
+	succeeded bool
+
+	// errorCode is the TURN error code the probe saw. It is the one part of
+	// the outcome the status does not hold, so a change of it is only noticed
+	// while the controller runs.
+	errorCode int
 
 	// status is the probe status the controller reports for the relay. Every
 	// pass reports it, whether or not it probes, so a status write that failed
@@ -42,18 +48,32 @@ type probeRecord struct {
 	status turnfleetv1alpha1.ProbeStatus
 }
 
-// probeOutcome is what decides whether a probe changed anything worth writing
-// to the status: whether it passed, the step it ended at and the TURN error
-// code. The message is left out on purpose, because it carries the error text,
-// and that text can differ between two probes that failed the same way.
-type probeOutcome struct {
-	succeeded bool
-	reason    string
-	errorCode int
-}
-
-func outcomeOf(result *probe.Result) probeOutcome {
-	return probeOutcome{succeeded: result.Succeeded, reason: result.Reason, errorCode: result.ErrorCode}
+// statusReason is the API's reason for a probe's reason. It is empty for a
+// reason the controller's probe never ends at, which is why the switch names
+// every probe reason: the exhaustive linter fails a probe reason added without
+// a decision here.
+func statusReason(reason probe.Reason) turnfleetv1alpha1.ProbeReason {
+	switch reason {
+	case probe.ReasonAllocated:
+		return turnfleetv1alpha1.ProbeReasonAllocated
+	case probe.ReasonListenerUnreachable:
+		return turnfleetv1alpha1.ProbeReasonListenerUnreachable
+	case probe.ReasonClientFailed:
+		return turnfleetv1alpha1.ProbeReasonClientFailed
+	case probe.ReasonAllocationRefused:
+		return turnfleetv1alpha1.ProbeReasonAllocationRefused
+	case probe.ReasonRelayedAddressUnreadable:
+		return turnfleetv1alpha1.ProbeReasonRelayedAddressUnreadable
+	case probe.ReasonRelayedAddressUnexpected:
+		return turnfleetv1alpha1.ProbeReasonRelayedAddressUnexpected
+	case probe.ReasonAuthUnavailable:
+		return turnfleetv1alpha1.ProbeReasonAuthUnavailable
+	case probe.ReasonRoundTripFailed, probe.ReasonURIUnreadable:
+		// The controller's probe asks for no peer round trip and parses no
+		// URI, so it never ends at either.
+		return ""
+	}
+	return ""
 }
 
 func (m *probeMemory) get(pool types.NamespacedName, relayName string) (probeRecord, bool) {
@@ -97,12 +117,15 @@ func (m *probeMemory) forget(pool types.NamespacedName) {
 // nextProbeStatus is a relay's probe status after a probe.
 //
 // The status records the relay's outcome, not the probe. lastTransitionTime
-// moves only when succeeded flips, and the message is replaced only when the
-// outcome does, so a relay that keeps answering the same way produces the same
-// status and writeStatus skips the write. previous is the outcome of the last
-// probe this controller ran, or nil when it has run none since it started; the
-// message is then refreshed once, because there is nothing to compare it with.
-func nextProbeStatus(current turnfleetv1alpha1.ProbeStatus, previous *probeOutcome, result *probe.Result, now time.Time) turnfleetv1alpha1.ProbeStatus {
+// moves only when succeeded flips, and reason and message are replaced only
+// when the outcome changes, so a relay that keeps answering the same way
+// produces the same status and writeStatus skips the write. The message is not
+// compared, because it carries the error text, and that text can differ
+// between two probes that failed the same way. previousErrorCode is the TURN
+// error code of the last probe this controller ran, or nil when it has run
+// none since it started.
+func nextProbeStatus(current turnfleetv1alpha1.ProbeStatus, previousErrorCode *int, result *probe.Result, now time.Time) turnfleetv1alpha1.ProbeStatus {
+	reason := statusReason(result.Reason)
 	if current.Succeeded == nil || *current.Succeeded != result.Succeeded || current.LastTransitionTime == nil {
 		return turnfleetv1alpha1.ProbeStatus{
 			// The API server stores whole seconds. A sub-second time here would
@@ -110,13 +133,16 @@ func nextProbeStatus(current turnfleetv1alpha1.ProbeStatus, previous *probeOutco
 			// again each time.
 			LastTransitionTime: new(metav1.NewTime(now.Truncate(time.Second))),
 			Succeeded:          new(result.Succeeded),
+			Reason:             reason,
 			Message:            new(result.Message),
 		}
 	}
-	if previous != nil && *previous == outcomeOf(result) {
+	sameCode := previousErrorCode == nil || *previousErrorCode == result.ErrorCode
+	if current.Reason == reason && sameCode {
 		return current
 	}
 	next := current
+	next.Reason = reason
 	next.Message = new(result.Message)
 	return next
 }
