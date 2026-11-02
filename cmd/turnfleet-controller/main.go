@@ -8,6 +8,7 @@ import (
 	"flag"
 	"os"
 	"strings"
+	"time"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -46,6 +47,7 @@ func main() {
 	var webhookCertPath, webhookCertName, webhookCertKey string
 	var webhookPort int
 	var enableLeaderElection bool
+	var leaseDuration, renewDeadline, retryPeriod time.Duration
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
@@ -59,6 +61,17 @@ func main() {
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+	// The defaults are controller-runtime's own, so a manager started without
+	// these flags renews its lease exactly as it did before they existed.
+	flag.DurationVar(&leaseDuration, "leader-elect-lease-duration", 15*time.Second,
+		"How long a standby waits after the last renewal before it takes the lease. "+
+			"Must be longer than --leader-elect-renew-deadline.")
+	flag.DurationVar(&renewDeadline, "leader-elect-renew-deadline", 10*time.Second,
+		"How long the leader keeps retrying a failed renewal before it gives up the lease and exits. "+
+			"An API server outage longer than this restarts the controller.")
+	flag.DurationVar(&retryPeriod, "leader-elect-retry-period", 2*time.Second,
+		"How often the leader renews the lease, and how often a standby tries to take it. "+
+			"Each renewal is one write to the API server.")
 	flag.BoolVar(&secureMetrics, "metrics-secure", true,
 		"If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
 	flag.StringVar(&webhookCertPath, "webhook-cert-path", "", "The directory that contains the webhook certificate.")
@@ -154,6 +167,9 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "40d9b33c.hzmi.dev",
+		LeaseDuration:          &leaseDuration,
+		RenewDeadline:          &renewDeadline,
+		RetryPeriod:            &retryPeriod,
 		// LeaderElectionReleaseOnCancel defines if the leader should step down
 		// voluntarily when the Manager ends. The program must exit as soon as the
 		// Manager stops, otherwise this setting is unsafe. Enabling it speeds up
