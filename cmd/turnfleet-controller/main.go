@@ -25,6 +25,7 @@ import (
 
 	turnfleetv1alpha1 "github.com/Hazmi35/turnfleet/api/v1alpha1"
 	"github.com/Hazmi35/turnfleet/internal/controller"
+	"github.com/Hazmi35/turnfleet/internal/relayinit"
 	webhookv1alpha1 "github.com/Hazmi35/turnfleet/internal/webhook/v1alpha1"
 )
 
@@ -41,7 +42,15 @@ func init() {
 }
 
 func main() {
+	// The init container of a relay pod runs this binary with this command
+	// (ADR 23). It is not the manager: it takes none of the manager's flags,
+	// and it must not start one.
+	if len(os.Args) > 1 && os.Args[1] == relayinit.Command {
+		os.Exit(relayinit.Run(os.Args[2:], os.Stderr, relayinit.HeldAddresses))
+	}
+
 	var clusterCIDRs string
+	var relayHelperImage string
 	var metricsAddr string
 	var metricsCertPath, metricsCertName, metricsCertKey string
 	var webhookCertPath, webhookCertName, webhookCertKey string
@@ -58,6 +67,10 @@ func main() {
 	flag.StringVar(&clusterCIDRs, "cluster-cidrs", "",
 		"Comma-separated CIDRs every relay must deny as a peer, in addition to the pool's own deny list. "+
 			"Use it for a cluster service range that is not RFC 1918; the pod CIDRs of the relay nodes are added automatically.")
+	flag.StringVar(&relayHelperImage, "relay-helper-image", "",
+		"The image of the init container that decides which node address a relay binds (ADR 23). "+
+			"Leave it empty to use the image of this controller's own pod, which is what a deployed controller wants: "+
+			"the init container runs this binary, so the two have to match.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -186,11 +199,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := (&controller.TURNPoolReconciler{
-		Client:       mgr.GetClient(),
-		Scheme:       mgr.GetScheme(),
-		ClusterCIDRs: splitCIDRs(clusterCIDRs),
-	}).SetupWithManager(mgr); err != nil {
+	reconciler := &controller.TURNPoolReconciler{
+		Client:           mgr.GetClient(),
+		Scheme:           mgr.GetScheme(),
+		ClusterCIDRs:     splitCIDRs(clusterCIDRs),
+		RelayHelperImage: relayHelperImage,
+	}
+	if relayHelperImage == "" {
+		// Read when a relay needs it, not at start: a failed read is retried
+		// by the next reconcile instead of lasting as long as the process.
+		reconciler.ResolveRelayHelperImage = ownImageResolver(mgr.GetAPIReader())
+	}
+	if err := reconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "failed to create controller", "controller", "turnpool")
 		os.Exit(1)
 	}

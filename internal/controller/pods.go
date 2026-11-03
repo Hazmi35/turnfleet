@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
+	"net/netip"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -22,6 +23,7 @@ import (
 
 	turnfleetv1alpha1 "github.com/Hazmi35/turnfleet/api/v1alpha1"
 	"github.com/Hazmi35/turnfleet/internal/relay"
+	"github.com/Hazmi35/turnfleet/internal/relayinit"
 )
 
 // relayHash is the value of the pod's config-hash annotation.
@@ -51,14 +53,22 @@ func relayHash(pool *turnfleetv1alpha1.TURNPool, state *relayState, tlsSecretHas
 		// did before this field existed, so upgrading the operator does not roll
 		// a fleet that never had a certificate to rotate.
 		TLSSecret string `json:"TLSSecret,omitempty"`
+		// Decision is the version of the logic the init container decides
+		// with (relayinit.Version). It is not the helper's image: the image
+		// changes with every controller release, and a release must not roll
+		// every relay on a two-address node. omitempty matters for the same
+		// reason as above: a relay without an init container hashes exactly as
+		// it did before this field existed.
+		Decision string `json:",omitempty"`
 	}{
-		Config:       state.config,
+		Config:       state.hashedConfig(),
 		Image:        pool.Spec.Dataplane.Image,
 		Resources:    pool.Spec.Dataplane.Resources,
 		Placement:    pool.Spec.Placement,
 		NodeName:     state.relay.NodeName,
 		ConfigSource: "Secret/" + RelayConfigSecretName(pool),
 		TLSSecret:    tlsSecretHash,
+		Decision:     decisionVersion(state),
 	}
 	encoded, err := json.Marshal(projection)
 	if err != nil {
@@ -67,9 +77,41 @@ func relayHash(pool *turnfleetv1alpha1.TURNPool, state *relayState, tlsSecretHas
 	return relay.ConfigHash(string(encoded)), nil
 }
 
+// decisionVersion is what the hash holds of a relay's init container: the
+// version of its decision logic, or nothing for a relay without one.
+func decisionVersion(state *relayState) string {
+	if state.candidates == nil {
+		return ""
+	}
+	return relayinit.Version
+}
+
+// configFiles are the entries one relay contributes to the pool's configuration
+// Secret: its configuration under its name, or both candidates under names
+// derived from it.
+func (s *relayState) configFiles() map[string]string {
+	if s.candidates == nil {
+		return map[string]string{s.relay.Name: s.config}
+	}
+	return map[string]string{
+		candidateKey(s.relay.Name, localConfigFile):  s.candidates.Local,
+		candidateKey(s.relay.Name, mappedConfigFile): s.candidates.Mapped,
+	}
+}
+
+// hashedConfig is the text the relay's configuration hash covers: the
+// configuration, or both candidates, because a change to either rolls the relay.
+func (s *relayState) hashedConfig() string {
+	if s.candidates == nil {
+		return s.config
+	}
+	return "local:\n" + s.candidates.Local + "mapped:\n" + s.candidates.Mapped
+}
+
 // reconcileRelayConfig keeps one Secret holding every relay's rendered coturn
 // configuration, keyed by relay name. Each pod projects its own key to the path
-// coturn reads, so a pool is one object instead of one per relay.
+// coturn reads, so a pool is one object instead of one per relay. A relay that
+// decides its bind address on its node has two keys, one per candidate.
 //
 // A Secret and not a ConfigMap because the rendered configuration embeds the
 // shared HMAC secret: as a ConfigMap, anything allowed to read ConfigMaps in
@@ -77,8 +119,11 @@ func relayHash(pool *turnfleetv1alpha1.TURNPool, state *relayState, tlsSecretHas
 func (r *TURNPoolReconciler) reconcileRelayConfig(ctx context.Context, pool *turnfleetv1alpha1.TURNPool, states []*relayState) error {
 	data := make(map[string][]byte, len(states))
 	for _, state := range states {
-		if state.planned {
-			data[state.relay.Name] = []byte(state.config)
+		if !state.planned {
+			continue
+		}
+		for key, content := range state.configFiles() {
+			data[key] = []byte(content)
 		}
 	}
 
@@ -203,6 +248,79 @@ func (r *TURNPoolReconciler) reconcilePods(ctx context.Context, pool *turnfleetv
 	return drainInFlight, nil
 }
 
+// detectedBind is the address the init container of a relay pod chose to bind,
+// read from its termination message. It reports false until the init container
+// has finished, and for an init container that failed: its message is then the
+// reason, not an address.
+func detectedBind(pod *corev1.Pod) (string, bool) {
+	for i := range pod.Status.InitContainerStatuses {
+		status := &pod.Status.InitContainerStatuses[i]
+		if status.Name != relayInitContainerName || status.State.Terminated == nil || status.State.Terminated.ExitCode != 0 {
+			continue
+		}
+		return relayinit.ParseBind(status.State.Terminated.Message)
+	}
+	return "", false
+}
+
+// sameAddress reports whether two strings name one IP address.
+func sameAddress(a, b string) bool {
+	left, err := netip.ParseAddr(a)
+	if err != nil {
+		return false
+	}
+	right, err := netip.ParseAddr(b)
+	if err != nil {
+		return false
+	}
+	return left.Unmap() == right.Unmap()
+}
+
+// recordDetectedBinds writes the bind address a relay's init container chose
+// onto its pod, in the annotation every other relay's pod gets at creation, and
+// says which case the node was in. It does nothing for a pod that has not
+// reported, nothing twice, and nothing for a report that is not one of the two
+// addresses the relay was given.
+func (r *TURNPoolReconciler) recordDetectedBinds(ctx context.Context, pool *turnfleetv1alpha1.TURNPool, states []*relayState) error {
+	for _, state := range states {
+		if state.pod == nil || !state.planned || !state.relay.DetectsBind() {
+			continue
+		}
+		bind, ok := detectedBind(state.pod)
+		if !ok || state.pod.Annotations[RelayBindAddressAnnotation] == bind {
+			continue
+		}
+		if !sameAddress(bind, state.relay.LocalBindAddress) && !sameAddress(bind, state.relay.BindAddress) {
+			// The init container can only have chosen one of the two addresses
+			// it was given. Anything else is not its report, so it is not
+			// recorded as the relay's bind address.
+			r.Recorder.Eventf(pool, nil, corev1.EventTypeWarning, "RelayBindUnexpected", "Detect",
+				"relay %s: the init container reported %q, which is neither %s nor %s, so it is ignored",
+				state.relay.Name, bind, state.relay.LocalBindAddress, state.relay.BindAddress)
+			continue
+		}
+
+		patch := client.MergeFrom(state.pod.DeepCopy())
+		if state.pod.Annotations == nil {
+			state.pod.Annotations = map[string]string{}
+		}
+		state.pod.Annotations[RelayBindAddressAnnotation] = bind
+		if err := r.Patch(ctx, state.pod, patch); err != nil {
+			return fmt.Errorf("recording the bind address of relay %s: %w", state.relay.Name, err)
+		}
+
+		if sameAddress(bind, state.relay.LocalBindAddress) {
+			r.Recorder.Eventf(pool, nil, corev1.EventTypeNormal, "RelayBindDetected", "Detect",
+				"relay %s binds %s: node %s holds it on an interface", state.relay.Name, bind, state.relay.NodeName)
+		} else {
+			r.Recorder.Eventf(pool, nil, corev1.EventTypeNormal, "RelayBindDetected", "Detect",
+				"relay %s binds %s and advertises %s: node %s does not hold %s (1:1 NAT)",
+				state.relay.Name, bind, state.relay.Address, state.relay.NodeName, state.relay.LocalBindAddress)
+		}
+	}
+	return nil
+}
+
 // drainRequired reports whether a relay's pod has to go: it is no longer
 // planned, or its configuration hash changed.
 func drainRequired(state *relayState) bool {
@@ -324,9 +442,13 @@ func desiredPod(pool *turnfleetv1alpha1.TURNPool, state *relayState) (*corev1.Po
 	pod.Namespace = pool.Namespace
 	pod.Labels = podLabels(pool)
 	pod.Annotations = map[string]string{
-		ConfigHashAnnotation:       state.hash,
-		RelayIdentityAnnotation:    state.relay.Identity,
-		RelayBindAddressAnnotation: state.relay.BindAddress,
+		ConfigHashAnnotation:    state.hash,
+		RelayIdentityAnnotation: state.relay.Identity,
+	}
+	// A relay that decides its bind address on the node does not know it yet:
+	// the controller records it once the init container has reported it.
+	if !state.relay.DetectsBind() {
+		pod.Annotations[RelayBindAddressAnnotation] = state.relay.BindAddress
 	}
 	if attachment, ok := podIPAttachmentRef(pool); ok {
 		annotation, err := podIPNetworksAnnotation(pool.Namespace, attachment, state.addressRequest)
@@ -373,16 +495,23 @@ func podSpec(pool *turnfleetv1alpha1.TURNPool, state *relayState) corev1.PodSpec
 		},
 		Containers: []corev1.Container{relayContainer(pool, state)},
 		Volumes: []corev1.Volume{
-			{
-				Name: configVolumeName,
-				VolumeSource: corev1.VolumeSource{
-					Secret: secretVolumeSource(RelayConfigSecretName(pool), state.relay.Name),
-				},
-			},
+			configVolume(pool, state),
 			// The relay runs with a read-only root filesystem, so it gets a
 			// scratch directory.
 			emptyDirVolume(tmpVolumeName),
 		},
+	}
+
+	if state.candidates != nil {
+		// The init container reads both candidates and writes the one that
+		// fits the node where coturn reads its configuration.
+		spec.InitContainers = []corev1.Container{relayInitContainer(state)}
+		spec.Volumes = append(spec.Volumes, corev1.Volume{
+			Name: candidatesVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: candidatesVolumeSource(RelayConfigSecretName(pool), state.relay.Name),
+			},
+		})
 	}
 
 	if tlsSecret := tlsSecretName(pool.Spec.Listeners); tlsSecret != "" {
@@ -404,13 +533,96 @@ func emptyDirVolume(name string) corev1.Volume {
 	}
 }
 
+// configVolume is the volume the relay container reads its configuration from.
+// It is the pool's configuration Secret, projected to one file. For a relay
+// that decides its bind address on its node it is an emptyDir instead, which the
+// init container fills with the chosen candidate: in memory, because the file
+// embeds the shared secret and the node's disk should not.
+func configVolume(pool *turnfleetv1alpha1.TURNPool, state *relayState) corev1.Volume {
+	if state.candidates != nil {
+		return corev1.Volume{
+			Name: configVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{Medium: corev1.StorageMediumMemory},
+			},
+		}
+	}
+	return corev1.Volume{
+		Name: configVolumeName,
+		VolumeSource: corev1.VolumeSource{
+			Secret: secretVolumeSource(RelayConfigSecretName(pool), state.relay.Name),
+		},
+	}
+}
+
 // secretVolumeSource projects one relay's key out of the pool's configuration
 // Secret, at the path coturn reads.
 func secretVolumeSource(secretName, relayName string) *corev1.SecretVolumeSource {
 	source := &corev1.SecretVolumeSource{}
 	source.SecretName = secretName
-	source.Items = []corev1.KeyToPath{{Key: relayName, Path: "turnserver.conf"}}
+	source.Items = []corev1.KeyToPath{{Key: relayName, Path: configFileName}}
 	return source
+}
+
+// candidatesVolumeSource projects both candidate configurations of a relay out
+// of the pool's configuration Secret, for the init container.
+func candidatesVolumeSource(secretName, relayName string) *corev1.SecretVolumeSource {
+	source := &corev1.SecretVolumeSource{}
+	source.SecretName = secretName
+	source.Items = []corev1.KeyToPath{
+		{Key: candidateKey(relayName, localConfigFile), Path: localConfigFile},
+		{Key: candidateKey(relayName, mappedConfigFile), Path: mappedConfigFile},
+	}
+	return source
+}
+
+// candidateKey is the key of one candidate configuration in the pool's
+// configuration Secret.
+func candidateKey(relayName, file string) string {
+	return relayName + "." + file
+}
+
+// relayInitContainer picks the relay's configuration on its node. It runs this
+// controller's own binary, so the check and the controller always agree, and it
+// holds no privilege: listing the node's interfaces needs none.
+//
+// It reads the two candidate configurations, writes the one that fits the node
+// to the in-memory volume coturn reads its configuration from, and reports the
+// bind address it chose as its termination message, which the controller reads
+// from the pod status.
+func relayInitContainer(state *relayState) corev1.Container {
+	return corev1.Container{
+		Name:            relayInitContainerName,
+		Image:           state.helperImage,
+		ImagePullPolicy: helperImagePullPolicy,
+		Args: []string{
+			relayinit.Command,
+			"--local-address=" + state.relay.LocalBindAddress,
+			"--mapped-address=" + state.relay.BindAddress,
+			"--local-config=" + candidatesMountPath + "/" + localConfigFile,
+			"--mapped-config=" + candidatesMountPath + "/" + mappedConfigFile,
+			"--out=" + activeMountPath + "/" + configFileName,
+		},
+		SecurityContext: &corev1.SecurityContext{
+			AllowPrivilegeEscalation: new(false),
+			ReadOnlyRootFilesystem:   new(true),
+			Capabilities:             &corev1.Capabilities{Drop: []corev1.Capability{"ALL"}},
+		},
+		Resources: corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("10m"),
+				corev1.ResourceMemory: resource.MustParse("16Mi"),
+			},
+			Limits: corev1.ResourceList{
+				corev1.ResourceMemory: resource.MustParse("64Mi"),
+			},
+		},
+		TerminationMessagePolicy: corev1.TerminationMessageReadFile,
+		VolumeMounts: []corev1.VolumeMount{
+			{Name: candidatesVolumeName, MountPath: candidatesMountPath, ReadOnly: true},
+			{Name: configVolumeName, MountPath: activeMountPath},
+		},
+	}
 }
 
 func relayContainer(pool *turnfleetv1alpha1.TURNPool, state *relayState) corev1.Container {
@@ -443,7 +655,7 @@ func relayContainer(pool *turnfleetv1alpha1.TURNPool, state *relayState) corev1.
 			{
 				Name:      configVolumeName,
 				MountPath: relay.ConfigPath,
-				SubPath:   "turnserver.conf",
+				SubPath:   configFileName,
 				ReadOnly:  true,
 			},
 			{
@@ -471,8 +683,11 @@ func relayContainer(pool *turnfleetv1alpha1.TURNPool, state *relayState) corev1.
 				// The listener binds the relay's own address, which is not the
 				// pod IP when the pod is hostNetwork on a dual-stack node or the
 				// relay advertises a NATed address. Probing the pod IP would
-				// report a healthy relay as unready, forever.
-				Host: state.relay.BindAddress,
+				// report a healthy relay as unready, forever. A relay that
+				// decides its bind address on the node listens on loopback too
+				// and is probed there, because the probe is fixed before the
+				// decision.
+				Host: state.relay.ListenerProbeAddress(),
 			}},
 			InitialDelaySeconds: 2,
 			PeriodSeconds:       5,
@@ -551,6 +766,16 @@ func tlsSecretName(listeners []turnfleetv1alpha1.ListenerSpec) string {
 // the image never needs to resolve it again; a cluster that preloads the image
 // (kind, or an air-gapped registry mirror) therefore works without a pull.
 const relayImagePullPolicy = corev1.PullIfNotPresent
+
+// helperImagePullPolicy is IfNotPresent for the init container's image too, for
+// a different reason: the webhook's digest rule does not cover it. The
+// controller pins the image to the digest its own pod reports when the kubelet
+// reports one, so the reference is immutable and a cached copy is the right
+// one. When the kubelet reports none that can be pulled, the image is the tag
+// the controller runs, and a node that already holds another image under a
+// reused tag keeps it. The decision is versioned (relayinit.Version) so that a
+// change to it rolls the relays whichever image a node has.
+const helperImagePullPolicy = corev1.PullIfNotPresent
 
 func resources(spec *corev1.ResourceRequirements) corev1.ResourceRequirements {
 	if spec == nil {

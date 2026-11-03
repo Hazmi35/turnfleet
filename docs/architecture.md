@@ -50,6 +50,12 @@ address belongs to the pod, on the default network or on a Multus attachment.
 That is what makes the mode work on clusters whose nodes have no routable
 address of their own (ADR 18).
 
+A node with an `InternalIP` and a different `ExternalIP` is either behind 1:1 NAT
+or holds the `ExternalIP` on an interface, and only the node can tell which. The
+relay advertises the `ExternalIP` in both cases. Its pod has an init container,
+running the controller's own binary, that picks the one of two rendered
+configurations that binds an address the node holds (ADR 23).
+
 ## Components
 
 | Component | Responsibility |

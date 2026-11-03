@@ -19,9 +19,13 @@ import (
 type AddressingMode string
 
 const (
-	// AddressingModeHostNetwork runs exactly one relay per relay node, binding
-	// the node's ExternalIP (or the turnfleet.hzmi.dev/relay-address override).
-	// Capacity grows with the number of labelled nodes.
+	// AddressingModeHostNetwork runs exactly one relay per relay node. The relay
+	// advertises the node's ExternalIP (or the turnfleet.hzmi.dev/relay-address
+	// override), and binds the ExternalIP when the node holds it on an
+	// interface or the InternalIP when it does not, as on a 1:1 NAT cloud. The
+	// relay pod decides when it starts. The node annotation
+	// turnfleet.hzmi.dev/relay-bind (InternalIP or ExternalIP) skips the
+	// decision. Capacity grows with the number of labelled nodes.
 	AddressingModeHostNetwork AddressingMode = "HostNetwork"
 
 	// AddressingModeExternalIPPool binds relays to specific secondary addresses

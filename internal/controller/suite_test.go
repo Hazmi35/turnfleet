@@ -252,6 +252,9 @@ func newFixture(t *testing.T) *testFixture {
 			Now:      clock.Now,
 			Prober:   prober.probe,
 			Scraper:  scraper.scrape,
+			// The image a relay's init container runs, which a deployed
+			// controller finds from its own pod.
+			RelayHelperImage: testHelperImage,
 		},
 		clock:     clock,
 		prober:    prober,
@@ -433,6 +436,37 @@ func (f *testFixture) createNode(name, address string) {
 	}
 	if err := k8sClient.Status().Update(f.ctx, node); err != nil {
 		f.t.Fatalf("setting the address of node %s: %v", name, err)
+	}
+	f.t.Cleanup(func() {
+		_ = k8sClient.Delete(context.Background(), &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: name}})
+	})
+}
+
+// createNATNode creates a relay node the way a cloud reports a public node
+// behind a 1:1 NAT: an InternalIP the instance holds and an ExternalIP it does
+// not. The annotations are the node's, such as the relay-bind choice.
+func (f *testFixture) createNATNode(name, internal, external string, annotations map[string]string) {
+	f.t.Helper()
+
+	node := &corev1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        name,
+			Labels:      map[string]string{RelayNodeLabel: "true"},
+			Annotations: annotations,
+		},
+		Spec: corev1.NodeSpec{PodCIDR: "10.244.0.0/24"},
+	}
+	if err := k8sClient.Create(f.ctx, node); err != nil {
+		f.t.Fatalf("creating node %s: %v", name, err)
+	}
+	node.Status = corev1.NodeStatus{
+		Addresses: []corev1.NodeAddress{
+			{Type: corev1.NodeInternalIP, Address: internal},
+			{Type: corev1.NodeExternalIP, Address: external},
+		},
+	}
+	if err := k8sClient.Status().Update(f.ctx, node); err != nil {
+		f.t.Fatalf("setting the addresses of node %s: %v", name, err)
 	}
 	f.t.Cleanup(func() {
 		_ = k8sClient.Delete(context.Background(), &corev1.Node{ObjectMeta: metav1.ObjectMeta{Name: name}})

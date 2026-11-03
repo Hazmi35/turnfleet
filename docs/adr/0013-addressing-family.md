@@ -2,6 +2,9 @@
 
 * Status: accepted
 * Date: 2026-10-13
+* Superseded on one point by [0023](0023-relay-bind-decided-on-the-node.md):
+  which node address a relay binds when the node has an `InternalIP` and a
+  different `ExternalIP` in a family. The family rules below stand.
 
 ## Context
 

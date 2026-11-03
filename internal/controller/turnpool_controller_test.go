@@ -4,6 +4,8 @@
 package controller
 
 import (
+	"context"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -12,9 +14,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	turnfleetv1alpha1 "github.com/Hazmi35/turnfleet/api/v1alpha1"
 	"github.com/Hazmi35/turnfleet/internal/relay"
+	"github.com/Hazmi35/turnfleet/internal/relayinit"
 )
 
 func hostNetworkPool(name string, replicas int32) *turnfleetv1alpha1.TURNPool {
@@ -1058,11 +1062,398 @@ func TestDualStackRunsOneRelayPerFamily(t *testing.T) {
 	}
 }
 
-// TestNodeAddresses covers the observation the family decision rests on: one
-// address per family, ExternalIP preferred, and the relay-address annotation
-// overriding the advertised address of the family it names.
+// testHelperImage is the image the fixture's controller says its relays' init
+// containers run.
+const testHelperImage = "ghcr.io/hazmi35/turnfleet-controller:test"
+
+// natPool is a one-relay HostNetwork pool with a TCP listener, so the relay pod
+// carries a readiness probe, on a relay port range of its own.
+func natPool(name string, portStart int32) *turnfleetv1alpha1.TURNPool {
+	pool := hostNetworkPoolOn(name, portStart)
+	pool.Spec.Listeners = []turnfleetv1alpha1.ListenerSpec{
+		{Name: "turn-tcp", Protocol: turnfleetv1alpha1.ListenerProtocolTCP, Port: 3478},
+	}
+	return pool
+}
+
+// reportInitContainer plays the kubelet: the relay-init container of a pod ran
+// to completion and left a termination message.
+func (f *testFixture) reportInitContainer(pod *corev1.Pod, exitCode int32, message string) {
+	f.t.Helper()
+
+	patch := client.MergeFrom(pod.DeepCopy())
+	pod.Status.InitContainerStatuses = []corev1.ContainerStatus{{
+		Name: relayInitContainerName,
+		State: corev1.ContainerState{Terminated: &corev1.ContainerStateTerminated{
+			ExitCode: exitCode,
+			Message:  message,
+		}},
+	}}
+	if err := k8sClient.Status().Patch(f.ctx, pod, patch); err != nil {
+		f.t.Fatalf("reporting the init container of pod %s: %v", pod.Name, err)
+	}
+}
+
+// secretFile reads one key of a pool's relay configuration Secret.
+func (f *testFixture) secretFile(pool, key string) (string, bool) {
+	f.t.Helper()
+
+	name := RelayConfigSecretName(&turnfleetv1alpha1.TURNPool{ObjectMeta: metav1.ObjectMeta{Name: pool}})
+	secret := &corev1.Secret{}
+	if err := k8sClient.Get(f.ctx, types.NamespacedName{Namespace: f.namespace, Name: name}, secret); err != nil {
+		f.t.Fatalf("getting secret %s: %v", name, err)
+	}
+	value, ok := secret.Data[key]
+	return string(value), ok
+}
+
+// requireCandidates checks the pool's relay Secret for a relay that decides its
+// bind address on the node: both candidates, nothing else, and each binds what
+// it should.
+func (f *testFixture) requireCandidates(pool, relayName string) {
+	f.t.Helper()
+	t := f.t
+
+	local, ok := f.secretFile(pool, candidateKey(relayName, localConfigFile))
+	if !ok {
+		t.Fatalf("the configuration Secret has no local candidate for %s", relayName)
+	}
+	mapped, ok := f.secretFile(pool, candidateKey(relayName, mappedConfigFile))
+	if !ok {
+		t.Fatalf("the configuration Secret has no mapped candidate for %s", relayName)
+	}
+	if _, plain := f.secretFile(pool, relayName); plain {
+		t.Errorf("the configuration Secret holds a single configuration for %s, which would bind an address the node may not hold", relayName)
+	}
+	requireContains(t, "local candidate", local, "listening-ip=13.212.26.172\n", "listening-ip=127.0.0.1\n", "relay-ip=13.212.26.172\n")
+	requireAbsent(t, "local candidate", local, "external-ip=", "10.42.0.134")
+	requireContains(t, "mapped candidate", mapped,
+		"listening-ip=10.42.0.134\n", "listening-ip=127.0.0.1\n", "relay-ip=10.42.0.134\n", "external-ip=13.212.26.172/10.42.0.134\n")
+	requireAbsent(t, "mapped candidate", mapped, "listening-ip=13.212.26.172", "relay-ip=13.212.26.172")
+}
+
+// TestReconcileLetsTheNodeDecideTheBind covers a node whose ExternalIP differs
+// from its InternalIP and that did not say which one it holds: a cloud's NATed
+// public node, or a node that holds its public address. The controller cannot
+// tell them apart, so the relay pod does.
+func TestReconcileLetsTheNodeDecideTheBind(t *testing.T) {
+	f := newFixture(t)
+	f.createSecret()
+	f.createNATNode("tf-detect-1", "10.42.0.134", "13.212.26.172", nil)
+
+	f.createPool(natPool("tpool-detect", 50000))
+	f.reconcile("tpool-detect")
+	f.reconcile("tpool-detect")
+
+	status := f.pool("tpool-detect").Status
+	if status == nil || len(status.Relays) != 1 || status.Relays[0].RelayAddress == nil {
+		t.Fatalf("status = %+v, want one relay with an address", status)
+	}
+	if got := *status.Relays[0].RelayAddress; got != "13.212.26.172" {
+		t.Errorf("the relay advertises %s, want the ExternalIP 13.212.26.172 in both cases", got)
+	}
+
+	pods := f.pods("tpool-detect")
+	if len(pods) != 1 {
+		t.Fatalf("got %d relay pods, want 1", len(pods))
+	}
+	pod := &pods[0]
+	if len(pod.Spec.InitContainers) != 1 {
+		t.Fatalf("pod has %d init containers, want the relay-init one", len(pod.Spec.InitContainers))
+	}
+	initContainer := pod.Spec.InitContainers[0]
+	if initContainer.Name != relayInitContainerName || initContainer.Image != testHelperImage {
+		t.Errorf("init container = %s on %s, want %s on %s",
+			initContainer.Name, initContainer.Image, relayInitContainerName, testHelperImage)
+	}
+	for _, want := range []string{"relay-init", "--local-address=13.212.26.172", "--mapped-address=10.42.0.134"} {
+		if !slices.Contains(initContainer.Args, want) {
+			t.Errorf("init container args %v lack %q", initContainer.Args, want)
+		}
+	}
+	if _, recorded := pod.Annotations[RelayBindAddressAnnotation]; recorded {
+		t.Errorf("the pod records bind address %q before its init container chose one", pod.Annotations[RelayBindAddressAnnotation])
+	}
+	requireTCPProbeOnLoopback(t, pod)
+
+	// The relay reads its configuration from memory the init container fills,
+	// and the Secret holds both candidates under keys derived from the relay.
+	for _, volume := range pod.Spec.Volumes {
+		if volume.Name == configVolumeName && (volume.EmptyDir == nil || volume.EmptyDir.Medium != corev1.StorageMediumMemory) {
+			t.Errorf("config volume = %+v, want an in-memory emptyDir", volume.VolumeSource)
+		}
+	}
+	f.requireCandidates("tpool-detect", pod.Name)
+
+	// Until the init container reports, nothing is recorded. When it does, the
+	// controller writes the choice onto the pod.
+	f.reconcile("tpool-detect")
+	pods = f.pods("tpool-detect")
+	if _, recorded := pods[0].Annotations[RelayBindAddressAnnotation]; recorded {
+		t.Fatalf("the pod records bind address %q before its init container reported", pods[0].Annotations[RelayBindAddressAnnotation])
+	}
+	f.reportInitContainer(&pods[0], 0, "10.42.0.134")
+	f.reconcile("tpool-detect")
+	pods = f.pods("tpool-detect")
+	if got := pods[0].Annotations[RelayBindAddressAnnotation]; got != "10.42.0.134" {
+		t.Errorf("the pod records bind address %q, want the InternalIP 10.42.0.134 the init container reported", got)
+	}
+}
+
+// TestReconcileRecordsAHeldExternalIP covers the node that holds its ExternalIP:
+// the init container reports it, and the pod records it.
+func TestReconcileRecordsAHeldExternalIP(t *testing.T) {
+	f := newFixture(t)
+	f.createSecret()
+	f.createNATNode("tf-detect-2", "10.42.0.135", "203.0.113.35", nil)
+
+	f.createPool(natPool("tpool-held", 50100))
+	f.reconcile("tpool-held")
+	f.reconcile("tpool-held")
+
+	pods := f.pods("tpool-held")
+	if len(pods) != 1 {
+		t.Fatalf("got %d relay pods, want 1", len(pods))
+	}
+	f.reportInitContainer(&pods[0], 0, "203.0.113.35")
+	f.reconcile("tpool-held")
+	if got := f.pods("tpool-held")[0].Annotations[RelayBindAddressAnnotation]; got != "203.0.113.35" {
+		t.Errorf("the pod records bind address %q, want the ExternalIP 203.0.113.35", got)
+	}
+}
+
+// TestReconcileIgnoresAFailedInitContainer covers an init container that could
+// not choose: its termination message is a reason, and nothing is recorded.
+func TestReconcileIgnoresAFailedInitContainer(t *testing.T) {
+	f := newFixture(t)
+	f.createSecret()
+	f.createNATNode("tf-detect-3", "10.42.0.136", "203.0.113.36", nil)
+
+	f.createPool(natPool("tpool-failed", 50200))
+	f.reconcile("tpool-failed")
+	f.reconcile("tpool-failed")
+
+	pods := f.pods("tpool-failed")
+	f.reportInitContainer(&pods[0], 1, "neither 203.0.113.36 nor 10.42.0.136 is assigned to an interface of this node")
+	f.reconcile("tpool-failed")
+	if got, recorded := f.pods("tpool-failed")[0].Annotations[RelayBindAddressAnnotation]; recorded {
+		t.Errorf("the pod records bind address %q for an init container that failed", got)
+	}
+}
+
+// TestReconcileIgnoresAnUnexpectedBind covers a termination message that is an
+// address, but not one the relay was given: it is not recorded.
+func TestReconcileIgnoresAnUnexpectedBind(t *testing.T) {
+	f := newFixture(t)
+	f.createSecret()
+	f.createNATNode("tf-detect-4", "10.42.0.141", "203.0.113.41", nil)
+
+	f.createPool(natPool("tpool-unexpected", 50800))
+	f.reconcile("tpool-unexpected")
+	f.reconcile("tpool-unexpected")
+
+	pods := f.pods("tpool-unexpected")
+	f.reportInitContainer(&pods[0], 0, "192.0.2.1")
+	f.reconcile("tpool-unexpected")
+	if got, recorded := f.pods("tpool-unexpected")[0].Annotations[RelayBindAddressAnnotation]; recorded {
+		t.Errorf("the pod records bind address %q, which is neither address the relay was given", got)
+	}
+}
+
+// TestReconcileRelayBindSkipsTheDecision covers the node annotation: a node
+// that says which address it holds gets a relay with one configuration, no init
+// container and the probe on the bind address, exactly like any other relay.
+func TestReconcileRelayBindSkipsTheDecision(t *testing.T) {
+	tests := []struct {
+		name         string
+		annotation   string
+		wantBind     string
+		wantMapping  bool
+		wantNodeName string
+		portStart    int32
+	}{
+		{name: "tpool-bind-int", annotation: RelayBindInternalIP, wantBind: "10.42.0.137", wantMapping: true, wantNodeName: "tf-bind-int", portStart: 50300},
+		{name: "tpool-bind-ext", annotation: RelayBindExternalIP, wantBind: "203.0.113.37", wantNodeName: "tf-bind-ext", portStart: 50400},
+	}
+	for _, tc := range tests {
+		t.Run(tc.annotation, func(t *testing.T) {
+			f := newFixture(t)
+			f.createSecret()
+			f.createNATNode(tc.wantNodeName, "10.42.0.137", "203.0.113.37", map[string]string{RelayBindAnnotation: tc.annotation})
+
+			f.createPool(natPool(tc.name, tc.portStart))
+			f.reconcile(tc.name)
+			f.reconcile(tc.name)
+
+			pods := f.pods(tc.name)
+			if len(pods) != 1 {
+				t.Fatalf("got %d relay pods, want 1", len(pods))
+			}
+			pod := &pods[0]
+			if len(pod.Spec.InitContainers) != 0 {
+				t.Errorf("pod has init containers %v, want none: the node said which address it holds", pod.Spec.InitContainers)
+			}
+			if got := pod.Annotations[RelayBindAddressAnnotation]; got != tc.wantBind {
+				t.Errorf("the pod records bind address %q, want %q", got, tc.wantBind)
+			}
+			for i := range pod.Spec.Containers {
+				if probe := pod.Spec.Containers[i].ReadinessProbe; probe != nil && probe.TCPSocket.Host != tc.wantBind {
+					t.Errorf("readiness probe host = %q, want the bind address %q", probe.TCPSocket.Host, tc.wantBind)
+				}
+			}
+			config, ok := f.secretFile(tc.name, pod.Name)
+			if !ok {
+				t.Fatalf("the configuration Secret has no configuration for %s", pod.Name)
+			}
+			requireContains(t, "configuration", config, "listening-ip="+tc.wantBind+"\n", "relay-ip="+tc.wantBind+"\n")
+			requireAbsent(t, "configuration", config, "listening-ip=127.0.0.1")
+			if mapped := strings.Contains(config, "external-ip=203.0.113.37/10.42.0.137\n"); mapped != tc.wantMapping {
+				t.Errorf("configuration maps the ExternalIP = %v, want %v:\n%s", mapped, tc.wantMapping, config)
+			}
+		})
+	}
+}
+
+// TestReconcileRejectsAnUnusableRelayBind covers a relay-bind value that is
+// neither InternalIP nor ExternalIP: the pass fails and names the node, like an
+// unusable relay-address does, and plans nothing on a guess.
+func TestReconcileRejectsAnUnusableRelayBind(t *testing.T) {
+	f := newFixture(t)
+	f.createSecret()
+	f.createNATNode("tf-bad-bind-1", "10.42.0.138", "203.0.113.38",
+		map[string]string{RelayBindAnnotation: "Both"})
+
+	f.createPool(natPool("tpool-bad-bind", 50500))
+	_, err := f.reconcileResult("tpool-bad-bind")
+	if err == nil || !strings.Contains(err.Error(), RelayBindAnnotation) {
+		t.Fatalf("reconcile error = %v, want one that names %s", err, RelayBindAnnotation)
+	}
+	if pods := f.pods("tpool-bad-bind"); len(pods) != 0 {
+		t.Errorf("got %d relay pods, want none", len(pods))
+	}
+}
+
+// TestReconcileNeedsTheHelperImage covers a controller that does not know its
+// own image: a relay that needs the decision is refused with an error that says
+// how to settle it, instead of getting a pod that binds a guess.
+func TestReconcileNeedsTheHelperImage(t *testing.T) {
+	f := newFixture(t)
+	f.reconciler.RelayHelperImage = ""
+	f.createSecret()
+	f.createNATNode("tf-no-helper-1", "10.42.0.139", "203.0.113.39", nil)
+
+	f.createPool(natPool("tpool-no-helper", 50600))
+	_, err := f.reconcileResult("tpool-no-helper")
+	if err == nil || !strings.Contains(err.Error(), "--relay-helper-image") || !strings.Contains(err.Error(), RelayBindAnnotation) {
+		t.Fatalf("reconcile error = %v, want one that names --relay-helper-image and %s", err, RelayBindAnnotation)
+	}
+	if pods := f.pods("tpool-no-helper"); len(pods) != 0 {
+		t.Errorf("got %d relay pods, want none", len(pods))
+	}
+}
+
+// TestReconcileResolvesTheHelperImageLazily covers a controller that reads its
+// own image when a relay needs it: a failed read fails the pass and is retried,
+// the first success is kept, and the pod runs what was read.
+func TestReconcileResolvesTheHelperImageLazily(t *testing.T) {
+	f := newFixture(t)
+	f.reconciler.RelayHelperImage = ""
+	calls := 0
+	failing := true
+	f.reconciler.ResolveRelayHelperImage = func(context.Context) (string, error) {
+		calls++
+		if failing {
+			return "", errors.New("the API server is not reachable")
+		}
+		return "ghcr.io/hazmi35/turnfleet-controller:v9@sha256:" + strings.Repeat("ab", 32), nil
+	}
+	f.createSecret()
+	f.createNATNode("tf-lazy-1", "10.42.0.140", "203.0.113.40", nil)
+	f.createPool(natPool("tpool-lazy", 50700))
+
+	_, err := f.reconcileResult("tpool-lazy")
+	if err == nil || !strings.Contains(err.Error(), "the API server is not reachable") {
+		t.Fatalf("reconcile error = %v, want the failed read", err)
+	}
+
+	failing = false
+	f.reconcile("tpool-lazy")
+	f.reconcile("tpool-lazy")
+	pods := f.pods("tpool-lazy")
+	if len(pods) != 1 || len(pods[0].Spec.InitContainers) != 1 {
+		t.Fatalf("pods = %d, want one relay pod with its init container", len(pods))
+	}
+	if got := pods[0].Spec.InitContainers[0].Image; !strings.HasPrefix(got, "ghcr.io/hazmi35/turnfleet-controller:v9@sha256:") {
+		t.Errorf("init container image = %q, want the image the resolver found", got)
+	}
+	if calls != 2 {
+		t.Errorf("the resolver was called %d times, want 2: one failure, one success that is kept", calls)
+	}
+}
+
+func requireTCPProbeOnLoopback(t *testing.T, pod *corev1.Pod) {
+	t.Helper()
+
+	probes := 0
+	for i := range pod.Spec.Containers {
+		container := &pod.Spec.Containers[i]
+		if container.ReadinessProbe == nil || container.ReadinessProbe.TCPSocket == nil {
+			continue
+		}
+		probes++
+		if got := container.ReadinessProbe.TCPSocket.Host; got != relay.LoopbackV4 {
+			t.Errorf("readiness probe host = %q, want %q: the bind address is not known when the pod is created", got, relay.LoopbackV4)
+		}
+	}
+	if probes == 0 {
+		t.Error("the relay pod has no TCP readiness probe to check")
+	}
+}
+
+func requireContains(t *testing.T, what, text string, wants ...string) {
+	t.Helper()
+
+	for _, want := range wants {
+		if !strings.Contains(text, want) {
+			t.Errorf("%s lacks %q:\n%s", what, want, text)
+		}
+	}
+}
+
+func requireAbsent(t *testing.T, what, text string, unwanted ...string) {
+	t.Helper()
+
+	for _, value := range unwanted {
+		if strings.Contains(text, value) {
+			t.Errorf("%s has %q:\n%s", what, value, text)
+		}
+	}
+}
+
+// TestNodeAddresses covers the observation the family decision rests on: per
+// family an advertised address, the address a relay binds, and the local
+// address the node may hold instead. A family with an InternalIP and a
+// different ExternalIP leaves the choice to the node unless relay-bind makes
+// it, and the relay-address annotation replaces only the advertised address of
+// the family it names.
 func TestNodeAddresses(t *testing.T) {
 	t.Parallel()
+
+	node := func(annotations map[string]string, addresses ...corev1.NodeAddress) *corev1.Node {
+		return &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: "tf-worker-1", Annotations: annotations},
+			Status:     corev1.NodeStatus{Addresses: addresses},
+		}
+	}
+	internalV4 := corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: "10.0.0.11"}
+	externalV4 := corev1.NodeAddress{Type: corev1.NodeExternalIP, Address: "203.0.113.11"}
+	internalV6 := corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: "fd00::11"}
+	externalV6 := corev1.NodeAddress{Type: corev1.NodeExternalIP, Address: "2001:db8::11"}
+
+	// detect is the address of a family the node decides: advertise the
+	// ExternalIP, bind the InternalIP unless the node holds the ExternalIP.
+	detectV4 := relay.NodeAddress{Address: "203.0.113.11", BindAddress: "10.0.0.11", LocalBindAddress: "203.0.113.11"}
+	detectV6 := relay.NodeAddress{Address: "2001:db8::11", BindAddress: "fd00::11", LocalBindAddress: "2001:db8::11"}
 
 	tests := []struct {
 		name      string
@@ -1071,72 +1462,126 @@ func TestNodeAddresses(t *testing.T) {
 		wantError bool
 	}{
 		{
+			name: "both addresses differ: the node decides what to bind",
+			node: node(nil, internalV4, externalV4),
+			want: []relay.NodeAddress{detectV4},
+		},
+		{
+			name: "the order of the node's addresses does not matter",
+			node: node(nil, externalV4, internalV4),
+			want: []relay.NodeAddress{detectV4},
+		},
+		{
+			name: "both addresses are equal",
+			node: node(nil,
+				corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: "203.0.113.11"}, externalV4),
+			want: []relay.NodeAddress{{Address: "203.0.113.11", BindAddress: "203.0.113.11"}},
+		},
+		{
 			name: "external address only",
-			node: &corev1.Node{Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{
-				{Type: corev1.NodeExternalIP, Address: "203.0.113.11"},
-			}}},
+			node: node(nil, externalV4),
 			want: []relay.NodeAddress{{Address: "203.0.113.11", BindAddress: "203.0.113.11"}},
 		},
 		{
-			name: "internal address when there is no external one",
-			node: &corev1.Node{Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{
-				{Type: corev1.NodeInternalIP, Address: "203.0.113.11"},
-			}}},
+			name: "internal address only",
+			node: node(nil, internalV4),
+			want: []relay.NodeAddress{{Address: "10.0.0.11", BindAddress: "10.0.0.11"}},
+		},
+		{
+			name: "dual stack, both families differ",
+			node: node(nil, internalV4, externalV4, internalV6, externalV6,
+				corev1.NodeAddress{Type: corev1.NodeHostName, Address: "tf-worker-1"}),
+			want: []relay.NodeAddress{detectV4, detectV6},
+		},
+		{
+			name: "dual stack, IPv4 differs and IPv6 does not",
+			node: node(nil, internalV4, externalV4,
+				corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: "2001:db8::11"}, externalV6),
+			want: []relay.NodeAddress{detectV4, {Address: "2001:db8::11", BindAddress: "2001:db8::11"}},
+		},
+		{
+			name: "dual stack, IPv6 has an external address only",
+			node: node(nil, internalV4, externalV4, externalV6),
+			want: []relay.NodeAddress{detectV4, {Address: "2001:db8::11", BindAddress: "2001:db8::11"}},
+		},
+		{
+			name: "relay-bind ExternalIP binds and advertises the external address",
+			node: node(map[string]string{RelayBindAnnotation: RelayBindExternalIP}, internalV4, externalV4),
 			want: []relay.NodeAddress{{Address: "203.0.113.11", BindAddress: "203.0.113.11"}},
 		},
 		{
-			name: "both families, external preferred in each",
-			node: &corev1.Node{Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{
-				{Type: corev1.NodeInternalIP, Address: "10.0.0.11"},
-				{Type: corev1.NodeExternalIP, Address: "203.0.113.11"},
-				{Type: corev1.NodeInternalIP, Address: "fd00::11"},
-				{Type: corev1.NodeExternalIP, Address: "2001:db8::11"},
-				{Type: corev1.NodeHostName, Address: "tf-worker-1"},
-			}}},
+			name: "relay-bind ExternalIP covers every family",
+			node: node(map[string]string{RelayBindAnnotation: RelayBindExternalIP},
+				internalV4, externalV4, internalV6, externalV6),
 			want: []relay.NodeAddress{
 				{Address: "203.0.113.11", BindAddress: "203.0.113.11"},
 				{Address: "2001:db8::11", BindAddress: "2001:db8::11"},
 			},
 		},
 		{
-			name: "a name is not an address",
-			node: &corev1.Node{Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{
-				{Type: corev1.NodeHostName, Address: "tf-worker-1"},
-				{Type: corev1.NodeExternalDNS, Address: "tf-worker-1.example.net"},
-			}}},
+			name: "relay-bind InternalIP binds the internal address and advertises the external one",
+			node: node(map[string]string{RelayBindAnnotation: RelayBindInternalIP}, internalV4, externalV4),
+			want: []relay.NodeAddress{{Address: "203.0.113.11", BindAddress: "10.0.0.11"}},
 		},
 		{
-			name: "the annotation overrides the family it names",
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{RelayAddressAnnotation: "203.0.113.77"}},
-				Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{
-					{Type: corev1.NodeExternalIP, Address: "203.0.113.11"},
-					{Type: corev1.NodeExternalIP, Address: "2001:db8::11"},
-				}},
-			},
-			want: []relay.NodeAddress{
-				{Address: "203.0.113.77", BindAddress: "203.0.113.11"},
-				{Address: "2001:db8::11", BindAddress: "2001:db8::11"},
-			},
+			name: "relay-bind on a node with an internal address only",
+			node: node(map[string]string{RelayBindAnnotation: RelayBindExternalIP}, internalV4),
+			want: []relay.NodeAddress{{Address: "10.0.0.11", BindAddress: "10.0.0.11"}},
 		},
 		{
-			name: "an annotation for a family the node does not have",
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{RelayAddressAnnotation: "2001:db8::77"}},
-				Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{
-					{Type: corev1.NodeExternalIP, Address: "203.0.113.11"},
-				}},
-			},
+			name:      "relay-bind with a value that is neither InternalIP nor ExternalIP",
+			node:      node(map[string]string{RelayBindAnnotation: "internalip"}, internalV4, externalV4),
 			wantError: true,
 		},
 		{
-			name: "an annotation that is not an address",
-			node: &corev1.Node{
-				ObjectMeta: metav1.ObjectMeta{Annotations: map[string]string{RelayAddressAnnotation: "relay.example.net"}},
-				Status: corev1.NodeStatus{Addresses: []corev1.NodeAddress{
-					{Type: corev1.NodeExternalIP, Address: "203.0.113.11"},
-				}},
+			name: "a name is not an address",
+			node: node(nil,
+				corev1.NodeAddress{Type: corev1.NodeHostName, Address: "tf-worker-1"},
+				corev1.NodeAddress{Type: corev1.NodeExternalDNS, Address: "tf-worker-1.example.net"}),
+		},
+		{
+			name: "relay-address replaces the advertised address, and the node still decides the bind",
+			node: node(map[string]string{RelayAddressAnnotation: "198.51.100.77"}, internalV4, externalV4),
+			want: []relay.NodeAddress{{Address: "198.51.100.77", BindAddress: "10.0.0.11", LocalBindAddress: "203.0.113.11"}},
+		},
+		{
+			name: "relay-address overrides the family it names and leaves the other alone",
+			node: node(map[string]string{RelayAddressAnnotation: "198.51.100.77"},
+				internalV4, externalV4, internalV6, externalV6),
+			want: []relay.NodeAddress{
+				{Address: "198.51.100.77", BindAddress: "10.0.0.11", LocalBindAddress: "203.0.113.11"},
+				detectV6,
 			},
+		},
+		{
+			name: "relay-address with relay-bind ExternalIP binds the external address",
+			node: node(map[string]string{
+				RelayAddressAnnotation: "198.51.100.77",
+				RelayBindAnnotation:    RelayBindExternalIP,
+			}, internalV4, externalV4),
+			want: []relay.NodeAddress{{Address: "198.51.100.77", BindAddress: "203.0.113.11"}},
+		},
+		{
+			name: "relay-address with relay-bind InternalIP binds the internal address",
+			node: node(map[string]string{
+				RelayAddressAnnotation: "198.51.100.77",
+				RelayBindAnnotation:    RelayBindInternalIP,
+			}, internalV4, externalV4),
+			want: []relay.NodeAddress{{Address: "198.51.100.77", BindAddress: "10.0.0.11"}},
+		},
+		{
+			name: "relay-address on a node with an external address only",
+			node: node(map[string]string{RelayAddressAnnotation: "198.51.100.77"}, externalV4),
+			want: []relay.NodeAddress{{Address: "198.51.100.77", BindAddress: "203.0.113.11"}},
+		},
+		{
+			name:      "relay-address for a family the node does not have",
+			node:      node(map[string]string{RelayAddressAnnotation: "2001:db8::77"}, externalV4),
+			wantError: true,
+		},
+		{
+			name:      "relay-address that is not an address",
+			node:      node(map[string]string{RelayAddressAnnotation: "relay.example.net"}, externalV4),
 			wantError: true,
 		},
 	}
@@ -1159,5 +1604,132 @@ func TestNodeAddresses(t *testing.T) {
 				t.Errorf("nodeAddresses() = %+v, want %+v", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestNodeAddressKeyFollowsRelayBind pins that changing the relay-bind
+// annotation changes the node's key whenever it changes the plan, so the
+// controller re-plans the node, and that a change that plans the same relays
+// does not.
+func TestNodeAddressKeyFollowsRelayBind(t *testing.T) {
+	t.Parallel()
+
+	node := func(annotations map[string]string, addresses ...corev1.NodeAddress) *corev1.Node {
+		return &corev1.Node{
+			ObjectMeta: metav1.ObjectMeta{Name: "tf-worker-1", Annotations: annotations},
+			Status:     corev1.NodeStatus{Addresses: addresses},
+		}
+	}
+	internal := corev1.NodeAddress{Type: corev1.NodeInternalIP, Address: "10.0.0.11"}
+	external := corev1.NodeAddress{Type: corev1.NodeExternalIP, Address: "203.0.113.11"}
+
+	detect := nodeAddressKey(node(nil, internal, external))
+	bindInternal := nodeAddressKey(node(map[string]string{RelayBindAnnotation: RelayBindInternalIP}, internal, external))
+	bindExternal := nodeAddressKey(node(map[string]string{RelayBindAnnotation: RelayBindExternalIP}, internal, external))
+	invalid := nodeAddressKey(node(map[string]string{RelayBindAnnotation: "Both"}, internal, external))
+
+	keys := map[string]string{"detect": detect, "InternalIP": bindInternal, "ExternalIP": bindExternal, "invalid": invalid}
+	for a, keyA := range keys {
+		for b, keyB := range keys {
+			if a < b && keyA == keyB {
+				t.Errorf("%s and %s have the same node key %q, so changing the annotation between them would not re-plan the node", a, b, keyA)
+			}
+		}
+	}
+
+	// A node with one address plans the same relay whatever relay-bind says.
+	single := nodeAddressKey(node(nil, external))
+	if withAnnotation := nodeAddressKey(node(map[string]string{RelayBindAnnotation: RelayBindExternalIP}, external)); withAnnotation != single {
+		t.Errorf("relay-bind changes the key of a node with one address: %q vs %q", withAnnotation, single)
+	}
+}
+
+// TestRelayHashOfAPlainRelayIsUnchanged pins the config hash of a relay that
+// does not decide its bind address on the node to the value the operator
+// computed before that decision existed (the values come from the hash on main
+// at 6e2c085). Upgrading must not roll a relay that needs no init container.
+func TestRelayHashOfAPlainRelayIsUnchanged(t *testing.T) {
+	t.Parallel()
+
+	pool := hostNetworkPool("demo", 1)
+	pool.Spec.Dataplane.Image = "coturn/coturn:4.18.0-r0@sha256:bbefd3e1fdfdc0d58770fe01b581fd8b00d9f3a5580d00acb77cf719a6bc78e3"
+	state := &relayState{relay: relay.Relay{NodeName: "worker-1"}, config: "listening-ip=203.0.113.10\n"}
+
+	for tlsSecretHash, want := range map[string]string{
+		"":       "01436bbcb89540a6b2873c802a88983f51894ef15413cf67f134e97e0d4d2362",
+		"abc123": "36f59f5710413fb18f5b88f602dc5135a2cfae5a7ac91b3c63486bd01ac3f850",
+	} {
+		got, err := relayHash(pool, state, tlsSecretHash)
+		if err != nil {
+			t.Fatalf("relayHash() failed: %v", err)
+		}
+		if got != want {
+			t.Errorf("relayHash(tls %q) = %s, want %s: a relay that needs no init container would roll on upgrade", tlsSecretHash, got, want)
+		}
+	}
+}
+
+// TestRelayHashCoversTheCandidates pins what rolls a relay that decides its
+// bind address on the node: a change to either candidate configuration. A
+// change to the image of its init container does not: every controller release
+// has another image, and a release must not restart every relay on a
+// two-address node.
+func TestRelayHashCoversTheCandidates(t *testing.T) {
+	t.Parallel()
+
+	pool := hostNetworkPool("demo", 1)
+	base := func() *relayState {
+		return &relayState{
+			relay:       relay.Relay{NodeName: "worker-1"},
+			candidates:  &relay.Candidates{Local: "listening-ip=13.212.26.172\n", Mapped: "listening-ip=10.42.0.134\n"},
+			helperImage: "ghcr.io/hazmi35/turnfleet-controller:v1",
+		}
+	}
+	hashOf := func(state *relayState) string {
+		t.Helper()
+
+		hash, err := relayHash(pool, state, "")
+		if err != nil {
+			t.Fatalf("relayHash() failed: %v", err)
+		}
+		return hash
+	}
+
+	original := hashOf(base())
+	if again := hashOf(base()); again != original {
+		t.Fatal("relayHash() is not deterministic")
+	}
+
+	changes := map[string]func(*relayState){
+		"local candidate":  func(s *relayState) { s.candidates.Local += "# changed\n" },
+		"mapped candidate": func(s *relayState) { s.candidates.Mapped += "# changed\n" },
+	}
+	for name, change := range changes {
+		state := base()
+		change(state)
+		if got := hashOf(state); got == original {
+			t.Errorf("changing the %s leaves the hash alone, so the relay would not roll", name)
+		}
+	}
+
+	newImage := base()
+	newImage.helperImage = "ghcr.io/hazmi35/turnfleet-controller:v2"
+	if got := hashOf(newImage); got != original {
+		t.Error("a new helper image changes the hash, so every controller release would roll every relay on a two-address node")
+	}
+
+	// A relay with candidates carries the decision version, and one without
+	// does not.
+	plain := base()
+	plain.candidates, plain.config = nil, "listening-ip=10.42.0.134\n"
+	if decisionVersion(plain) != "" || decisionVersion(base()) != relayinit.Version {
+		t.Error("decisionVersion() must be empty for a relay without candidates and relayinit.Version for one with")
+	}
+
+	// Moving text between the two candidates is a change too.
+	swapped := base()
+	swapped.candidates.Local, swapped.candidates.Mapped = swapped.candidates.Mapped, swapped.candidates.Local
+	if got := hashOf(swapped); got == original {
+		t.Error("swapping the candidates leaves the hash alone")
 	}
 }
