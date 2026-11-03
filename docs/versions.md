@@ -13,6 +13,8 @@ what they pin, so there is one copy of each number and no second table to drift:
   `.custom-gcl.yml`; its plugin modules are pinned in `.custom-gcl.yml` alone.
 * Container images: the `Makefile` (`GO_IMAGE`, `RUNTIME_IMAGE`, `KIND_IMAGE`,
   `COTURN_IMAGE` with `COTURN_IMAGE_DIGEST`), referenced as `tag@sha256:digest`.
+  `.github/workflows/image.yaml` repeats `GO_IMAGE` and `RUNTIME_IMAGE` in its
+  `env`, because the published images are built there.
 * GitHub Actions: pinned by commit SHA in `.github/workflows/`, each with the
   tag the SHA came from as a comment.
 
@@ -92,6 +94,9 @@ resolve. `GO_IMAGE` carries the Go toolchain and is grouped with the `go`
 directive and the workflows' `GO_VERSION` (`go toolchain` in `renovate.json`).
 `KIND_IMAGE` is what the `kind node image` rule groups. Distroless `nonroot` is
 a tag rather than a version, so that dependency is digest upkeep.
+`GO_IMAGE` and `RUNTIME_IMAGE` are extracted a second time from the image
+workflow's `env`, under the same dependency names, so one pull request moves
+both copies of each.
 
 The coturn image is the upstream, unmodified BSD-3-Clause data plane. It is
 never vendored into this repository (see `docs/adr/0002-coturn-data-plane.md`).
