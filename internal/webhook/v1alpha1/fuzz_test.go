@@ -68,6 +68,23 @@ func FuzzWebhookValidation(f *testing.F) {
 				}
 			}
 			seen[planned.Address] = append(seen[planned.Address], planned.PortRange)
+
+			// An admitted ExternalIPPool entry, bindAddress included, must
+			// render: the controller stops reconciling a pool whose relay
+			// cannot be rendered.
+			if pool.Spec.Addressing.Mode != turnfleetv1alpha1.AddressingModeExternalIPPool {
+				continue
+			}
+			if _, err := relay.Render(&relay.RenderInput{
+				Relay:         planned,
+				PoolNamespace: pool.Namespace,
+				PoolName:      pool.Name,
+				Spec:          pool.Spec,
+				DeniedCIDRs:   pool.Spec.PeerPolicy.DeniedCIDRs,
+				AuthSecret:    "fuzz-secret",
+			}); err != nil {
+				t.Fatalf("an admitted pool planned relay %s that does not render: %v", planned.Name, err)
+			}
 		}
 	})
 }
@@ -148,8 +165,8 @@ func poolFromBytes(data []byte) *turnfleetv1alpha1.TURNPool {
 	case turnfleetv1alpha1.AddressingModeExternalIPPool:
 		pool.Spec.Addressing.ExternalIPPool = &turnfleetv1alpha1.ExternalIPPoolSpec{
 			Addresses: []turnfleetv1alpha1.ExternalAddress{
-				{NodeName: "worker-1", Address: "198.51.100.11"},
-				{NodeName: "worker-1", Address: "2001:db8:100::1"},
+				{NodeName: "worker-1", Address: "198.51.100.11", BindAddress: fuzzBindAddress(byteAt(12))},
+				{NodeName: "worker-1", Address: "2001:db8:100::1", BindAddress: fuzzBindAddress(byteAt(13))},
 			},
 		}
 	case turnfleetv1alpha1.AddressingModePodIP:
@@ -162,6 +179,26 @@ func poolFromBytes(data []byte) *turnfleetv1alpha1.TURNPool {
 	}
 
 	return pool
+}
+
+// fuzzBindAddress picks a bindAddress from a byte: absent, usable in each
+// family, and a value the webhook must refuse in each way it can be wrong. The
+// stored corpus has zero past the bytes it sets, which is absent.
+func fuzzBindAddress(b byte) string {
+	return []string{
+		"",
+		"10.0.0.11",
+		"fd00::11",
+		"127.0.0.1",
+		"0.0.0.0",
+		"not-an-ip",
+		"198.51.100.11",
+		"2001:db8:100::1",
+		"::ffff:10.0.0.11",
+		" 10.0.0.11",
+		"fe80::1%eth0",
+		"224.0.0.1",
+	}[int(b)%12]
 }
 
 // fuzzSecretRef builds the secret selector the fuzzed pools point at, without a

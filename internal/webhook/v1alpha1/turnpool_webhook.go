@@ -329,9 +329,10 @@ func validateAddressing(spec *turnfleetv1alpha1.TURNPoolSpec, path *field.Path) 
 				if addr.BindAddress != "" {
 					clash = entry.Child("bindAddress")
 				}
-				errs = append(errs, field.Invalid(clash, relay.EffectiveBindAddress(addr),
-					fmt.Sprintf("is also the address the relay on %s binds on node %s: two relays cannot bind one local address, and two public addresses cannot translate to one private address (1:1 NAT)",
-						first, addr.NodeName)))
+				duplicate := field.Duplicate(clash, relay.EffectiveBindAddress(addr))
+				duplicate.Detail = fmt.Sprintf("the relay on %s binds it on node %s: two relays cannot bind one local address, and two public addresses cannot translate to one private address (1:1 NAT)",
+					first, addr.NodeName)
+				errs = append(errs, duplicate)
 			} else {
 				bound[key] = addr.Address
 			}
@@ -641,13 +642,14 @@ func validateBindAddress(addr turnfleetv1alpha1.ExternalAddress, family turnflee
 	if addr.BindAddress == "" {
 		return nil
 	}
-	bindFamily := relay.AddressFamilyOf(addr.BindAddress)
-	if bindFamily == "" {
-		return field.ErrorList{field.Invalid(path, addr.BindAddress, "must be an IP address")}
+	if !relay.IsPlainIP(addr.BindAddress) {
+		return field.ErrorList{field.Invalid(path, addr.BindAddress,
+			"must be an IP address with no surrounding space, no zone and no IPv4-in-IPv6 form")}
 	}
+	bindFamily := relay.AddressFamilyOf(addr.BindAddress)
 	if routable, reason := relay.IndividuallyRoutable(addr.BindAddress); !routable {
 		return field.ErrorList{field.Invalid(path, addr.BindAddress,
-			fmt.Sprintf("%s, so no node can hold it for a relay to bind", reason))}
+			fmt.Sprintf("%s, so no peer can reach a relay bound to it", reason))}
 	}
 	if family == "" {
 		return nil

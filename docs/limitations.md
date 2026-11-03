@@ -27,10 +27,13 @@ its statement and gains a pointer to the issue.
   address from the cluster's outbound NAT stay the operator's job
   (`docs/adr/0024-externalippool-bind-address.md`). A cluster that does it for
   you is tracked in #89, #90, #91 and #92.
-* **Two pools can bind one private address.** The cross-pool conflict check
-  compares advertised addresses. Two pools whose entries map different public
-  addresses to one private address are not reported, and their relays compete
-  for the sockets on it. The webhook checks one pool only
+* **Two pools can bind one local address.** The cross-pool conflict check
+  compares advertised addresses. Any two relays from different pools that bind
+  one local address are not reported, and they compete for the sockets on it.
+  That covers two entries that map different public addresses to one private
+  address, an entry whose `bindAddress` is another pool's `address`, and an
+  entry whose `bindAddress` is a node's `InternalIP` that a `HostNetwork` or
+  `PartitionedIP` relay binds. The webhook checks one pool only
   (`docs/adr/0024-externalippool-bind-address.md`).
 * **No Service in the data path means firewall work.** Listener ports and the
   relay range must be reachable on each relay node. The operator cannot create

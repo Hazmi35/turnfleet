@@ -5,6 +5,8 @@ package v1alpha1
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -357,5 +359,71 @@ var _ = Describe("TURNPool admission through the API server", func() {
 			pool.Spec.Auth.SecretRef.Name = "turn-secret-rotated"
 			Expect(k8sClient.Update(ctx, pool)).To(Succeed())
 		})
+	})
+	// These rules are in the CRD, so the API server enforces them whether or
+	// not the webhook is installed (config/default installs none). The messages
+	// asserted here are the CRD's: the webhook's differ, and the API server
+	// evaluates the CRD's rules first.
+	Context("when an ExternalIPPool entry declares a bindAddress", func() {
+		const (
+			notBindable = "bindAddress must be an IP address a relay can bind"
+			familyOrDup = "bindAddress must be of the same family as address and differ from it"
+		)
+
+		newExternalPool := func(name, address, bindAddress string) *turnfleetv1alpha1.TURNPool {
+			pool := newPool(name)
+			pool.Spec.Replicas = 1
+			family := turnfleetv1alpha1.AddressingFamilyIPv4
+			if strings.Contains(address, ":") {
+				family = turnfleetv1alpha1.AddressingFamilyIPv6
+			}
+			pool.Spec.Addressing = turnfleetv1alpha1.AddressingSpec{
+				Mode:   turnfleetv1alpha1.AddressingModeExternalIPPool,
+				Family: family,
+				ExternalIPPool: &turnfleetv1alpha1.ExternalIPPoolSpec{
+					Addresses: []turnfleetv1alpha1.ExternalAddress{
+						{NodeName: "worker-1", Address: address, BindAddress: bindAddress},
+					},
+				},
+			}
+			return pool
+		}
+
+		for i, tc := range []struct{ name, address, bindAddress string }{
+			{"a private IPv4 address for a public one", "203.0.113.20", "10.0.0.11"},
+			{"a private IPv6 address for a public one", "2001:db8:ffff::20", "fd00::11"},
+			{"no bindAddress", "203.0.113.20", ""},
+		} {
+			It("admits "+tc.name, func() {
+				pool := newExternalPool(fmt.Sprintf("cel-ok-%d", i), tc.address, tc.bindAddress)
+				Expect(k8sClient.Create(ctx, pool)).To(Succeed())
+				DeferCleanup(func() { _ = k8sClient.Delete(context.Background(), pool) })
+			})
+		}
+
+		for _, tc := range []struct{ name, address, bindAddress, want string }{
+			{"a value that is not an IP address", "203.0.113.20", "worker-1.internal", notBindable},
+			{"an address with a prefix length", "203.0.113.20", "10.0.0.11/24", notBindable},
+			{"surrounding space", "203.0.113.20", " 10.0.0.11", notBindable},
+			{"an IPv4-in-IPv6 form", "2001:db8:ffff::20", "::ffff:10.0.0.11", notBindable},
+			{"a zone", "2001:db8:ffff::20", "fd00::11%eth0", notBindable},
+			{"the unspecified address", "203.0.113.20", "0.0.0.0", notBindable},
+			{"a loopback address", "203.0.113.20", "127.0.0.1", notBindable},
+			{"a link-local address", "203.0.113.20", "169.254.10.1", notBindable},
+			{"a multicast address", "203.0.113.20", "224.0.0.5", notBindable},
+			{"another family than address", "203.0.113.20", "fd00::11", familyOrDup},
+			{"the address itself", "203.0.113.20", "203.0.113.20", familyOrDup},
+			// The CRD compares the strings, so the webhook reports this one.
+			{"the address in another spelling", "2001:db8:ffff::20", "2001:0db8:ffff:0:0:0:0:20", "omit bindAddress"},
+			{"a value longer than an IPv6 address", "203.0.113.20", "10.0.0.11" + strings.Repeat("1", 40), "45"},
+		} {
+			It("rejects "+tc.name, func() {
+				err := k8sClient.Create(ctx, newExternalPool("cel-bad", tc.address, tc.bindAddress))
+				Expect(err).To(HaveOccurred())
+				Expect(apierrors.IsInvalid(err)).To(BeTrue(), "error was %v", err)
+				Expect(err.Error()).To(ContainSubstring(tc.want))
+				Expect(err.Error()).To(ContainSubstring("bindAddress"))
+			})
+		}
 	})
 })

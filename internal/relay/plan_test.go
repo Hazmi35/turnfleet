@@ -342,6 +342,67 @@ func TestComputePlanExternalIPPoolBindAddressKeepsIdentity(t *testing.T) {
 	}
 }
 
+// TestComputePlanExternalIPPoolSkipsAnUnusableBindAddress pins the planner's
+// half of the defence: an entry whose bindAddress the renderer would refuse is
+// skipped with a note, and the other entries still place relays. One bad entry
+// must not stop the pool, as a non-IP address does not.
+func TestComputePlanExternalIPPoolSkipsAnUnusableBindAddress(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		bindAddress string
+		wantProblem string
+	}{
+		{"not an IP address", "worker-1.internal", "is not an IP address"},
+		{"another family than address", "fd00::11", "is an IPv6 address, but address 203.0.113.20 is IPv4"},
+		{"unspecified", "0.0.0.0", "unspecified"},
+		{"loopback", "127.0.0.1", "loopback"},
+		{"a zone", "fe80::1%eth0", "is not an IP address"},
+		{"surrounding space", " 10.0.0.11", "is not an IP address"},
+		{"IPv4 in IPv6 form", "::ffff:10.0.0.11", "is not an IP address"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			spec := renderSpec(turnfleetv1alpha1.AddressingModeExternalIPPool)
+			spec.Replicas = 2
+			spec.Addressing.ExternalIPPool.Addresses = []turnfleetv1alpha1.ExternalAddress{
+				{NodeName: "worker-1", Address: "203.0.113.20", BindAddress: tc.bindAddress},
+				{NodeName: "worker-2", Address: "203.0.113.21", BindAddress: "10.0.0.12"},
+			}
+			plan := ComputePlan(&PlanInput{
+				PoolName: "demo",
+				Spec:     spec,
+				Nodes:    []Node{v4Node("worker-1", "10.0.0.11"), v4Node("worker-2", "10.0.0.12")},
+			})
+
+			if len(plan.Relays) != 1 || plan.Relays[0].Address != "203.0.113.21" {
+				t.Fatalf("plan places %+v, want only the relay on 203.0.113.21", plan.Relays)
+			}
+			if plan.Unplaced != 1 {
+				t.Errorf("unplaced = %d, want 1", plan.Unplaced)
+			}
+			var noted bool
+			for _, note := range plan.Notes {
+				if strings.Contains(note, "203.0.113.20") && strings.Contains(note, tc.wantProblem) {
+					noted = true
+				}
+			}
+			if !noted {
+				t.Errorf("notes %q do not say why 203.0.113.20 is skipped (%q)", plan.Notes, tc.wantProblem)
+			}
+			// Every relay the plan places must render.
+			for _, planned := range plan.Relays {
+				if _, err := Render(&RenderInput{Relay: planned, PoolName: "demo", PoolNamespace: "default", Spec: spec, AuthSecret: testSecret}); err != nil {
+					t.Errorf("planned relay %s does not render: %v", planned.Name, err)
+				}
+			}
+		})
+	}
+}
+
 func TestPartitionPortRange(t *testing.T) {
 	t.Parallel()
 

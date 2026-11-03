@@ -28,9 +28,11 @@ const (
 	// decision. Capacity grows with the number of labelled nodes.
 	AddressingModeHostNetwork AddressingMode = "HostNetwork"
 
-	// AddressingModeExternalIPPool binds relays to specific secondary addresses
-	// declared in addressing.externalIPPool.addresses, one relay per address.
-	// Capacity grows with the number of declared addresses.
+	// AddressingModeExternalIPPool runs one relay per address declared in
+	// addressing.externalIPPool.addresses. Each is an address the named node
+	// holds, or a public address the network translates to a local address the
+	// node holds (bindAddress). Capacity grows with the number of declared
+	// addresses.
 	AddressingModeExternalIPPool AddressingMode = "ExternalIPPool"
 
 	// AddressingModePartitionedIP runs several relays per node on the node's
@@ -141,9 +143,20 @@ type DataplaneSpec struct {
 	ExtraArgs []string `json:"extraArgs,omitempty"`
 }
 
-// ExternalAddress is one secondary address already attached to a node.
+// ExternalAddress is one address a relay advertises: an address the named node
+// holds, or a public address the network translates to a local address the node
+// holds (bindAddress).
+//
+// The rules below hold on every install, because the API server evaluates them
+// and the validating webhook is optional. The webhook adds the checks across
+// entries, and clearer messages. It also catches the one spelling of "equal"
+// the rules do not: the same address written two ways.
+//
+// +kubebuilder:validation:XValidation:rule="!has(self.bindAddress) || (isIP(self.bindAddress) && ip(self.bindAddress).isGlobalUnicast())",message="bindAddress must be an IP address a relay can bind: not unspecified, loopback, link-local or multicast",fieldPath=".bindAddress"
+// +kubebuilder:validation:XValidation:rule="!has(self.bindAddress) || !isIP(self.address) || !isIP(self.bindAddress) || (ip(self.bindAddress).family() == ip(self.address).family() && self.bindAddress != self.address)",message="bindAddress must be of the same family as address and differ from it: leave it out when the node holds address",fieldPath=".bindAddress"
 type ExternalAddress struct {
-	// nodeName is the node the address is attached to.
+	// nodeName is the node that holds address, or holds bindAddress when that is
+	// set.
 	// +kubebuilder:validation:MinLength=1
 	// +required
 	NodeName string `json:"nodeName,omitempty"`
@@ -152,28 +165,32 @@ type ExternalAddress struct {
 	// also the address the relay binds, unless bindAddress is set. Together with
 	// the relay port range it is the relay's identity.
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=45
 	// +required
 	Address string `json:"address,omitempty"`
 
 	// bindAddress is the local address the relay binds, for an address the node
 	// does not hold. Set it when address is a public address that the network
-	// translates to one the node does (1:1 NAT, such as an Elastic IP): the
-	// relay binds bindAddress and advertises address. It must be an address of
-	// the same family as address, and the node must hold it on an interface.
-	// Leave it unset when the node holds address itself, and the relay binds
-	// address. Changing it replaces the relay with a new pod and keeps the
-	// relay's identity.
+	// translates to one the node does (1:1 NAT, such as a cloud provider's public
+	// address): the relay binds bindAddress and advertises address. It must be an
+	// address of the same family as address, and the node must hold it on an
+	// interface. Leave it unset when the node holds address itself, and the relay
+	// binds address. Changing it replaces the relay and keeps its identity. The
+	// relay drains first, as for any configuration change (spec.drainTimeout).
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:MaxLength=45
 	// +optional
 	BindAddress string `json:"bindAddress,omitempty"`
 }
 
 // ExternalIPPoolSpec configures AddressingModeExternalIPPool.
 type ExternalIPPoolSpec struct {
-	// addresses are the secondary addresses available to the pool, one relay per
-	// address. Each entry must be attached to the named node. The operator does
-	// not attach addresses. The webhook requires at least one address when the
-	// pool's mode is ExternalIPPool.
+	// addresses are the addresses available to the pool, one relay per address.
+	// The named node must hold each entry's address, or its bindAddress when it
+	// sets one. The operator does not attach addresses. The webhook requires at
+	// least one address when the pool's mode is ExternalIPPool. A pool has at most
+	// 256 relays, so it lists at most 256 addresses.
+	// +kubebuilder:validation:MaxItems=256
 	// +listType=map
 	// +listMapKey=address
 	// +optional

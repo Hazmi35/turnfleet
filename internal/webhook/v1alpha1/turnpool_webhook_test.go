@@ -973,6 +973,32 @@ func TestValidateExternalIPPoolBindAddress(t *testing.T) {
 			wantMessage: "must be an IP address",
 		},
 		{
+			name: "a bindAddress with surrounding space",
+			entries: entries{
+				{NodeName: "worker-1", Address: "203.0.113.20", BindAddress: " 10.0.0.11"},
+			},
+			wantField:   "spec.addressing.externalIPPool.addresses[0].bindAddress",
+			wantMessage: "must be an IP address",
+		},
+		{
+			name:   "a bindAddress in IPv4-in-IPv6 form",
+			family: turnfleetv1alpha1.AddressingFamilyIPv6,
+			entries: entries{
+				{NodeName: "worker-1", Address: "2001:db8:ffff::20", BindAddress: "::ffff:10.0.0.11"},
+			},
+			wantField:   "spec.addressing.externalIPPool.addresses[0].bindAddress",
+			wantMessage: "must be an IP address",
+		},
+		{
+			name:   "a bindAddress with a zone",
+			family: turnfleetv1alpha1.AddressingFamilyIPv6,
+			entries: entries{
+				{NodeName: "worker-1", Address: "2001:db8:ffff::20", BindAddress: "fd00::11%eth0"},
+			},
+			wantField:   "spec.addressing.externalIPPool.addresses[0].bindAddress",
+			wantMessage: "must be an IP address",
+		},
+		{
 			name: "an IPv6 bindAddress for an IPv4 address",
 			entries: entries{
 				{NodeName: "worker-1", Address: "203.0.113.20", BindAddress: "fd00::11"},

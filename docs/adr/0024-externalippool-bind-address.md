@@ -51,19 +51,24 @@ relay's `Address` to `address` and its `BindAddress` to `bindAddress`, or to
 and the conflict check of ADR 12 are all keyed on the advertised address, so a
 client is never told the private address.
 
-**The webhook validates the pair.** When `bindAddress` is set it must be:
+**The pair is validated twice, because the webhook is optional.** The CRD
+carries CEL rules on the entry, which the API server evaluates on every install,
+including `config/default`, which deploys no webhook. The validating webhook
+repeats them with clearer messages and adds the check across entries, which CEL
+cannot do without a bound on the list. When `bindAddress` is set it must be:
 
-* an IP address;
+* an IP address in its plain spelling: no surrounding space, no zone and no
+  IPv4-in-IPv6 form (what CEL's `isIP` accepts), at most 45 characters;
 * of the same family as `address`, because coturn maps an advertised address to
   a bound one only within a family;
 * not unspecified, loopback, link-local or multicast, the set that
-  `relay.IndividuallyRoutable` refuses for a `PodIP` address. A private address
-  is the expected value and is allowed;
+  `relay.IndividuallyRoutable` refuses for a `PodIP` address (CEL:
+  `isGlobalUnicast`). A private address is the expected value and is allowed;
 * different from `address`. An equal value is **rejected, not normalised**: the
   spec would have two spellings of "the node holds this address", and the API
   has one, which is to leave `bindAddress` out. A webhook that rewrites it would
   also make the stored spec differ from the manifest the author applied;
-* unique per node among the effective bind addresses of the pool's entries (the
+* unique per node among the effective bind addresses (the webhook only) of the pool's entries (the
   `bindAddress`, or the `address` when there is none). Two public addresses
   cannot translate to one private address, and two relays on one node cannot
   bind one local address and listener port. The key includes the node because a
@@ -71,7 +76,20 @@ client is never told the private address.
   same one.
 
 The CRD gives `bindAddress` a minimum length of one, so an empty string is
-rejected by the schema and absence means "bind `address`".
+rejected by the schema and absence means "bind `address`". The CEL library the
+rules use (`isIP`, `ip()`, `isGlobalUnicast`) is in Kubernetes 1.31 and later,
+and the repository targets 1.37 (the envtest control plane and the kind node
+image).
+
+**The planner skips an entry it cannot render.** An object can reach the
+controller without either check, for instance one stored before the rules
+existed. The renderer refuses a `bindAddress` that is not an IP address or is of
+another family than `address`, and a render error stops the whole pool's
+reconcile. The planner therefore skips such an entry, and one whose
+`bindAddress` is unspecified, loopback, link-local or multicast, with a note
+that reaches the pool's Ready condition while the pool is short of relays. The
+other entries keep their relays, as they do beside an `address` that is not an
+IP address.
 
 **Nothing checks that the node holds `bindAddress`.** The webhook cannot see a
 node's interfaces. The node's `status.addresses` is reported by the kubelet and
@@ -153,9 +171,12 @@ or a CNI that fills the node's interfaces.
   and an `InternalIP`, and only an interface listing tells which one it holds.
   Here the operator declares the address, and the private address that goes with
   it is not in the node's status at all. The declared pair is the fact.
+* **Validate in the webhook only.** `config/default` and the chart deploy no
+  webhook, and a bad value then reached the renderer, whose error stopped the
+  whole pool. The CRD rules and the planner's skip cover that install.
 * **Validate nothing and let the controller fail.** The renderer refuses a
-  mixed-family pair, in the reconcile loop, where the author sees only a pool
-  that does not come up. The webhook says so at admission, with the field.
+  mixed-family pair in the reconcile loop, where the author sees only a pool
+  that does not come up. Admission says so, with the field.
 * **Normalise `bindAddress == address` to absent.** See the validation rules:
   one way to say it.
 * **Make `bindAddress` part of the identity.** A client holds an allocation
@@ -174,6 +195,10 @@ or a CNI that fills the node's interfaces.
   and configures it.
 * Existing pools do not change: with no `bindAddress` the configuration, its
   hash and the relay's identity are what they were.
+* Issue #11 said a changed bind address "does not drain" the relay. It does:
+  the replacement goes through the config-hash rollout, which drains (ADR 6 and
+  ADR 21). Nothing moves the relay's identity, so no client sees another URI,
+  but the relay leaves `turnURIs` while it drains.
 * Setting, changing or removing `bindAddress` rolls that relay once, under the
   drain of ADR 21, and does not move its identity or its URIs.
 * A relay is ready only after the controller's own probe, from inside the
