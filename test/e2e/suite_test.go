@@ -9,8 +9,8 @@
 // The suite is deliberately end to end: it creates TURNPools, waits for the
 // operator to create relay pods on the cluster's relay nodes, and then talks to
 // those relays with a real TURN client. Nothing is mocked, because the failure
-// this project exists to remove — signalling succeeds, the relay candidate never
-// forms, every pod looks healthy — is invisible to a mock.
+// this project exists to remove (signalling succeeds, the relay candidate never
+// forms, every pod looks healthy) is invisible to a mock.
 //
 // Prerequisites (all of them `make test-e2e` step by step): the kind cluster
 // from hack/kind-config.yaml with three relay-labelled workers, the coturn image
@@ -205,8 +205,8 @@ func isAlreadyExists(err error) bool {
 // cannot be removed fails the run visibly instead of hanging it.
 const poolRemovalTimeout = 3 * time.Minute
 
-// cleanupPools deletes the pools the run created. It is best effort — the
-// run's result is already decided — but bounded, and it must not hang the
+// cleanupPools deletes the pools the run created. It is best effort (the
+// run's result is already decided), but bounded, and it must not hang the
 // teardown on a pool that cannot drain.
 func cleanupPools(ctx context.Context) {
 	if err := removePools(ctx, "the run that created it is over", client.InNamespace(testNamespace)); err != nil {
@@ -230,8 +230,8 @@ func cleanupPools(ctx context.Context) {
 // a leftover pool bound to the node address the suite's own pool also uses
 // leaves the two sharing one address, which the operator reports as a degraded
 // state, so the suite would fail for a reason that is in that earlier run and
-// not in its own diff. The suite owns KIND_CLUSTER — make kind-up and make
-// kind-down manage it — so every pool on it is the suite's to clear.
+// not in its own diff. The suite owns KIND_CLUSTER (make kind-up and make
+// kind-down manage it), so every pool on it is the suite's to clear.
 func resetPoolState(ctx context.Context) error {
 	return removePools(ctx, "it holds a relay address and a port range the suite's pools would share")
 }
@@ -240,8 +240,8 @@ func resetPoolState(ctx context.Context) error {
 // for them to go.
 //
 // A TURNPool carries a drain finalizer (controller.FinalizerName) that only a
-// running controller removes: a pool deleted while the controller is down —
-// the case here, a leftover from an earlier failed run — would sit in
+// running controller removes: a pool deleted while the controller is down
+// (the case here, a leftover from an earlier failed run) would sit in
 // Terminating forever, and anything waiting on it would block. So if a pool is
 // still there after the bounded wait and still carries that finalizer, strip
 // it and delete again, then wait once more. Nothing else removes it.

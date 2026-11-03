@@ -30,7 +30,7 @@ import (
 // rendered coturn configuration (which already contains the listeners, the port
 // range, the realm, the secret and the peer policy), the object that
 // configuration is read from, the content of the serving certificate the pod
-// mounts (coturn reads it when it starts, so a rotation has to roll the relay —
+// mounts (coturn reads it when it starts, so a rotation has to roll the relay,
 // ADR 4), plus the pod fields the configuration does not carry, so changing the
 // image, the resources or the placement rolls the relay just like changing the
 // config does.

@@ -94,7 +94,7 @@ type Relay struct {
 	// binds every address on the node ("prometheus exporter server will listen
 	// on [::]:9641", verified against the pinned image). Relays that share a
 	// node therefore need distinct metrics ports even when they own different
-	// addresses, which is exactly what a DualStack pool does — one relay per
+	// addresses, which is exactly what a DualStack pool does: one relay per
 	// address family on the node.
 	MetricsPortOffset int32
 }

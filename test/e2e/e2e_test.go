@@ -627,9 +627,9 @@ func holdAllocation(t *testing.T, address string, port int32) func() {
 // request, no port-forward, no long-lived process.
 //
 // The scheme is read from the running Deployment, not assumed. Metrics are
-// secure by default — `-metrics-secure` defaults to true in the manager
+// secure by default: `-metrics-secure` defaults to true in the manager
 // (config/manager sets nothing, and the chart only emits
-// `--metrics-secure=false` when `metrics.secure` is false) — and a secure
+// `--metrics-secure=false` when `metrics.secure` is false), and a secure
 // endpoint cannot be read through the proxy at all, because the metrics server
 // authenticates its caller while the proxy forwards no credential. Assuming
 // `http:` is what turned a suite pointed at a chart install into
@@ -664,8 +664,8 @@ func controllerMetricsScheme(ctx context.Context, t *testing.T) string {
 // It is what makes the two e2e targets independent in either order. The chart
 // step installs the chart, whose metrics are secure by default; a suite run
 // afterwards says why it cannot check the counter instead of failing on a
-// BadRequest that names nothing. Where the assertion is possible — `make
-// test-e2e`, which deploys config/e2e — nothing is skipped.
+// BadRequest that names nothing. Where the assertion is possible (`make
+// test-e2e`, which deploys config/e2e), nothing is skipped.
 func requireReadableMetrics(ctx context.Context, t *testing.T) {
 	t.Helper()
 

@@ -39,7 +39,7 @@ type podIPAttachment struct {
 // podIPAttachmentRef parses the pool's attachment reference: "name" in the
 // pool's namespace, or "namespace/name". The zero value has no attachment and
 // binds the pod's own address on the default network, and a reference that is
-// empty for any other reason — one stored without the schema ever seeing it —
+// empty for any other reason (one stored without the schema ever seeing it)
 // is treated the same way by relay.PodIPAttachmentParts, which is the guard.
 func podIPAttachmentRef(pool *turnfleetv1alpha1.TURNPool) (podIPAttachment, bool) {
 	namespace, name, ok := relay.PodIPAttachmentParts(pool.Spec.Addressing.PodIP.AttachmentRef, pool.Namespace)
@@ -154,8 +154,8 @@ func podAddressRequests(observed *nodeObservation) map[string]string {
 // and reports each one with its reason.
 //
 // Admission checks the same rule, but node annotations change after admission:
-// a node that is annotated with an address that cannot work at all — loopback,
-// link-local, multicast or unspecified — would otherwise turn every relay on
+// a node that is annotated with an address that cannot work at all (loopback,
+// link-local, multicast or unspecified) would otherwise turn every relay on
 // it into one that allocates, probes healthy in-cluster and is unreachable
 // from every peer. The reconcile re-checks the declaration and surfaces what it
 // dropped, so the rule is enforced, not just advised

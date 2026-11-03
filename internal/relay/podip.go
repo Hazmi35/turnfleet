@@ -31,7 +31,7 @@ const PodAddressesAnnotation = "turnfleet.hzmi.dev/relay-pod-addresses"
 // and advertises, and whether the declaration is usable at all.
 //
 // A declaration may carry a prefix ("203.0.113.21/24"). The prefix is not part
-// of the relay identity — a relay is (address, port range) — but it is what
+// of the relay identity, which is (address, port range), but it is what
 // the CNI IPAM plugins want in a pod's "ips" request, so the controller passes
 // the declaration through unchanged and the planner keeps the bare address.
 func PodAddress(declared string) (string, bool) {
@@ -78,8 +78,8 @@ func PodIPAttachmentParts(ref, poolNamespace string) (namespace, name string, ok
 // peers route it, which is a hub-and-spoke cluster whose pod CIDR is peered
 // while the node subnet is not.
 //
-// This function therefore refuses only the addresses that cannot work at all —
-// unspecified, loopback, link-local unicast and multicast — where admitting
+// This function therefore refuses only the addresses that cannot work at all
+// (unspecified, loopback, link-local unicast and multicast), where admitting
 // one would produce a relay that allocates, probes healthy in-cluster, and is
 // unreachable from every peer.
 func IndividuallyRoutable(address string) (routable bool, reason string) {

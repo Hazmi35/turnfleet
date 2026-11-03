@@ -48,8 +48,8 @@ const (
 	ConditionAddressConflict = "AddressConflict"
 
 	// ConditionPodAddressUnusable is true when a relay node declares a PodIP
-	// address the pool cannot advertise at all — unspecified, loopback,
-	// link-local or multicast. The address is dropped from the plan, and the
+	// address the pool cannot advertise at all (unspecified, loopback,
+	// link-local or multicast). The address is dropped from the plan, and the
 	// condition names the node and the reason. It is the reconcile-time half
 	// of a rule admission also checks, because a node annotation can change
 	// after the pool was admitted.
@@ -450,8 +450,8 @@ func setCondition(status *turnfleetv1alpha1.TURNPoolStatus, conditionType string
 // condition it does not find. Without this, every pass produces a status that
 // differs from the stored one by a few nanoseconds, and two things follow, both
 // wrong: writeStatus' equality guard never fires, so the status is written again
-// on every pass — and, because the API server stores whole seconds, the stored
-// LastTransitionTime walks forward on a pool nothing has happened to.
+// on every pass, and the stored LastTransitionTime walks forward on a pool
+// nothing has happened to, because the API server stores whole seconds.
 func carryTransitionTimes(previous, next *turnfleetv1alpha1.TURNPoolStatus) {
 	if previous == nil {
 		return

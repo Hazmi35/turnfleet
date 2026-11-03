@@ -1,4 +1,4 @@
-# Turnfleet — build, test and release automation.
+# Turnfleet: build, test and release automation.
 #
 # Everything this file downloads is pinned: Go tool versions, container images
 # by tag plus digest, and the Kubernetes version used by envtest. Go tools are
@@ -202,7 +202,7 @@ build: generate ## Build the controller and probe binaries.
 # `make test-e2e` already built and loaded, instead of rebuilding and reloading
 # them. The CI e2e job runs the two targets back to back against one tree; the
 # rebuild cost 137s of the chart step for two images nothing had changed in.
-# Anything else — a standalone `make test-e2e-chart`, a different tree — still
+# Anything else (a standalone `make test-e2e-chart`, a different tree) still
 # builds, so the target keeps testing what it is pointed at.
 REUSE_IMAGES ?= 0
 
@@ -319,7 +319,7 @@ deploy: ## Deploy the controller into the kind cluster.
 .PHONY: undeploy
 undeploy: ## Remove the controller from the kind cluster.
 	# Bounded: a pool deleted while the controller was down keeps its drain
-	# finalizer, and `kubectl delete` waits on it — a wedged object must end the
+	# finalizer, and `kubectl delete` waits on it. A wedged object must end the
 	# command, not hold the cluster lock for tens of minutes.
 	-$(KUSTOMIZE) build $(KUSTOMIZE_OVERLAY) | timeout 60 $(KUBECTL) delete --ignore-not-found -f -
 

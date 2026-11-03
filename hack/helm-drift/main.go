@@ -25,14 +25,14 @@
 //     (the pod template's) the installer's keys are skipped:
 //     `app.kubernetes.io/managed-by`, `app.kubernetes.io/instance`,
 //     `app.kubernetes.io/version` and `helm.sh/*`. These name the installer and
-//     the release rather than the deployment — kustomize writes
+//     the release rather than the deployment: kustomize writes
 //     `managed-by: kustomize`, Helm writes the release name, the chart version
-//     and `managed-by: Helm` — and config/ itself is inconsistent about which
+//     and `managed-by: Helm`. Also, config/ itself is inconsistent about which
 //     objects carry labels at all (config/rbac/role.yaml has none,
 //     config/manager/manager.yaml has three, so the chart cannot match it per
 //     object without copying that inconsistency). The labels the cluster acts on
-//     are inside a spec — the Deployment's selector, its pod template and the
-//     Services' selectors — and those are compared in full.
+//     are inside a spec (the Deployment's selector, its pod template and the
+//     Services' selectors), and those are compared in full.
 //   - The empty list placeholders config/ carries (`volumeMounts: []` and
 //     `volumes: []` in config/manager/manager.yaml), which mean the same to the
 //     API server as an absent key. Only those: an empty map can be required, as
@@ -304,8 +304,8 @@ func dropInstallerMetadata(value any) {
 // means the same to the API server as an absent key: config/manager/manager.yaml
 // writes `volumeMounts: []` and `volumes: []` where the chart renders nothing.
 //
-// Only these are dropped. An empty map is not equivalent to an absent one — the
-// cert-manager Issuer requires `spec.selfSigned: {}` — so a blanket rule would
+// Only these are dropped. An empty map is not equivalent to an absent one: the
+// cert-manager Issuer requires `spec.selfSigned: {}`, so a blanket rule would
 // let the chart delete a required field and still pass.
 var emptyListPlaceholders = map[string]bool{"volumeMounts": true, "volumes": true}
 

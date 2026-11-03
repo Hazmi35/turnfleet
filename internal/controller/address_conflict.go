@@ -265,8 +265,8 @@ func (r *TURNPoolReconciler) poolsForHeldAddresses(ctx context.Context, obj clie
 
 // heldIdentitiesChanged triggers when the set of relay identities a pool's
 // status reports changes: a relay appearing, disappearing or moving to another
-// identity. Everything else a status carries — probe results, allocation
-// counts, conditions — changes nothing for another pool, and waking it for
+// identity. Everything else a status carries (probe results, allocation
+// counts, conditions) changes nothing for another pool, and waking it for
 // those would put every pool that shares an address on the probe interval.
 func heldIdentitiesChanged() predicate.Predicate {
 	return predicate.Funcs{

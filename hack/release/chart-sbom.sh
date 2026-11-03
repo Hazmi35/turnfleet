@@ -11,7 +11,7 @@
 # SHA256, the archive's own SHA256 (which is the digest of the layer the OCI
 # manifest names) and the SPDX package verification code over those files. The
 # document therefore describes the bytes the release signed, and the same shape
-# — SPDX 2.3, attached as a cosign attestation on the digest — is what the
+# (SPDX 2.3, attached as a cosign attestation on the digest) is what the
 # images' SBOMs use, so a consumer verifies the chart the way it verifies them.
 #
 # The scan is by digest, never by tag: a tag can be re-pointed, and a document
