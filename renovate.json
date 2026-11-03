@@ -50,7 +50,7 @@
       "matchPackageNames": ["kindest/node"]
     },
     {
-      "description": "The Go toolchain is one version written in five places: the `go` directive in go.mod and tools/go.mod, the GO_VERSION env in the workflows, the devcontainer image and the build image the Dockerfiles take as GO_IMAGE. One pull request has to move them together, which is what docs/versions.md means by GO_VERSION tracking the `go` directive.",
+      "description": "The Go toolchain is one version written in six places: the `go` directive in go.mod and tools/go.mod, the GO_VERSION env in the workflows, the devcontainer image, and the build image the Dockerfiles take as GO_IMAGE, which the Makefile and the image workflow each pin. One pull request has to move them together, which is what docs/versions.md means by GO_VERSION tracking the `go` directive.",
       "groupName": "go toolchain",
       "groupSlug": "go-toolchain",
       "matchDatasources": ["golang-version", "docker"],
@@ -120,13 +120,24 @@
       "depNameTemplate": "kindest/node"
     },
     {
-      "description": "The build image, as the Makefile pins it. It carries the Go toolchain (`golang:1.27.3-bookworm`) and the Dockerfiles only say `FROM ${GO_IMAGE}`, so the Makefile is the only place the pin exists.",
+      "description": "The build image, as the Makefile pins it. It carries the Go toolchain (`golang:1.27.3-bookworm`) and the Dockerfiles only say `FROM ${GO_IMAGE}`, so the Makefile and the image workflow's env (the manager below) are the two places the pin exists.",
       "customType": "regex",
       "managerFilePatterns": ["/^Makefile$/"],
       "matchStrings": [
         "GO_IMAGE \\?= golang:(?<currentValue>[^\\s@]+)@(?<currentDigest>sha256:[0-9a-f]{64})"
       ],
       "autoReplaceStringTemplate": "GO_IMAGE ?= golang:{{{newValue}}}@{{{newDigest}}}",
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "golang"
+    },
+    {
+      "description": "The build image, as the image workflow pins it in its env: the published images are built from this copy, and the Makefile's is what CI and `make docker-buildx` use. Same dependency name as the Makefile copy, so one pull request (the `go toolchain` group) moves both. The workflow writes `GO_IMAGE:` where the Makefile writes `GO_IMAGE ?=`, so the match and the replacement are its own.",
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/.*\\.ya?ml$/"],
+      "matchStrings": [
+        "GO_IMAGE: golang:(?<currentValue>[^\\s@]+)@(?<currentDigest>sha256:[0-9a-f]{64})"
+      ],
+      "autoReplaceStringTemplate": "GO_IMAGE: golang:{{{newValue}}}@{{{newDigest}}}",
       "datasourceTemplate": "docker",
       "depNameTemplate": "golang"
     },
@@ -138,6 +149,17 @@
         "RUNTIME_IMAGE \\?= gcr\\.io/distroless/static-debian12:(?<currentValue>[^\\s@]+)@(?<currentDigest>sha256:[0-9a-f]{64})"
       ],
       "autoReplaceStringTemplate": "RUNTIME_IMAGE ?= gcr.io/distroless/static-debian12:{{{newValue}}}@{{{newDigest}}}",
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "gcr.io/distroless/static-debian12"
+    },
+    {
+      "description": "The runtime base image, as the image workflow pins it in its env. Same dependency name as the Makefile copy, so one pull request moves both; the match and the replacement are its own because the workflow writes `RUNTIME_IMAGE:` where the Makefile writes `RUNTIME_IMAGE ?=`.",
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/.*\\.ya?ml$/"],
+      "matchStrings": [
+        "RUNTIME_IMAGE: gcr\\.io/distroless/static-debian12:(?<currentValue>[^\\s@]+)@(?<currentDigest>sha256:[0-9a-f]{64})"
+      ],
+      "autoReplaceStringTemplate": "RUNTIME_IMAGE: gcr.io/distroless/static-debian12:{{{newValue}}}@{{{newDigest}}}",
       "datasourceTemplate": "docker",
       "depNameTemplate": "gcr.io/distroless/static-debian12"
     },
