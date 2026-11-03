@@ -122,8 +122,10 @@ its statement and gains a pointer to the issue.
   inbound traffic arrives only through a load balancer is a hard blocker unless
   the pod addresses are themselves reachable from the peers and permitted. Kind
   as `make kind-up` configures it has no Multus and no secondary address for a
-  pod, so the mode is proven by unit, envtest and golden-file tests rather than
-  by `make test-e2e` today. The fixture that would exercise it is tracked in
-  #19.
+  pod, so the data path of the mode is proven by unit, envtest and golden-file
+  tests rather than by `make test-e2e` today. The fixture that would exercise it
+  is tracked in #19. `make test-e2e` does cover the failure half: a node that
+  declares an address the pod cannot hold, where the relay is drained and never
+  published (`TestPodIPRelayWhoseDeclaredAddressThePodCannotHold`).
 * **The e2e suite runs on amd64.** The kind node image and the loaded coturn
   image are amd64; arm64 is built in CI but not exercised end to end.
