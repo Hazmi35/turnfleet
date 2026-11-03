@@ -41,6 +41,23 @@ COTURN_IMAGE ?= coturn/coturn:4.18.0-r0
 COTURN_IMAGE_DIGEST ?= sha256:bbefd3e1fdfdc0d58770fe01b581fd8b00d9f3a5580d00acb77cf719a6bc78e3
 GO_IMAGE ?= golang:1.27.3-bookworm@sha256:d9b6a1beb9474adc2a1ce842573639b44b2a0dd49b6669f51d3821baf9ec37c9
 RUNTIME_IMAGE ?= gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
+# Multus and the reference CNI plugins give the kind cluster the secondary
+# interface a PodIP relay is attached to (`make kind-up`, docs/versions.md).
+# They are test tooling and never ship in an image. MULTUS_IMAGE is the thick
+# plugin's daemon image, by tag and digest, and test/fixtures/multus-daemonset-thick.yaml
+# is the manifest of the same release, vendored unchanged (the `kind-multus`
+# target swaps in this image). A Multus bump moves the image through Renovate
+# and re-vendors the manifest by hand.
+MULTUS_IMAGE ?= ghcr.io/k8snetworkplumbingwg/multus-cni:v4.3.1-thick@sha256:a357a79359b80ddd5f4699117946cacf3b54f5baecf7944535594863e875fc25
+MULTUS_MANIFEST ?= test/fixtures/multus-daemonset-thick.yaml
+# The kind node image carries host-local, loopback, portmap and ptp only. The
+# attachment needs macvlan and the static IPAM plugin, which `make
+# kind-cni-plugins` extracts from this release into every node. The tarball is
+# verified against the checksum below before anything is extracted. Renovate
+# moves the version and the checksum together (customManager in renovate.json).
+CNI_PLUGINS_VERSION ?= v1.9.1
+CNI_PLUGINS_SHA256 ?= b98f74a0f8522f0a83867178729c1aa70f2158f90c45a2ca8fa791db1c76b303
+CNI_PLUGINS_BINARIES ?= macvlan static
 
 # Local cluster. `make deploy` and every kubectl invocation in this file target
 # this context only; the repository rule is that no other context is touched.
@@ -254,6 +271,32 @@ kind-up: ## Create the local kind cluster if it does not exist.
 	else \
 		echo "kind cluster $(KIND_CLUSTER) already exists"; \
 	fi
+	$(MAKE) kind-cni-plugins kind-multus
+
+# The plugins and Multus go on every cluster `kind-up` is run against, not only
+# a new one, so a cluster created before they were added matches CI.
+.PHONY: kind-cni-plugins
+kind-cni-plugins: ## Install the pinned reference CNI plugins into every kind node.
+	@mkdir -p "$(LOCALBIN)"
+	@archive="$(LOCALBIN)/cni-plugins-linux-amd64-$(CNI_PLUGINS_VERSION).tgz"; \
+	if [ ! -f "$$archive" ]; then \
+		curl -fsSL -o "$$archive" "https://github.com/containernetworking/plugins/releases/download/$(CNI_PLUGINS_VERSION)/cni-plugins-linux-amd64-$(CNI_PLUGINS_VERSION).tgz"; \
+	fi; \
+	if ! echo "$(CNI_PLUGINS_SHA256)  $$archive" | sha256sum --check --strict -; then \
+		rm -f "$$archive"; \
+		echo "the CNI plugins archive does not match CNI_PLUGINS_SHA256 and was removed" >&2; \
+		exit 1; \
+	fi; \
+	for node in $$($(KIND) get nodes --name $(KIND_CLUSTER)); do \
+		$(CONTAINER_TOOL) exec -i "$$node" tar -xzf - -C /opt/cni/bin $(addprefix ./,$(CNI_PLUGINS_BINARIES)) < "$$archive"; \
+		echo "installed $(CNI_PLUGINS_BINARIES) $(CNI_PLUGINS_VERSION) on $$node"; \
+	done
+
+.PHONY: kind-multus
+kind-multus: ## Install the pinned Multus thick plugin and wait for it to be ready.
+	sed 's|ghcr.io/k8snetworkplumbingwg/multus-cni:snapshot-thick|$(MULTUS_IMAGE)|' $(MULTUS_MANIFEST) | $(KUBECTL) apply -f -
+	$(KUBECTL) wait --for=condition=Established --timeout=2m crd/network-attachment-definitions.k8s.cni.cncf.io
+	$(KUBECTL) -n kube-system rollout status daemonset/kube-multus-ds --timeout=5m
 
 .PHONY: kind-down
 kind-down: ## Delete the local kind cluster.

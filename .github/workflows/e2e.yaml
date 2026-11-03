@@ -2,9 +2,10 @@
 # Copyright (C) 2026 Turnfleet Authors
 #
 # End-to-end suite: `make test-e2e` creates the kind cluster from
-# hack/kind-config.yaml, installs the CRDs, deploys the controller and runs the
-# e2e tests against it. kind is pinned by version and by checksum here; the node
-# image and every other pin live in the Makefile.
+# hack/kind-config.yaml, installs Multus and the reference CNI plugins the PodIP
+# case needs (`make kind-up`), installs the CRDs, deploys the controller and
+# runs the e2e tests against it. kind is pinned by version and by checksum here;
+# the node image and every other pin live in the Makefile.
 name: E2E
 
 on:

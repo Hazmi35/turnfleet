@@ -63,6 +63,12 @@
       "matchPackageNames": ["coturn/coturn"]
     },
     {
+      "description": "Multus is test tooling in the kind cluster, and its manifest is vendored: test/fixtures/multus-daemonset-thick.yaml is the manifest of the release the image pin names, unchanged, with the image swapped in at `make kind-multus`. Renovate moves the image in the Makefile and cannot move the file, so a Multus pull request is not done until the manifest is re-vendored from the new tag.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/k8snetworkplumbingwg/multus-cni"],
+      "prBodyNotes": ["Re-vendor `test/fixtures/multus-daemonset-thick.yaml` from `deployments/multus-daemonset-thick.yml` at the new tag, unchanged, and update the manifest checksum in `docs/versions.md`. Renovate cannot do this."]
+    },
+    {
       "description": "The kubernetes manager also reads apiVersion fields, and the HPA example's `autoscaling/v2` is the manifest API the cluster serves, not a version to track: a newer API only matters when the CRD moves to it on purpose.",
       "matchDatasources": ["kubernetes-api"],
       "enabled": false
@@ -172,6 +178,28 @@
       "matchStrings": ["HELM_VERSION \\?= v?(?<currentValue>[\\d.]+)"],
       "datasourceTemplate": "github-releases",
       "depNameTemplate": "helm/helm"
+    },
+    {
+      "description": "Multus, the thick plugin's daemon image, as the Makefile pins it: the tag and the digest are one dependency. Multus is test tooling for the kind cluster (docs/versions.md). The image is the only copy Renovate can move: test/fixtures/multus-daemonset-thick.yaml is the manifest of the same release (its CRD, RBAC and DaemonSet), vendored unchanged, and `make kind-multus` swaps this image into it. The manifest is re-vendored by hand from the new tag, which the pull request body says (packageRules).",
+      "customType": "regex",
+      "managerFilePatterns": ["/^Makefile$/"],
+      "matchStrings": [
+        "MULTUS_IMAGE \\?= ghcr\\.io/k8snetworkplumbingwg/multus-cni:(?<currentValue>[^\\s@]+)@(?<currentDigest>sha256:[0-9a-f]{64})"
+      ],
+      "autoReplaceStringTemplate": "MULTUS_IMAGE ?= ghcr.io/k8snetworkplumbingwg/multus-cni:{{{newValue}}}@{{{newDigest}}}",
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "ghcr.io/k8snetworkplumbingwg/multus-cni"
+    },
+    {
+      "description": "The reference CNI plugins, as the Makefile pins them: the release version and the sha256 of cni-plugins-linux-amd64-<version>.tgz, which `make kind-cni-plugins` checks before it extracts anything. The checksum is the digest of the release attachment, which the github-release-attachments datasource computes, so one pull request moves both lines. If a bump leaves them out of step, `make kind-up` fails on the checksum instead of installing an archive nobody pinned.",
+      "customType": "regex",
+      "managerFilePatterns": ["/^Makefile$/"],
+      "matchStrings": [
+        "CNI_PLUGINS_VERSION \\?= (?<currentValue>v[\\d.]+)\\nCNI_PLUGINS_SHA256 \\?= (?<currentDigest>[0-9a-f]{64})"
+      ],
+      "autoReplaceStringTemplate": "CNI_PLUGINS_VERSION ?= {{{newValue}}}\nCNI_PLUGINS_SHA256 ?= {{{newDigest}}}",
+      "datasourceTemplate": "github-release-attachments",
+      "depNameTemplate": "containernetworking/plugins"
     }
   ]
 }

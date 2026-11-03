@@ -8,7 +8,8 @@ what they pin, so there is one copy of each number and no second table to drift:
   tools) and `tools/go.mod` (the lint toolchain); the `GO_VERSION` env in the
   workflows tracks the `go` directive.
 * Build, test and cluster tooling: `Makefile` (`CONTROLLER_TOOLS_VERSION`,
-  `ENVTEST_K8S_VERSION`, `KUSTOMIZE_VERSION`, `KIND_IMAGE`, `HELM_VERSION`).
+  `ENVTEST_K8S_VERSION`, `KUSTOMIZE_VERSION`, `KIND_IMAGE`, `HELM_VERSION`,
+  `MULTUS_IMAGE`, `CNI_PLUGINS_VERSION` with `CNI_PLUGINS_SHA256`).
 * golangci-lint: the `tool` directive in `tools/go.mod`, matched by
   `.custom-gcl.yml`; its plugin modules are pinned in `.custom-gcl.yml` alone.
 * Container images: the `Makefile` (`GO_IMAGE`, `RUNTIME_IMAGE`, `KIND_IMAGE`,
@@ -121,6 +122,46 @@ its `appVersion`, which is the release version. The chart's `version` and
 `appVersion` are the same number, `X.Y.Z` for the tag `vX.Y.Z`, and the released
 image carries that number beside the tag. A release bumps both before it is
 created, so an install without flags gets the released image.
+
+## Multus and the CNI plugins
+
+The kind cluster carries a secondary network so the e2e suite can run a `PodIP`
+relay on a Multus attachment (`TestPodIPRelayOnAMultusAttachment`, ADR 18).
+`make kind-up` installs both pins below into every cluster it is run against,
+new or old, so a local cluster and the CI cluster match. Both are Apache-2.0
+test tooling. Neither is shipped in an image, linked into a binary, or
+installed by the controller or the chart.
+
+* **Multus** (`k8snetworkplumbingwg/multus-cni`, thick plugin). `MULTUS_IMAGE` in
+  the `Makefile` is the daemon image by tag and digest
+  (`v4.3.1-thick@sha256:…`). `test/fixtures/multus-daemonset-thick.yaml` is the
+  manifest of the same release (`deployments/multus-daemonset-thick.yml` at
+  `v4.3.1`), vendored unchanged: its sha256 is
+  `24fb29530b760d28126bba76bd91fac8fd74100b53d9fc65943c223e3a82be30`. It names
+  the moving `snapshot-thick` tag, and `make kind-multus` replaces that tag with
+  `MULTUS_IMAGE` when it applies the file, so the repository never carries an
+  unpinned reference in a form that gets applied. Renovate moves the image
+  (a `docker` custom manager on the Makefile line, tag and digest as one
+  dependency, and `-thick` keeps it on the thick variant). It cannot move the
+  vendored file. A Multus pull request therefore has to re-vendor the manifest
+  from the new tag and update the checksum above by hand, and the rule in
+  `renovate.json` puts that in the pull request body.
+* **Reference CNI plugins** (`containernetworking/plugins`). The kind node image
+  ships `host-local`, `loopback`, `portmap` and `ptp` only. The attachment needs
+  `macvlan` and the `static` IPAM plugin, so `make kind-cni-plugins` extracts
+  exactly `CNI_PLUGINS_BINARIES` from `cni-plugins-linux-amd64-<version>.tgz`
+  into `/opt/cni/bin` of each node. `CNI_PLUGINS_VERSION` and
+  `CNI_PLUGINS_SHA256` are the pin: the target downloads the release archive into
+  `bin/` and runs `sha256sum --check` on it before it extracts anything, and it
+  deletes an archive that does not match. The checksum is the one the release
+  publishes for the archive. Renovate moves the two lines together through the
+  `github-release-attachments` datasource, which reads the new release's
+  checksum itself (a custom manager on the Makefile lines). If that ever stops
+  working, the bump is red on `make kind-up` at the checksum and the fix is to
+  copy the new `.tgz.sha256` from the release by hand.
+
+The e2e suite is amd64 only (see `docs/limitations.md`), which is why the
+archive name carries `linux-amd64`.
 
 ## GitHub Actions
 
