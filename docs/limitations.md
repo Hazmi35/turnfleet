@@ -121,11 +121,29 @@ its statement and gains a pointer to the issue.
   The external vantage point is the check that it was done. A network whose
   inbound traffic arrives only through a load balancer is a hard blocker unless
   the pod addresses are themselves reachable from the peers and permitted. Kind
-  as `make kind-up` configures it has no Multus and no secondary address for a
-  pod, so the data path of the mode is proven by unit, envtest and golden-file
-  tests rather than by `make test-e2e` today. The fixture that would exercise it
-  is tracked in #19. `make test-e2e` does cover the failure half: a node that
-  declares an address the pod cannot hold, where the relay is drained and never
-  published (`TestPodIPRelayWhoseDeclaredAddressThePodCannotHold`).
+  as `make kind-up` configures it carries Multus and the reference CNI plugins
+  (macvlan and the static IPAM plugin), so `make test-e2e` runs the data path of
+  the mode: a relay on a macvlan attachment advertises the attachment's address
+  in its status, `turnURIs` and the URI ConfigMap, and answers a TURN `Allocate`
+  from the test host (`TestPodIPRelayOnAMultusAttachment`). It also covers the
+  failure half: a node that declares an address the pod cannot hold, where the
+  relay is drained and never published
+  (`TestPodIPRelayWhoseDeclaredAddressThePodCannotHold`). What kind proves is
+  the mechanism, and not a cloud's IPAM. The attachment uses the static IPAM
+  plugin, which honours the address the pod asks for. `azure-ipam`, SR-IOV and
+  `whereabouts` are not exercised, and neither are the per-address ingress rules
+  and the routing a real cloud network adds. The case probes from the test
+  host, which sits on the same bridge as the nodes, so it shows the address
+  reaches the pod and not that a peer behind a NAT or a firewall can reach it.
+  The case skips, with the reason in its output, on a host that has no interface
+  on the kind nodes' network, such as a remote container engine.
+* **A macvlan relay is unreachable from its own node.** The kernel does not pass
+  traffic between a macvlan interface and its parent. A `PodIP` relay on a
+  macvlan attachment therefore cannot be probed from a controller pod that runs
+  on the same node, and it never turns ready, although the host and every other
+  node reach it. The e2e case adds a second macvlan interface on the relay's
+  node and routes the relay's address through it (`test/fixtures/macvlan-shim.sh`).
+  An operator on macvlan needs the same shim, or a controller placed on another
+  node. The case does not show whether other interface types share the limit.
 * **The e2e suite runs on amd64.** The kind node image and the loaded coturn
   image are amd64; arm64 is built in CI but not exercised end to end.

@@ -59,7 +59,7 @@ make api-docs             # docs/api.md from api/v1alpha1
 make test                 # unit + envtest (KUBEBUILDER_ASSETS is set for you)
 make test-fuzz            # fuzz the renderer and the webhook validators
 make build                # bin/turnfleet-controller, bin/turnfleet-probe
-make kind-up kind-down    # local 1 control-plane + 3 relay-node workers
+make kind-up kind-down    # local 1 control-plane + 3 relay-node workers, with Multus and macvlan
 make install deploy undeploy  # apply, deploy and remove the manifests
 make helm-install         # install the controller from charts/turnfleet
 make helm-lint helm-drift # lint the chart, fail when it drifts from config/

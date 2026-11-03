@@ -133,17 +133,25 @@ What the mode forbids:
 * The declaration is node-wide, so two `PodIP` pools with relays on one node
   collide on the addresses offered there; the cross-pool check (ADR 12) reports
   it, because the identities carry the address.
-* Kind as `make kind-up` configures it has no Multus and no secondary address
-  for a pod, so this mode's data path is not exercised by `make test-e2e` yet.
-  The suite does exercise the read-back and the drain against a real pod: a
-  declared address the pod cannot hold produces `RelayAddressChanged`, a drain
-  and no published URI. The data path is proven by unit, envtest and the
-  renderer's golden files, and it shares the flag set ADR 8 verified against
-  the pinned image. That is a gap in the local cluster, not in the mode. #19
-  tracks the fixture (Multus plus a macvlan attachment, whose host side the
-  suite already probes for `ExternalIPPool` in
-  `test/fixtures/attach-secondary-address.sh` and `hostProbe`) that would let
-  the suite exercise it.
+* Kind as `make kind-up` configures it carries Multus (the thick plugin) and
+  the reference CNI plugins the node image lacks (macvlan and the static IPAM
+  plugin), so `make test-e2e` runs this mode's data path against a real pod.
+  The node declares an address on the kind network, the pool names a macvlan
+  attachment, and the relay pod holds the address on `net1`. The case checks
+  that `XOR-RELAYED-ADDRESS`, the relay's status, `status.turnURIs` and the
+  `<pool>-turn-uris` ConfigMap carry that address and not the node's
+  `InternalIP`, and it allocates through `turnfleet-probe` and the probe package
+  from the test host (`TestPodIPRelayOnAMultusAttachment`, issue #19). The suite
+  also exercises the read-back and the drain against a real pod: a declared
+  address the pod cannot hold produces `RelayAddressChanged`, a drain and no
+  published URI. What kind cannot prove is a cloud's IPAM: the static plugin
+  honours the `ips` request, which `azure-ipam` and SR-IOV with `host-local` do
+  not, and the host that probes shares the nodes' bridge, so there is no NAT or
+  firewall in the path. The vantage point (ADR 7) is still the check for that.
+  macvlan also isolates a node from its own pod's address, so the case adds a
+  macvlan shim on the relay's node, which keeps the controller's in-cluster
+  probe working wherever the controller is scheduled
+  (`test/fixtures/macvlan-shim.sh`, `docs/limitations.md`).
 * Admission remains advisory for the node-declared half of the rule, and the
   reconciler is what enforces it. The vantage point (ADR 7) remains the only
   proof that the address is reachable from outside.

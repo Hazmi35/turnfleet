@@ -6,7 +6,9 @@
 # Three workers are labelled as relay nodes because a relay binds its listener
 # and relay port range directly on a node address (hostNetwork). The node image
 # is pinned by tag and digest; the Kubernetes minor version matches the envtest
-# binaries and the client-go version in go.mod.
+# binaries and the client-go version in go.mod. The cluster file does not
+# describe Multus or the CNI plugins: `make kind-up` installs both afterwards
+# (docs/versions.md).
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: turnfleet
