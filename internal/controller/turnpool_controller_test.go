@@ -295,6 +295,97 @@ func TestReconcileExternalIPPool(t *testing.T) {
 	}
 }
 
+// TestReconcileExternalIPPoolBindAddress covers an entry that declares the
+// private address a relay binds and the public address it advertises. The node
+// here reports an InternalIP and a different ExternalIP, which gives a
+// HostNetwork relay the init container of ADR 23. An entry states its bind
+// address, so its relay gets none: the pod records the bind address, probes it,
+// and renders the mapping. Moving only the bind address keeps the relay's
+// identity and rolls its pod through the config-hash rollout.
+func TestReconcileExternalIPPoolBindAddress(t *testing.T) {
+	const name = "tpool-ext-nat"
+
+	f := newFixture(t)
+	f.createSecret()
+	f.createNATNode("tf-ext-nat-1", "10.42.0.150", "203.0.113.50", nil)
+
+	pool := natPool(name, 50900)
+	pool.Spec.Addressing = turnfleetv1alpha1.AddressingSpec{
+		Mode: turnfleetv1alpha1.AddressingModeExternalIPPool,
+		ExternalIPPool: &turnfleetv1alpha1.ExternalIPPoolSpec{
+			Addresses: []turnfleetv1alpha1.ExternalAddress{
+				{NodeName: "tf-ext-nat-1", Address: "203.0.113.60", BindAddress: "10.42.0.150"},
+			},
+		},
+	}
+	f.createPool(pool)
+
+	f.reconcile(name)
+	f.reconcile(name)
+
+	pods := f.pods(name)
+	if len(pods) != 1 {
+		t.Fatalf("got %d relay pods, want 1", len(pods))
+	}
+	pod := &pods[0]
+	if len(pod.Spec.InitContainers) != 0 {
+		t.Errorf("pod has init containers %v, want none: the entry declares the bind address", pod.Spec.InitContainers)
+	}
+	if got := pod.Annotations[RelayBindAddressAnnotation]; got != "10.42.0.150" {
+		t.Errorf("the pod records bind address %q, want the entry's bindAddress 10.42.0.150", got)
+	}
+	probed := false
+	for i := range pod.Spec.Containers {
+		if probe := pod.Spec.Containers[i].ReadinessProbe; probe != nil && probe.TCPSocket != nil {
+			probed = true
+			if probe.TCPSocket.Host != "10.42.0.150" {
+				t.Errorf("readiness probe host = %q, want the bind address 10.42.0.150", probe.TCPSocket.Host)
+			}
+		}
+	}
+	if !probed {
+		t.Error("the relay pod has no TCP readiness probe to check")
+	}
+	config, ok := f.secretFile(name, pod.Name)
+	if !ok {
+		t.Fatalf("the configuration Secret has no configuration for %s", pod.Name)
+	}
+	requireContains(t, "configuration", config,
+		"listening-ip=10.42.0.150\n", "relay-ip=10.42.0.150\n", "external-ip=203.0.113.60/10.42.0.150\n")
+	requireAbsent(t, "configuration", config, "203.0.113.50", "listening-ip=127.0.0.1")
+
+	f.markPodsReady(name)
+	f.reconcileUntil(name, "one ready relay", func() bool { return readyRelays(t, f, name) == 1 })
+	status := f.pool(name).Status
+	if len(status.Relays) != 1 || status.Relays[0].RelayAddress == nil || *status.Relays[0].RelayAddress != "203.0.113.60" {
+		t.Fatalf("status relays = %+v, want one relay on the advertised address 203.0.113.60", status.Relays)
+	}
+	if uris := f.publishedURIs(name); len(uris) != 1 || !strings.Contains(uris[0], "203.0.113.60") || strings.Contains(uris[0], "10.42.0.150") {
+		t.Errorf("published URIs = %v, want one on the advertised address and none on the bind address", uris)
+	}
+	before := pod.Annotations[ConfigHashAnnotation]
+	identity := pod.Name
+
+	// Move only the bind address. The relay keeps its identity, so its pod keeps
+	// its name, and the changed configuration rolls it.
+	current := f.pool(name)
+	current.Spec.Addressing.ExternalIPPool.Addresses[0].BindAddress = "10.42.0.151"
+	if err := k8sClient.Update(f.ctx, current); err != nil {
+		t.Fatalf("updating the bind address: %v", err)
+	}
+	f.reconcileUntil(name, "the relay rolled onto the new bind address", func() bool {
+		pods := f.pods(name)
+		return len(pods) == 1 && pods[0].Annotations[RelayBindAddressAnnotation] == "10.42.0.151"
+	})
+	rolled := f.pods(name)[0]
+	if rolled.Name != identity {
+		t.Errorf("the relay's pod is %s after the bind address moved, want %s: the identity is unchanged", rolled.Name, identity)
+	}
+	if rolled.Annotations[ConfigHashAnnotation] == before {
+		t.Error("the config hash did not change with the bind address")
+	}
+}
+
 // TestReconcilePodIP covers the mode end to end in the reconcile loop: one
 // relay per address a node declares, each in a pod with its own network
 // namespace, attached to the pool's attachment.

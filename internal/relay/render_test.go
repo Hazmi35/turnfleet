@@ -68,6 +68,29 @@ func externalV6Spec() turnfleetv1alpha1.TURNPoolSpec {
 	return spec
 }
 
+// externalNATSpec declares an IPv4 public address that the node does not hold,
+// with the private address it translates to (1:1 NAT, an Elastic IP).
+func externalNATSpec() turnfleetv1alpha1.TURNPoolSpec {
+	spec := renderSpec(turnfleetv1alpha1.AddressingModeExternalIPPool)
+	spec.Addressing.ExternalIPPool = &turnfleetv1alpha1.ExternalIPPoolSpec{
+		Addresses: []turnfleetv1alpha1.ExternalAddress{
+			{NodeName: "worker-1", Address: "203.0.113.20", BindAddress: "10.0.0.11"},
+		},
+	}
+	return spec
+}
+
+// externalNATV6Spec is the same declaration in IPv6.
+func externalNATV6Spec() turnfleetv1alpha1.TURNPoolSpec {
+	spec := v6Spec(turnfleetv1alpha1.AddressingModeExternalIPPool)
+	spec.Addressing.ExternalIPPool = &turnfleetv1alpha1.ExternalIPPoolSpec{
+		Addresses: []turnfleetv1alpha1.ExternalAddress{
+			{NodeName: "worker-1", Address: "2001:db8:ffff::20", BindAddress: "fd00::11"},
+		},
+	}
+	return spec
+}
+
 func goldenInputs(t *testing.T) map[string]RenderInput {
 	t.Helper()
 
@@ -254,6 +277,39 @@ func goldenInputs(t *testing.T) map[string]RenderInput {
 			PoolNamespace: "turnfleet",
 			PoolName:      "demo",
 			Spec:          externalV6Spec(),
+			DeniedCIDRs:   deniedV6,
+			AuthSecret:    testSecret,
+		},
+		"externalippool-nat": {
+			// The entry declares the private address the node holds and the
+			// public address it advertises, as the planner derives them from
+			// bindAddress: the renderer emits coturn's public/private mapping.
+			Relay: Relay{
+				Name:        "demo-relay-7e8f9",
+				Identity:    "203.0.113.20|49152-49199",
+				NodeName:    "worker-1",
+				Address:     "203.0.113.20",
+				BindAddress: "10.0.0.11",
+				PortRange:   PortRange{Start: 49152, End: 49199},
+			},
+			PoolNamespace: "turnfleet",
+			PoolName:      "demo",
+			Spec:          externalNATSpec(),
+			DeniedCIDRs:   denied,
+			AuthSecret:    testSecret,
+		},
+		"externalippool-v6-nat": {
+			Relay: Relay{
+				Name:        "demo-relay-9a0b1",
+				Identity:    "2001:db8:ffff::20|49152-49199",
+				NodeName:    "worker-1",
+				Address:     "2001:db8:ffff::20",
+				BindAddress: "fd00::11",
+				PortRange:   PortRange{Start: 49152, End: 49199},
+			},
+			PoolNamespace: "turnfleet",
+			PoolName:      "demo",
+			Spec:          externalNATV6Spec(),
 			DeniedCIDRs:   deniedV6,
 			AuthSecret:    testSecret,
 		},

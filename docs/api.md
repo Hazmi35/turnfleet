@@ -130,7 +130,8 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `nodeName` _string_ | nodeName is the node the address is attached to. |  | MinLength: 1 <br />Required: \{\} <br /> |
-| `address` _string_ | address is the address itself. It is both the address a relay binds and<br />the address it advertises in XOR-RELAYED-ADDRESS. |  | MinLength: 1 <br />Required: \{\} <br /> |
+| `address` _string_ | address is the address the relay advertises in XOR-RELAYED-ADDRESS. It is<br />also the address the relay binds, unless bindAddress is set. Together with<br />the relay port range it is the relay's identity. |  | MinLength: 1 <br />Required: \{\} <br /> |
+| `bindAddress` _string_ | bindAddress is the local address the relay binds, for an address the node<br />does not hold. Set it when address is a public address that the network<br />translates to one the node does (1:1 NAT, such as an Elastic IP): the<br />relay binds bindAddress and advertises address. It must be an address of<br />the same family as address, and the node must hold it on an interface.<br />Leave it unset when the node holds address itself, and the relay binds<br />address. Changing it replaces the relay with a new pod and keeps the<br />relay's identity. |  | MinLength: 1 <br />Optional: \{\} <br /> |
 
 
 #### ExternalIPPoolSpec

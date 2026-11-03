@@ -54,7 +54,9 @@ A node with an `InternalIP` and a different `ExternalIP` is either behind 1:1 NA
 or holds the `ExternalIP` on an interface, and only the node can tell which. The
 relay advertises the `ExternalIP` in both cases. Its pod has an init container,
 running the controller's own binary, that picks the one of two rendered
-configurations that binds an address the node holds (ADR 23).
+configurations that binds an address the node holds (ADR 23). An `ExternalIPPool`
+entry states the pair itself, `address` to advertise and `bindAddress` to bind,
+so its relay has no init container (ADR 24).
 
 ## Components
 

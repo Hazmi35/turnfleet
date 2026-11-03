@@ -148,11 +148,24 @@ type ExternalAddress struct {
 	// +required
 	NodeName string `json:"nodeName,omitempty"`
 
-	// address is the address itself. It is both the address a relay binds and
-	// the address it advertises in XOR-RELAYED-ADDRESS.
+	// address is the address the relay advertises in XOR-RELAYED-ADDRESS. It is
+	// also the address the relay binds, unless bindAddress is set. Together with
+	// the relay port range it is the relay's identity.
 	// +kubebuilder:validation:MinLength=1
 	// +required
 	Address string `json:"address,omitempty"`
+
+	// bindAddress is the local address the relay binds, for an address the node
+	// does not hold. Set it when address is a public address that the network
+	// translates to one the node does (1:1 NAT, such as an Elastic IP): the
+	// relay binds bindAddress and advertises address. It must be an address of
+	// the same family as address, and the node must hold it on an interface.
+	// Leave it unset when the node holds address itself, and the relay binds
+	// address. Changing it replaces the relay with a new pod and keeps the
+	// relay's identity.
+	// +kubebuilder:validation:MinLength=1
+	// +optional
+	BindAddress string `json:"bindAddress,omitempty"`
 }
 
 // ExternalIPPoolSpec configures AddressingModeExternalIPPool.

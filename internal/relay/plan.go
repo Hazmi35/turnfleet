@@ -167,7 +167,7 @@ func candidatesForFamily(spec *turnfleetv1alpha1.TURNPoolSpec, node *Node, famil
 			out = append(out, candidate{
 				nodeName:    addr.NodeName,
 				address:     addr.Address,
-				bindAddress: addr.Address,
+				bindAddress: EffectiveBindAddress(addr),
 				portRange:   portRange,
 			})
 		}
@@ -282,6 +282,18 @@ func normalizeNodes(nodes []Node) []Node {
 	}
 	slices.SortFunc(out, func(a, b Node) int { return strings.Compare(a.Name, b.Name) })
 	return out
+}
+
+// EffectiveBindAddress is the local address the relay on a declared address
+// binds: its bindAddress when it declares one (the node holds a private address
+// and the network translates address to it), otherwise the address itself. The
+// ExternalIPPool entry is the one place the operator states this pair, so the
+// planner and the webhook read it through here.
+func EffectiveBindAddress(entry turnfleetv1alpha1.ExternalAddress) string {
+	if entry.BindAddress != "" {
+		return entry.BindAddress
+	}
+	return entry.Address
 }
 
 // declaredAddresses returns the pool's declared addresses for one node in one

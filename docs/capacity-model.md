@@ -59,10 +59,12 @@ its own port range, delivered without a load balancer.
 | --- | --- | --- | --- | --- |
 | `HostNetwork` | 1 (required anti-affinity) | advertises the node's `ExternalIP` (or the `turnfleet.hzmi.dev/relay-address` annotation) and binds the `ExternalIP` when the node holds it, the `InternalIP` when it does not | the whole range | `end - start + 1` |
 | `PartitionedIP` | `addressing.partitionedIP.relaysPerNode` | the node address, shared by all relays on that node, advertised and bound by the same rule as `HostNetwork` | `(end - start + 1) / relaysPerNode`, remainder to the first slices | still `end - start + 1`: **splitting an IP does not create ports** |
-| `ExternalIPPool` | one per declared address on the node | the declared secondary address | the whole range | `addresses on the node × (end - start + 1)` |
+| `ExternalIPPool` | one per declared address on the node | the declared `address`, advertised, and bound unless the entry sets `bindAddress`: then the relay binds that local address of the node and advertises `address` (1:1 NAT) | the whole range | `addresses on the node × (end - start + 1)` |
 | `PodIP` | one per declared address on the node | the address the pod holds on the default network or on a Multus attachment, declared per node in `turnfleet.hzmi.dev/relay-pod-addresses` | the whole range | `addresses on the node × (end - start + 1)` |
 
-Every mode but `PodIP` binds an address that belongs to the node. `PodIP` gives
+Every mode but `PodIP` binds an address that belongs to the node. An
+`ExternalIPPool` entry whose public address the node does not hold sets
+`bindAddress` to the one it does. `PodIP` gives
 the address to the pod itself, which is what makes it usable on clusters whose
 nodes have no address a peer can route to (Azure Kubernetes Service with
 Cilium, and Multus secondary networks). See
@@ -80,7 +82,9 @@ Growing capacity:
   `addressing.externalIPPool.addresses`, or declare a second address on a node
   that already runs a relay. Every relay owns its address, so a node with two
   declared addresses runs two relays. Attaching cloud secondary addresses to
-  existing nodes is what this mode exists for.
+  existing nodes is what this mode exists for. A cloud public address (an
+  Elastic IP) is declared as `address`, with the node's private address that it
+  maps to as `bindAddress`.
 * `PodIP`: declare another address on a relay node in
   `turnfleet.hzmi.dev/relay-pod-addresses`. Each declared address is one relay
   with its own port space, exactly as in `ExternalIPPool`; the routes and
@@ -338,10 +342,13 @@ advertises a public address that differs from the address it binds, the renderer
 emits `-X public/private` so coturn advertises the public one. A relay on a node
 behind 1:1 NAT gets that mapping without configuration (see ADR 23), and the
 annotation `turnfleet.hzmi.dev/relay-address` replaces the advertised address.
-An `ExternalIPPool` entry cannot declare a separate advertised address:
-`ExternalAddress.address` is both the address a relay binds and the one it
-advertises. That is tracked in #11. coturn maps one address to another within
-one family, so an IPv6 relay renders an IPv6 pair.
+An `ExternalIPPool` entry declares the pair itself: `address` is what the relay
+advertises, and `bindAddress` is the local address it binds when the node does
+not hold `address` (an Elastic IP, a public address behind 1:1 NAT). Without
+`bindAddress` the relay binds `address`, as before. The node must hold
+`bindAddress`, and the operator attaches both addresses (see ADR 24). coturn
+maps one address to another within one family, so an IPv6 relay renders an IPv6
+pair, and the webhook rejects a `bindAddress` of the other family.
 
 ## Which environments can be served
 
@@ -360,6 +367,7 @@ and whether the peers can reach that address.
 | Nodes with public addresses, peers on the internet | `HostNetwork` | The listener ports and the relay range are open on each node address. |
 | Nodes with private addresses, peers in the same private network | `HostNetwork` | The peers route to the node addresses. `InternalIP` is the right address here. |
 | Nodes with several addresses attached | `ExternalIPPool` | The addresses exist on the nodes, with ingress rules per address. |
+| Nodes whose public addresses are 1:1 NAT (Elastic IPs and their equivalents) | `ExternalIPPool` with `bindAddress` | Each public address is attached to its instance and maps to a private address the node holds, and the operator has set up that address on the node (ADR 24). The controller's pod reaches the public address from inside the cluster, because a relay is ready only when the controller's probe allocates on it. |
 | Pod addresses from a prefix the peers can reach, such as Azure Kubernetes Service with Cilium | `PodIP` without an attachment | Ingress rules per address, and a route from each pod prefix to its node. |
 | A Multus attachment on a network the peers can reach | `PodIP` with an attachment | A NetworkAttachmentDefinition whose IPAM gives each relay pod its declared address. |
 | IPv6 or dual-stack peers | any mode, with `spec.addressing.family` | Each relay address is in the family the peer's path uses. |

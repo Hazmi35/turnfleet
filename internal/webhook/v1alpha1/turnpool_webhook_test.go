@@ -890,3 +890,241 @@ func causeFields(err *apierrors.StatusError) []string {
 func containsField(fields []string, want string) bool {
 	return slices.Contains(fields, want)
 }
+
+// externalPool returns a valid ExternalIPPool pool of the given family that
+// declares the given entries, with one replica per entry.
+func externalPool(family turnfleetv1alpha1.AddressingFamily, entries ...turnfleetv1alpha1.ExternalAddress) *turnfleetv1alpha1.TURNPool {
+	pool := validPool()
+	pool.Spec.Replicas = int32(len(entries)) //nolint:gosec // a handful of test entries.
+	pool.Spec.Addressing = turnfleetv1alpha1.AddressingSpec{
+		Mode:           turnfleetv1alpha1.AddressingModeExternalIPPool,
+		Family:         family,
+		ExternalIPPool: &turnfleetv1alpha1.ExternalIPPoolSpec{Addresses: entries},
+	}
+	return pool
+}
+
+// TestValidateExternalIPPoolBindAddress covers the bindAddress of an
+// ExternalIPPool entry: accepted when it is a local address of the same family,
+// and one rejection per way it can be wrong.
+func TestValidateExternalIPPoolBindAddress(t *testing.T) {
+	t.Parallel()
+
+	type entries = []turnfleetv1alpha1.ExternalAddress
+	tests := []struct {
+		name    string
+		family  turnfleetv1alpha1.AddressingFamily
+		entries entries
+		// wantField is the field the rejection must name. Empty means the pool
+		// is valid.
+		wantField string
+		// wantMessage is a fragment the rejection's message must carry.
+		wantMessage string
+	}{
+		{
+			name: "a private bindAddress for a public address (1:1 NAT)",
+			entries: entries{
+				{NodeName: "worker-1", Address: "203.0.113.20", BindAddress: "10.0.0.11"},
+			},
+		},
+		{
+			name: "entries with and without bindAddress in one pool",
+			entries: entries{
+				{NodeName: "worker-1", Address: "203.0.113.20", BindAddress: "10.0.0.11"},
+				{NodeName: "worker-2", Address: "203.0.113.21"},
+			},
+		},
+		{
+			name:   "an IPv6 bindAddress for an IPv6 address",
+			family: turnfleetv1alpha1.AddressingFamilyIPv6,
+			entries: entries{
+				{NodeName: "worker-1", Address: "2001:db8:ffff::20", BindAddress: "fd00::11"},
+			},
+		},
+		{
+			name:   "a DualStack pool with a pair in each family",
+			family: turnfleetv1alpha1.AddressingFamilyDualStack,
+			entries: entries{
+				{NodeName: "worker-1", Address: "203.0.113.20", BindAddress: "10.0.0.11"},
+				{NodeName: "worker-1", Address: "2001:db8:ffff::20", BindAddress: "fd00::11"},
+			},
+		},
+		{
+			name: "the same private address on two nodes",
+			entries: entries{
+				{NodeName: "worker-1", Address: "203.0.113.20", BindAddress: "10.0.0.11"},
+				{NodeName: "worker-2", Address: "203.0.113.21", BindAddress: "10.0.0.11"},
+			},
+		},
+		{
+			name: "a bindAddress that is not an IP address",
+			entries: entries{
+				{NodeName: "worker-1", Address: "203.0.113.20", BindAddress: "worker-1.internal"},
+			},
+			wantField:   "spec.addressing.externalIPPool.addresses[0].bindAddress",
+			wantMessage: "must be an IP address",
+		},
+		{
+			name: "a bindAddress with a prefix length",
+			entries: entries{
+				{NodeName: "worker-1", Address: "203.0.113.20", BindAddress: "10.0.0.11/24"},
+			},
+			wantField:   "spec.addressing.externalIPPool.addresses[0].bindAddress",
+			wantMessage: "must be an IP address",
+		},
+		{
+			name: "an IPv6 bindAddress for an IPv4 address",
+			entries: entries{
+				{NodeName: "worker-1", Address: "203.0.113.20", BindAddress: "fd00::11"},
+			},
+			wantField:   "spec.addressing.externalIPPool.addresses[0].bindAddress",
+			wantMessage: "same family",
+		},
+		{
+			name:   "an IPv4 bindAddress for an IPv6 address",
+			family: turnfleetv1alpha1.AddressingFamilyIPv6,
+			entries: entries{
+				{NodeName: "worker-1", Address: "2001:db8:ffff::20", BindAddress: "10.0.0.11"},
+			},
+			wantField:   "spec.addressing.externalIPPool.addresses[0].bindAddress",
+			wantMessage: "same family",
+		},
+		{
+			name: "an unspecified bindAddress",
+			entries: entries{
+				{NodeName: "worker-1", Address: "203.0.113.20", BindAddress: "0.0.0.0"},
+			},
+			wantField:   "spec.addressing.externalIPPool.addresses[0].bindAddress",
+			wantMessage: "unspecified",
+		},
+		{
+			name: "a loopback bindAddress",
+			entries: entries{
+				{NodeName: "worker-1", Address: "203.0.113.20", BindAddress: "127.0.0.1"},
+			},
+			wantField:   "spec.addressing.externalIPPool.addresses[0].bindAddress",
+			wantMessage: "loopback",
+		},
+		{
+			name: "a link-local bindAddress",
+			entries: entries{
+				{NodeName: "worker-1", Address: "203.0.113.20", BindAddress: "169.254.10.1"},
+			},
+			wantField:   "spec.addressing.externalIPPool.addresses[0].bindAddress",
+			wantMessage: "link-local",
+		},
+		{
+			name: "a multicast bindAddress",
+			entries: entries{
+				{NodeName: "worker-1", Address: "203.0.113.20", BindAddress: "224.0.0.5"},
+			},
+			wantField:   "spec.addressing.externalIPPool.addresses[0].bindAddress",
+			wantMessage: "multicast",
+		},
+		{
+			name: "a bindAddress equal to the address",
+			entries: entries{
+				{NodeName: "worker-1", Address: "203.0.113.20", BindAddress: "203.0.113.20"},
+			},
+			wantField:   "spec.addressing.externalIPPool.addresses[0].bindAddress",
+			wantMessage: "omit bindAddress",
+		},
+		{
+			name:   "a bindAddress equal to the address in another spelling",
+			family: turnfleetv1alpha1.AddressingFamilyIPv6,
+			entries: entries{
+				{NodeName: "worker-1", Address: "2001:db8:ffff::20", BindAddress: "2001:0db8:ffff:0:0:0:0:20"},
+			},
+			wantField:   "spec.addressing.externalIPPool.addresses[0].bindAddress",
+			wantMessage: "omit bindAddress",
+		},
+		{
+			name: "two public addresses translating to one private address on a node",
+			entries: entries{
+				{NodeName: "worker-1", Address: "203.0.113.20", BindAddress: "10.0.0.11"},
+				{NodeName: "worker-1", Address: "203.0.113.21", BindAddress: "10.0.0.11"},
+			},
+			wantField:   "spec.addressing.externalIPPool.addresses[1].bindAddress",
+			wantMessage: "1:1 NAT",
+		},
+		{
+			name: "a bindAddress that another entry's address already binds on the node",
+			entries: entries{
+				{NodeName: "worker-1", Address: "10.0.0.11"},
+				{NodeName: "worker-1", Address: "203.0.113.21", BindAddress: "10.0.0.11"},
+			},
+			wantField:   "spec.addressing.externalIPPool.addresses[1].bindAddress",
+			wantMessage: "cannot bind one local address",
+		},
+		{
+			name: "an address that another entry's bindAddress already binds on the node",
+			entries: entries{
+				{NodeName: "worker-1", Address: "203.0.113.20", BindAddress: "10.0.0.11"},
+				{NodeName: "worker-1", Address: "10.0.0.11"},
+			},
+			wantField:   "spec.addressing.externalIPPool.addresses[1].address",
+			wantMessage: "cannot bind one local address",
+		},
+	}
+
+	validator := &TURNPoolValidator{}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := validator.ValidateCreate(context.Background(), externalPool(tc.family, tc.entries...))
+			if tc.wantField == "" {
+				if err != nil {
+					t.Fatalf("ValidateCreate() rejected a valid pool: %v", err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("ValidateCreate() admitted an invalid pool")
+			}
+			var statusErr *apierrors.StatusError
+			if !asStatusError(err, &statusErr) {
+				t.Fatalf("ValidateCreate() error is not an API status error: %v", err)
+			}
+			if fields := causeFields(statusErr); len(fields) != 1 || fields[0] != tc.wantField {
+				t.Errorf("ValidateCreate() reported %v, want exactly %q", fields, tc.wantField)
+			}
+			if !strings.Contains(err.Error(), tc.wantMessage) {
+				t.Errorf("ValidateCreate() message %q does not mention %q", err.Error(), tc.wantMessage)
+			}
+		})
+	}
+}
+
+// TestValidateUpdateAllowsBindAddressChange pins the mutability of
+// bindAddress. A relay's identity is its address and its port range, so moving
+// the address the relay binds strands no allocation by itself: the relay is
+// replaced through the config-hash rollout and keeps its identity. The same
+// holds for adding a bindAddress to an entry or removing it.
+func TestValidateUpdateAllowsBindAddressChange(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name     string
+		from, to string
+	}{
+		{"set on an entry that had none", "", "10.0.0.11"},
+		{"cleared on an entry that had one", "10.0.0.11", ""},
+		{"moved to another private address", "10.0.0.11", "10.0.0.12"},
+	}
+
+	validator := &TURNPoolValidator{}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			oldPool := externalPool("", turnfleetv1alpha1.ExternalAddress{NodeName: "worker-1", Address: "203.0.113.20", BindAddress: tc.from})
+			newPool := externalPool("", turnfleetv1alpha1.ExternalAddress{NodeName: "worker-1", Address: "203.0.113.20", BindAddress: tc.to})
+			newPool.ResourceVersion = "2"
+
+			if _, err := validator.ValidateUpdate(context.Background(), oldPool, newPool); err != nil {
+				t.Fatalf("ValidateUpdate() rejected a bindAddress change: %v", err)
+			}
+		})
+	}
+}
