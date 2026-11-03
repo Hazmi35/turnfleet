@@ -336,7 +336,7 @@ func TestNodePodAddresses(t *testing.T) {
 // TestUsablePodAddressesEnforcesRoutability is the reconcile-time half of the
 // admission rule: an address a node declares that cannot work at all is dropped
 // from the plan and reported, so an edit behind admission's back is still
-// enforced. A private address is kept — whether the peers route it is the
+// enforced. A private address is kept: whether the peers route it is the
 // operator's judgement, and the vantage point is what proves it.
 func TestUsablePodAddressesEnforcesRoutability(t *testing.T) {
 	t.Parallel()

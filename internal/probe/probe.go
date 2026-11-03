@@ -200,8 +200,8 @@ func Allocate(ctx context.Context, cfg *Config) Result {
 		return finish(&result, start, err, turnErrorCode(err), ReasonAllocationRefused, "the relay refused the allocation")
 	}
 	// Closing the allocation sends Refresh with lifetime 0, so the probe does
-	// not hold the capacity it is measuring. The release is asynchronous — the
-	// client does not wait for the relay to answer — which is why a relay with a
+	// not hold the capacity it is measuring. The release is asynchronous: the
+	// client does not wait for the relay to answer, which is why a relay with a
 	// single free port can still report 508 for the moment the refresh is in
 	// flight.
 	defer func() { _ = alloc.close() }()

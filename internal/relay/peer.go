@@ -59,8 +59,8 @@ const (
 //
 // A relay that can reach any peer is an SSRF pivot from the cluster onto
 // whatever it can route to, so the default denies every private, loopback and
-// link-local destination — including the cloud metadata address
-// 169.254.169.254 — plus the ranges reserved for multicast and future use. In
+// link-local destination (including the cloud metadata address
+// 169.254.169.254), plus the ranges reserved for multicast and future use. In
 // the common case (RFC 1918 pod and service CIDRs) this also covers the
 // cluster's own pod and service networks; the controller appends the pod CIDRs
 // it observes on the relay nodes, and an operator can add a non-RFC 1918
@@ -107,8 +107,8 @@ func DefaultDeniedCIDRsV6() []string {
 // family: the IPv6 list for an IPv6 pool, the IPv4 list for an IPv4 one, and
 // both for a DualStack pool, which has peers of both families.
 //
-// A relay only ever reaches peers in its own address family — a v6 relay socket
-// sends to v6 addresses — so the ranges of the other family would only make the
+// A relay only ever reaches peers in its own address family (a v6 relay socket
+// sends to v6 addresses), so the ranges of the other family would only make the
 // list longer without denying anything.
 func DefaultDeniedCIDRsFor(family turnfleetv1alpha1.AddressingFamily) []string {
 	switch family {
@@ -124,10 +124,10 @@ func DefaultDeniedCIDRsFor(family turnfleetv1alpha1.AddressingFamily) []string {
 // PeerRange converts a CIDR into the value coturn accepts for
 // --denied-peer-ip and --allowed-peer-ip.
 //
-// coturn 4.18.0-r0 rejects CIDR notation outright — "Aborting: invalid
+// coturn 4.18.0-r0 rejects CIDR notation outright, with "Aborting: invalid
 // denied-peer-ip value 203.0.113.0/24. Use IP or IP-IP range (CIDR is not
-// supported)" — so a prefix is expanded to the inclusive range it covers, and a
-// single-address prefix collapses to one address.
+// supported)". A prefix is therefore expanded to the inclusive range it
+// covers, and a single-address prefix collapses to one address.
 func PeerRange(cidr string) (string, error) {
 	prefix, err := netip.ParsePrefix(strings.TrimSpace(cidr))
 	if err != nil {

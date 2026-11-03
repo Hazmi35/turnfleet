@@ -21,15 +21,15 @@ import (
 // spins the queue, and a missing retry leaves a pool stuck until something
 // unrelated wakes it. Four outcomes exist and each is pinned below:
 //
-//   - ctrl.Result{}, nil — nothing to come back for (turnpool_controller.go:101
+//   - ctrl.Result{}, nil when there is nothing to come back for (turnpool_controller.go:101
 //     when the pool is gone; status.go:333 and status.go:361 on the deletion
 //     path).
-//   - RequeueAfter: secretRetryInterval — the auth Secret is unreadable, so
+//   - RequeueAfter: secretRetryInterval when the auth Secret is unreadable, so
 //     there is nothing to converge (turnpool_controller.go:154).
-//   - RequeueAfter: drainPollInterval — a drain is in flight, either from a
+//   - RequeueAfter: drainPollInterval when a drain is in flight, either from a
 //     scale-down (turnpool_controller.go:210 through requeueAfter,
 //     :215-220) or from a deletion (status.go:402).
-//   - RequeueAfter: probeInterval(pool) — steady state
+//   - RequeueAfter: probeInterval(pool) in steady state
 //     (turnpool_controller.go:210, :222-227).
 //
 // There is no immediate requeue: `grep -rn 'Requeue:' internal/ cmd/` finds no
@@ -38,7 +38,7 @@ import (
 //
 // The expected intervals are written as literals, not as the constants they
 // mirror. Asserting a constant against itself is exactly how these contracts
-// went untested — `requireRequeueAfter(..., secretRetryInterval)` passes
+// went untested: `requireRequeueAfter(..., secretRetryInterval)` passes
 // whatever secretRetryInterval holds, so a retry retuned from 10s to 11s, or to
 // an hour, fails nothing. Each literal names the constant it mirrors, so
 // changing a policy interval means updating the number here in the same commit,
@@ -49,8 +49,8 @@ import (
 // ranges shared with another test's leftover pool are reported as conflicts.
 
 // requireRequeueAfter pins the interval a pass asked for and that it asked for
-// nothing else. The whole result is compared, so an immediate requeue — the
-// deprecated Requeue field, which no pass sets — or a priority fails this too,
+// nothing else. The whole result is compared, so an immediate requeue (the
+// deprecated Requeue field, which no pass sets) or a priority fails this too,
 // without reading the deprecated field to check it.
 func requireRequeueAfter(t *testing.T, what string, result ctrl.Result, err error, want time.Duration) {
 	t.Helper()
@@ -87,7 +87,7 @@ func TestReconcileOnAMissingPoolAsksForNothing(t *testing.T) {
 // TestRequeueWhileTheAuthSecretIsMissing covers the retry that keeps a pool
 // from needing a manual poke when its Secret is created: the pass reports the
 // pool as degraded and comes back in secretRetryInterval. The second half pins
-// that the pool leaves that path — and its interval — once the Secret is there.
+// that the pool leaves that path, and its interval, once the Secret is there.
 func TestRequeueWhileTheAuthSecretIsMissing(t *testing.T) {
 	const name = "tpool-requeue-secret"
 
@@ -251,7 +251,7 @@ func TestRequeueWhileDeletingAPoolThatStillHasRelays(t *testing.T) {
 // level-based design rests on: a pass over state nothing has changed must
 // schedule the same work and write nothing. A pass that rewrote its own output
 // every time would bump every resourceVersion in the namespace forever, and
-// every watcher in it — including this controller — would reconcile in a loop.
+// every watcher in it, including this controller, would reconcile in a loop.
 //
 // "Writes nothing" is checked where it can be observed: the resourceVersion of
 // every object a pass can write. The pool and the relay configuration Secret
@@ -332,7 +332,7 @@ func TestReconcileIsIdempotentOnUnchangedState(t *testing.T) {
 
 // TestCarryTransitionTimesKeepsOnlyUnchangedTransitionTimes pins the helper that
 // makes a rebuilt status comparable, and with it the API's meaning of
-// LastTransitionTime — the time a condition last transitioned. Both directions
+// LastTransitionTime: the time a condition last transitioned. Both directions
 // are checked: carrying the time of a condition that did change would freeze
 // LastTransitionTime forever, which is the same bug from the other side.
 func TestCarryTransitionTimesKeepsOnlyUnchangedTransitionTimes(t *testing.T) {

@@ -207,7 +207,7 @@ var _ = Describe("TURNPool admission through the API server", func() {
 			// The block is a spelling of "use an attachment" only when it
 			// names one: its one field must be set whenever the block is, and
 			// the reference must be non-empty, so `podIP: {}` is refused by the
-			// schema — through admission as well, where the defaulting patch
+			// schema, and through admission as well, where the defaulting patch
 			// leaves the refusal to the schema rather than filling the field
 			// in.
 			pool := newPodIPPool("admission-podip-empty-block", "")
@@ -244,8 +244,8 @@ var _ = Describe("TURNPool admission through the API server", func() {
 		It("admits a pool whose nodes declare private addresses", func() {
 			// Admission refuses only what cannot work at all. A private,
 			// carrier-grade NAT or IPv6 unique local address is the operator's
-			// judgement — a hub-and-spoke cluster whose pod CIDR is peered
-			// while the node subnet is not routes it — and the external
+			// judgement (a hub-and-spoke cluster whose pod CIDR is peered
+			// while the node subnet is not routes it), and the external
 			// vantage point (ADR 7) is what proves reachability.
 			createDeclaringNode("podip-node-private", "10.0.0.5/24,100.64.0.5/10,fd00::5/64")
 			pool := newPodIPPool("admission-podip-private", "")

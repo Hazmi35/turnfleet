@@ -314,8 +314,8 @@ func TestAllocateSucceeds(t *testing.T) {
 // consuming the capacity it measures: a one-port relay must serve the probe over
 // and over.
 //
-// Releasing is asynchronous by design — the client sends Refresh with lifetime
-// zero and does not wait for the response — so the relay frees the port a moment
+// Releasing is asynchronous by design: the client sends Refresh with lifetime
+// zero and does not wait for the response, so the relay frees the port a moment
 // after the probe returns. The test therefore polls: what it proves is that the
 // port is released, not that it is released instantly.
 func TestAllocateReleasesTheAllocation(t *testing.T) {

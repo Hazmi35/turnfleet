@@ -729,8 +729,8 @@ func TestComputePlanIPv6IsStable(t *testing.T) {
 }
 
 // TestAddressChangeIsANewIdentity is the planner half of the drain path: a
-// relay's identity is (address, port range), so when a node's address changes —
-// the relay-address annotation moving, a cloud address being reattached — the
+// relay's identity is (address, port range), so when a node's address changes
+// (the relay-address annotation moving, a cloud address being reattached), the
 // old identity disappears from the plan and the controller drains it instead of
 // reusing a pod that is relaying on an address it no longer owns.
 func TestAddressChangeIsANewIdentity(t *testing.T) {

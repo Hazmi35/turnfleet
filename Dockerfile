@@ -16,7 +16,7 @@ COPY go.mod go.sum ./
 # they are shared between the two images built in one `make docker-build` and
 # between the two `make docker-build` runs a CI job makes (one for the suite,
 # one for the chart), and they never end up in the image. Without them a
-# change to LDFLAGS — which the Makefile stamps with the build date — misses
+# change to LDFLAGS, which the Makefile stamps with the build date, misses
 # the layer cache and recompiles the whole dependency graph.
 RUN --mount=type=cache,target=/go/pkg/mod go mod download
 COPY . .

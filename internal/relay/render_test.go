@@ -422,7 +422,7 @@ func TestRenderRejectsUnusableInput(t *testing.T) {
 
 // TestRenderPodIPBindsTheAddressThePodHolds pins the mode's data plane: the
 // relay listens on and advertises the address the pod holds, and coturn's
-// public/private mapping is not emitted, because there is nothing to map — the
+// public/private mapping is not emitted, because there is nothing to map: the
 // address is local to the pod.
 func TestRenderPodIPBindsTheAddressThePodHolds(t *testing.T) {
 	t.Parallel()

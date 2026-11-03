@@ -213,7 +213,7 @@ func (r *TURNPoolReconciler) renderRelays(
 // and a spec that reaches the controller from there has been defaulted by
 // nobody. A relay whose only denied peers are the ones this controller knows
 // about is an SSRF pivot into the cluster, so the operator applies the default
-// itself rather than trusting that someone else did — and applies the same one,
+// itself rather than trusting that someone else did. It applies the same one,
 // chosen from the pool's family, because a relay only reaches peers in its own
 // family and the list of the other one would deny nothing (ADR 13).
 func policyDeniedCIDRs(pool *turnfleetv1alpha1.TURNPool) []string {

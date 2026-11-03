@@ -31,7 +31,7 @@ import (
 	"github.com/Hazmi35/turnfleet/internal/relay"
 )
 
-// digestPinnedImage matches `repo/name:tag@sha256:<64 hex>` — a tag is optional,
+// digestPinnedImage matches `repo/name:tag@sha256:<64 hex>`. A tag is optional,
 // the digest is not.
 var digestPinnedImage = regexp.MustCompile(`^[^\s@]+@sha256:[0-9a-f]{64}$`)
 
@@ -346,7 +346,7 @@ func validateAddressing(spec *turnfleetv1alpha1.TURNPoolSpec, path *field.Path) 
 	case turnfleetv1alpha1.AddressingModePodIP:
 		// Nothing is required: the addresses are declared on the relay nodes
 		// (relay.PodAddressesAnnotation), which a TURNPool does not own, and
-		// podIP is optional — its zero value means no attachment, with the
+		// podIP is optional: its zero value means no attachment, with the
 		// relay binding the pod's own address on the default network, while a
 		// non-empty attachmentRef names the attachment it binds. A pool whose
 		// nodes declare no address is admitted and reports the replicas it
@@ -379,7 +379,7 @@ var networkAttachmentDefinitionKind = schema.GroupVersionKind{
 }
 
 // podIPAttachmentRef is the pool's attachment reference, or "" when the pool
-// names no attachment — an absent podIP block, i.e. the block's zero value —
+// names no attachment (an absent podIP block, i.e. the block's zero value)
 // and its relays bind their own pod address on the default network. podIP
 // requires a non-empty reference inside it, but the guard stays for objects
 // that never met admission, where "" still means the default network.

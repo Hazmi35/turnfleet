@@ -3,7 +3,7 @@
 # The manifests here mirror config/default (webhooks off) and
 # config/with-webhook (webhooks on), which stay the source of truth for what the
 # controller is: `make helm-drift` renders both and fails when they part ways.
-# The chart is for installing the controller, never the relays — relay pods are
+# The chart is for installing the controller, never the relays. Relay pods are
 # created by the controller from a TURNPool, and nothing in the relay data path
 # goes through this chart.
 apiVersion: v2

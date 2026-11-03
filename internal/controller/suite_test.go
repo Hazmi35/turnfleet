@@ -40,7 +40,7 @@ var (
 // fixtureCounter numbers the test namespaces. A counter and not a clock
 // reading: `time.Now().UnixNano() % 1_000_000` repeats every millisecond, so
 // two fixtures could pick the same name and the second Create would fail with
-// AlreadyExists — a failure with nothing to do with the code under test.
+// AlreadyExists, a failure with nothing to do with the code under test.
 var fixtureCounter atomic.Uint64
 
 func TestMain(m *testing.M) {
@@ -88,8 +88,8 @@ const (
 // issues a redundant write looks exactly like a pass that issues none. Only the
 // client can see the difference, which is what makes it assertable.
 //
-// It is read and written by the test goroutine alone — the pass is called
-// synchronously from a spec — so it needs no lock.
+// It is read and written by the test goroutine alone (the pass is called
+// synchronously from a spec), so it needs no lock.
 type mutationCounter struct {
 	client.Client
 

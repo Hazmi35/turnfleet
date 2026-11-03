@@ -16,7 +16,7 @@
 #     exit 3  the checks could not run (not inside a git work tree)
 #
 # It is not fast in wall-clock time: every invocation rebuilds the pinned
-# golangci-lint and runs it — about 46s on the reference machine — so a harness
+# golangci-lint and runs it (about 46s on the reference machine), so a harness
 # that cancels hook handlers after a fixed budget must not call this.
 set -uo pipefail
 

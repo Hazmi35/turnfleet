@@ -62,7 +62,7 @@ func (o vantageObservation) observed() bool {
 // It reads the ConfigMap rather than the pool's spec or status on purpose: the
 // published result is the only thing an outside vantage point can write, and
 // the controller must not be able to reconstruct it from anything it observes
-// in-cluster. A missing ConfigMap is not an error — it means no runner has run.
+// in-cluster. A missing ConfigMap is not an error: it means no runner has run.
 func (r *TURNPoolReconciler) observeVantage(ctx context.Context, pool *turnfleetv1alpha1.TURNPool) (vantageObservation, error) {
 	name := vantage.ConfigMapName(pool.Name)
 	configMap := &corev1.ConfigMap{}

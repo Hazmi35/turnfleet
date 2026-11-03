@@ -31,7 +31,7 @@ func Date() string { return date }
 // Its results must not be named version, commit and date: those are the package
 // variables the linker stamps, and a named result shadows the variable it is
 // named after. Naming them so is why every binary reported
-// "turnfleet-probe  (, )" — the accessors read the stamped variables, and this
+// "turnfleet-probe  (, )". The accessors read the stamped variables, and this
 // function read its own empty results.
 func Info() (v, c, d string) {
 	v, c, d = version, commit, date
