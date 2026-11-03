@@ -56,7 +56,7 @@ _Appears in:_
 | Field | Description |
 | --- | --- |
 | `HostNetwork` | AddressingModeHostNetwork runs exactly one relay per relay node. The relay<br />advertises the node's ExternalIP (or the turnfleet.hzmi.dev/relay-address<br />override), and binds the ExternalIP when the node holds it on an<br />interface or the InternalIP when it does not, as on a 1:1 NAT cloud. The<br />relay pod decides when it starts. The node annotation<br />turnfleet.hzmi.dev/relay-bind (InternalIP or ExternalIP) skips the<br />decision. Capacity grows with the number of labelled nodes.<br /> |
-| `ExternalIPPool` | AddressingModeExternalIPPool binds relays to specific secondary addresses<br />declared in addressing.externalIPPool.addresses, one relay per address.<br />Capacity grows with the number of declared addresses.<br /> |
+| `ExternalIPPool` | AddressingModeExternalIPPool runs one relay per address declared in<br />addressing.externalIPPool.addresses. Each is an address the named node<br />holds, or a public address the network translates to a local address the<br />node holds (bindAddress). Capacity grows with the number of declared<br />addresses.<br /> |
 | `PartitionedIP` | AddressingModePartitionedIP runs several relays per node on the node's<br />single address, each owning a disjoint slice of the relay port range. It<br />adds concurrency and isolation but NOT capacity. The sum of the slices is<br />still one IP's port space.<br /> |
 | `PodIP` | AddressingModePodIP runs one relay per address the relay nodes reserve<br />for the pool. Each relay runs in an ordinary pod (hostNetwork: false)<br />that binds and advertises the address the pod itself holds, on the<br />cluster's default network or on a Multus NetworkAttachmentDefinition<br />named by addressing.podIP.attachmentRef. Capacity grows with the number<br />of reserved addresses, exactly as in ExternalIPPool. See<br />docs/adr/0018-addressing-mode-podip.md.<br /> |
 
@@ -120,7 +120,14 @@ _Appears in:_
 
 
 
-ExternalAddress is one secondary address already attached to a node.
+ExternalAddress is one address a relay advertises: an address the named node
+holds, or a public address the network translates to a local address the node
+holds (bindAddress).
+
+The rules below hold on every install, because the API server evaluates them
+and the validating webhook is optional. The webhook adds the checks across
+entries, and clearer messages. It also catches the one spelling of "equal"
+the rules do not: the same address written two ways.
 
 
 
@@ -129,8 +136,9 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `nodeName` _string_ | nodeName is the node the address is attached to. |  | MinLength: 1 <br />Required: \{\} <br /> |
-| `address` _string_ | address is the address itself. It is both the address a relay binds and<br />the address it advertises in XOR-RELAYED-ADDRESS. |  | MinLength: 1 <br />Required: \{\} <br /> |
+| `nodeName` _string_ | nodeName is the node that holds address, or holds bindAddress when that is<br />set. |  | MinLength: 1 <br />Required: \{\} <br /> |
+| `address` _string_ | address is the address the relay advertises in XOR-RELAYED-ADDRESS. It is<br />also the address the relay binds, unless bindAddress is set. Together with<br />the relay port range it is the relay's identity. |  | MaxLength: 45 <br />MinLength: 1 <br />Required: \{\} <br /> |
+| `bindAddress` _string_ | bindAddress is the local address the relay binds, for an address the node<br />does not hold. Set it when address is a public address that the network<br />translates to one the node does (1:1 NAT, such as a cloud provider's public<br />address): the relay binds bindAddress and advertises address. It must be an<br />address of the same family as address, and the node must hold it on an<br />interface. Leave it unset when the node holds address itself, and the relay<br />binds address. Changing it replaces the relay and keeps its identity. The<br />relay drains first, as for any configuration change (spec.drainTimeout). |  | MaxLength: 45 <br />MinLength: 1 <br />Optional: \{\} <br /> |
 
 
 #### ExternalIPPoolSpec
@@ -146,7 +154,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `addresses` _[ExternalAddress](#externaladdress) array_ | addresses are the secondary addresses available to the pool, one relay per<br />address. Each entry must be attached to the named node. The operator does<br />not attach addresses. The webhook requires at least one address when the<br />pool's mode is ExternalIPPool. |  | Optional: \{\} <br /> |
+| `addresses` _[ExternalAddress](#externaladdress) array_ | addresses are the addresses available to the pool, one relay per address.<br />The named node must hold each entry's address, or its bindAddress when it<br />sets one. The operator does not attach addresses. The webhook requires at<br />least one address when the pool's mode is ExternalIPPool. A pool has at most<br />256 relays, so it lists at most 256 addresses. |  | MaxItems: 256 <br />Optional: \{\} <br /> |
 
 
 #### ListenerProtocol

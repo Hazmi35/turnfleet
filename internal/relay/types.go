@@ -259,6 +259,14 @@ func AddressFamilyOf(address string) turnfleetv1alpha1.AddressingFamily {
 	return turnfleetv1alpha1.AddressingFamilyIPv6
 }
 
+// IsPlainIP reports whether a string is an IP address in the one spelling the
+// renderer can pass on unchanged: no surrounding space, no zone, and not an
+// IPv4 address written in IPv6 form. It is what the API server's isIP accepts.
+func IsPlainIP(address string) bool {
+	addr, err := netip.ParseAddr(address)
+	return err == nil && !addr.Is4In6() && addr.Zone() == ""
+}
+
 // AddressFamilies returns the families a pool plans relays in, IPv4 first so
 // the plan is deterministic.
 //

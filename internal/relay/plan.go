@@ -44,6 +44,7 @@ func ComputePlan(in *PlanInput) Plan {
 	candidates := candidatesFor(&in.Spec, nodes)
 
 	plan := Plan{Relays: make([]Relay, 0, min(int(replicas), len(candidates)))}
+	plan.Notes = append(plan.Notes, unusableBindAddressNotes(&in.Spec)...)
 	used := map[string][]PortRange{}
 	for _, candidate := range candidates {
 		if int64(len(plan.Relays)) >= int64(replicas) {
@@ -167,7 +168,7 @@ func candidatesForFamily(spec *turnfleetv1alpha1.TURNPoolSpec, node *Node, famil
 			out = append(out, candidate{
 				nodeName:    addr.NodeName,
 				address:     addr.Address,
-				bindAddress: addr.Address,
+				bindAddress: EffectiveBindAddress(addr),
 				portRange:   portRange,
 			})
 		}
@@ -284,6 +285,60 @@ func normalizeNodes(nodes []Node) []Node {
 	return out
 }
 
+// EffectiveBindAddress is the local address the relay on a declared address
+// binds: its bindAddress when it declares one (the node holds a private address
+// and the network translates address to it), otherwise the address itself. The
+// ExternalIPPool entry is the one place the operator states this pair, so the
+// planner and the webhook read it through here.
+func EffectiveBindAddress(entry turnfleetv1alpha1.ExternalAddress) string {
+	if entry.BindAddress != "" {
+		return entry.BindAddress
+	}
+	return entry.Address
+}
+
+// bindAddressProblem says why an entry's bindAddress cannot be bound, or
+// returns "" when the entry has none or it is usable. It is what the renderer
+// refuses (a value that is not an IP address, or of another family than
+// address) plus the addresses no peer can reach a relay on. The validating
+// webhook and the CRD's validation rules reject the same values at admission,
+// but a pool can reach the planner without either (a cluster without the
+// webhook, an object stored before the rules existed).
+func bindAddressProblem(entry turnfleetv1alpha1.ExternalAddress) string {
+	if entry.BindAddress == "" {
+		return ""
+	}
+	if !IsPlainIP(entry.BindAddress) {
+		return "is not an IP address"
+	}
+	bindFamily := AddressFamilyOf(entry.BindAddress)
+	if routable, reason := IndividuallyRoutable(entry.BindAddress); !routable {
+		return reason
+	}
+	if family := AddressFamilyOf(entry.Address); family != "" && family != bindFamily {
+		return fmt.Sprintf("is an %s address, but address %s is %s", bindFamily, entry.Address, family)
+	}
+	return ""
+}
+
+// unusableBindAddressNotes names every entry the planner skips for its
+// bindAddress, for the pool's Ready message. An entry that is skipped places no
+// relay, and the others carry on, as for an address that is not an IP address.
+func unusableBindAddressNotes(spec *turnfleetv1alpha1.TURNPoolSpec) []string {
+	if spec.Addressing.Mode != turnfleetv1alpha1.AddressingModeExternalIPPool || spec.Addressing.ExternalIPPool == nil {
+		return nil
+	}
+	var notes []string
+	for _, entry := range spec.Addressing.ExternalIPPool.Addresses {
+		if problem := bindAddressProblem(entry); problem != "" {
+			notes = append(notes, fmt.Sprintf(
+				"address %s on node %s is skipped: its bindAddress %q %s",
+				entry.Address, entry.NodeName, entry.BindAddress, problem))
+		}
+	}
+	return notes
+}
+
 // declaredAddresses returns the pool's declared addresses for one node in one
 // address family, sorted by address. The family comes from the address itself:
 // a declared address is whatever is attached to the node, and a duplicated
@@ -299,6 +354,9 @@ func declaredAddresses(spec *turnfleetv1alpha1.TURNPoolSpec, node *Node, family 
 			continue
 		}
 		if AddressFamilyOf(addr.Address) != family {
+			continue
+		}
+		if bindAddressProblem(addr) != "" {
 			continue
 		}
 		out = append(out, addr)

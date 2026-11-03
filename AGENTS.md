@@ -22,8 +22,9 @@ nothing. This file is the only instruction file for every agent.
 * **Bind address**: the local address a relay's coturn binds (`listening-ip`,
   `relay-ip`). It equals the relay address unless the advertised address is not
   local: a 1:1 NAT node, where the relay binds the node's `InternalIP` and
-  advertises its `ExternalIP`, or the `turnfleet.hzmi.dev/relay-address`
-  override. When a node's `ExternalIP` and `InternalIP` differ, the relay pod
+  advertises its `ExternalIP`, the `turnfleet.hzmi.dev/relay-address`
+  override, or an `ExternalIPPool` entry whose `bindAddress` is the local
+  address that a public 1:1 NAT address translates to (ADR 24). When a node's `ExternalIP` and `InternalIP` differ, the relay pod
   decides which one it binds, by whether the node holds the `ExternalIP` on an
   interface (ADR 23). The node annotation `turnfleet.hzmi.dev/relay-bind`
   skips that decision.

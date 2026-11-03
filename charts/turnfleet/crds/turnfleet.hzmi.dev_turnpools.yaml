@@ -74,29 +74,68 @@ spec:
                     properties:
                       addresses:
                         description: |-
-                          addresses are the secondary addresses available to the pool, one relay per
-                          address. Each entry must be attached to the named node. The operator does
-                          not attach addresses. The webhook requires at least one address when the
-                          pool's mode is ExternalIPPool.
+                          addresses are the addresses available to the pool, one relay per address.
+                          The named node must hold each entry's address, or its bindAddress when it
+                          sets one. The operator does not attach addresses. The webhook requires at
+                          least one address when the pool's mode is ExternalIPPool. A pool has at most
+                          256 relays, so it lists at most 256 addresses.
                         items:
-                          description: ExternalAddress is one secondary address already
-                            attached to a node.
+                          description: |-
+                            ExternalAddress is one address a relay advertises: an address the named node
+                            holds, or a public address the network translates to a local address the node
+                            holds (bindAddress).
+
+                            The rules below hold on every install, because the API server evaluates them
+                            and the validating webhook is optional. The webhook adds the checks across
+                            entries, and clearer messages. It also catches the one spelling of "equal"
+                            the rules do not: the same address written two ways.
                           properties:
                             address:
                               description: |-
-                                address is the address itself. It is both the address a relay binds and
-                                the address it advertises in XOR-RELAYED-ADDRESS.
+                                address is the address the relay advertises in XOR-RELAYED-ADDRESS. It is
+                                also the address the relay binds, unless bindAddress is set. Together with
+                                the relay port range it is the relay's identity.
+                              maxLength: 45
+                              minLength: 1
+                              type: string
+                            bindAddress:
+                              description: |-
+                                bindAddress is the local address the relay binds, for an address the node
+                                does not hold. Set it when address is a public address that the network
+                                translates to one the node does (1:1 NAT, such as a cloud provider's public
+                                address): the relay binds bindAddress and advertises address. It must be an
+                                address of the same family as address, and the node must hold it on an
+                                interface. Leave it unset when the node holds address itself, and the relay
+                                binds address. Changing it replaces the relay and keeps its identity. The
+                                relay drains first, as for any configuration change (spec.drainTimeout).
+                              maxLength: 45
                               minLength: 1
                               type: string
                             nodeName:
-                              description: nodeName is the node the address is attached
-                                to.
+                              description: |-
+                                nodeName is the node that holds address, or holds bindAddress when that is
+                                set.
                               minLength: 1
                               type: string
                           required:
                           - address
                           - nodeName
                           type: object
+                          x-kubernetes-validations:
+                          - fieldPath: .bindAddress
+                            message: 'bindAddress must be an IP address a relay can
+                              bind: not unspecified, loopback, link-local or multicast'
+                            rule: '!has(self.bindAddress) || (isIP(self.bindAddress)
+                              && ip(self.bindAddress).isGlobalUnicast())'
+                          - fieldPath: .bindAddress
+                            message: 'bindAddress must be of the same family as address
+                              and differ from it: leave it out when the node holds
+                              address'
+                            rule: '!has(self.bindAddress) || !isIP(self.address) ||
+                              !isIP(self.bindAddress) || (ip(self.bindAddress).family()
+                              == ip(self.address).family() && self.bindAddress !=
+                              self.address)'
+                        maxItems: 256
                         type: array
                         x-kubernetes-list-map-keys:
                         - address

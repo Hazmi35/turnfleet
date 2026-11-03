@@ -29,6 +29,7 @@ decision gets a new ADR that says so.
 | [0021](0021-drain-before-delete.md) | Drain ordering: a drain is recorded on the pod in one pass and the pod deleted in a later one, one relay at a time. |
 | [0022](0022-probe-status-records-outcomes.md) | A relay's probe status records its outcome and changes only when the outcome does; the probe schedule lives in the controller's memory. |
 | [0023](0023-relay-bind-decided-on-the-node.md) | A relay on a node with two different addresses advertises the `ExternalIP` and decides on the node which address it binds: the `ExternalIP` if an interface holds it, the `InternalIP` behind 1:1 NAT. `turnfleet.hzmi.dev/relay-bind` skips the decision. Amends ADR 1 and ADR 13. |
+| [0024](0024-externalippool-bind-address.md) | An `ExternalIPPool` entry declares the local address a relay binds (`bindAddress`) apart from the public address it advertises (`address`). The identity stays `(address, port range)`, and the operator keeps attaching and configuring the addresses. Amends ADR 1. |
 
 Related documents that are not ADRs: [`../architecture.md`](../architecture.md),
 [`../capacity-model.md`](../capacity-model.md),

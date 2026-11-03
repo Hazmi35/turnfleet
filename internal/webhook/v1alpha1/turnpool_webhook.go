@@ -12,6 +12,7 @@ package v1alpha1
 import (
 	"context"
 	"fmt"
+	"net/netip"
 	"regexp"
 	"strings"
 
@@ -307,12 +308,33 @@ func validateAddressing(spec *turnfleetv1alpha1.TURNPoolSpec, path *field.Path) 
 					len(addressing.ExternalIPPool.Addresses), spec.Replicas)))
 		}
 		declaredPerFamily := map[turnfleetv1alpha1.AddressingFamily]int{}
+		// Two relays on one node cannot bind one local address and listener
+		// port, so the effective bind address is unique per node. It is keyed
+		// on the node because a private address is only unique in its network.
+		bound := map[nodeAddress]string{}
 		for i, addr := range addressing.ExternalIPPool.Addresses {
-			item := path.Child("externalIPPool", "addresses").Index(i).Child("address")
+			entry := path.Child("externalIPPool", "addresses").Index(i)
+			item := entry.Child("address")
 			family := relay.AddressFamilyOf(addr.Address)
 			if family == "" {
 				errs = append(errs, field.Invalid(item, addr.Address, "must be an IP address"))
+				// The bind address is still checked, so one pass reports both.
+				errs = append(errs, validateBindAddress(addr, "", entry.Child("bindAddress"))...)
 				continue
+			}
+			errs = append(errs, validateBindAddress(addr, family, entry.Child("bindAddress"))...)
+			key := nodeAddress{node: addr.NodeName, address: canonicalAddress(relay.EffectiveBindAddress(addr))}
+			if first, taken := bound[key]; taken {
+				clash := item
+				if addr.BindAddress != "" {
+					clash = entry.Child("bindAddress")
+				}
+				duplicate := field.Duplicate(clash, relay.EffectiveBindAddress(addr))
+				duplicate.Detail = fmt.Sprintf("the relay on %s binds it on node %s: two relays cannot bind one local address, and two public addresses cannot translate to one private address (1:1 NAT)",
+					first, addr.NodeName)
+				errs = append(errs, duplicate)
+			} else {
+				bound[key] = addr.Address
 			}
 			declaredPerFamily[family]++
 			if !relay.PlansFamily(addressing.Family, family) {
@@ -586,6 +608,62 @@ func validateTimings(spec *turnfleetv1alpha1.TURNPoolSpec, path *field.Path) fie
 				spec.Probe.Interval.Duration)))
 	}
 	return errs
+}
+
+// nodeAddress is a local address on one node.
+type nodeAddress struct {
+	node    string
+	address string
+}
+
+// canonicalAddress spells an IP address one way, so two spellings of one
+// address compare equal. A string that is not an address is returned as it is.
+func canonicalAddress(address string) string {
+	addr, err := netip.ParseAddr(strings.TrimSpace(address))
+	if err != nil {
+		return address
+	}
+	return addr.Unmap().String()
+}
+
+// validateBindAddress checks the optional bindAddress of one ExternalIPPool
+// entry. family is the family of the entry's address, empty when that address
+// is not an IP address.
+//
+// The bind address is where coturn listens and relays, and the renderer maps
+// the advertised address to it (-X public/private), which coturn accepts only
+// inside one family. It is a local address, so a private address is expected
+// and allowed. The webhook refuses what no node can hold or no peer path can
+// use, the same set IndividuallyRoutable refuses for a PodIP address. An entry
+// whose bindAddress equals its address is rejected rather than normalised. The
+// two spellings of "the node holds the address" would be separate specs that
+// render one relay, and the API has one way to say it: leave bindAddress out.
+func validateBindAddress(addr turnfleetv1alpha1.ExternalAddress, family turnfleetv1alpha1.AddressingFamily, path *field.Path) field.ErrorList {
+	if addr.BindAddress == "" {
+		return nil
+	}
+	if !relay.IsPlainIP(addr.BindAddress) {
+		return field.ErrorList{field.Invalid(path, addr.BindAddress,
+			"must be an IP address with no surrounding space, no zone and no IPv4-in-IPv6 form")}
+	}
+	bindFamily := relay.AddressFamilyOf(addr.BindAddress)
+	if routable, reason := relay.IndividuallyRoutable(addr.BindAddress); !routable {
+		return field.ErrorList{field.Invalid(path, addr.BindAddress,
+			fmt.Sprintf("%s, so no peer can reach a relay bound to it", reason))}
+	}
+	if family == "" {
+		return nil
+	}
+	if bindFamily != family {
+		return field.ErrorList{field.Invalid(path, addr.BindAddress,
+			fmt.Sprintf("is an %s address but address %s is %s: coturn maps an advertised address to a bound one of the same family only",
+				bindFamily, addr.Address, family))}
+	}
+	if canonicalAddress(addr.BindAddress) == canonicalAddress(addr.Address) {
+		return field.ErrorList{field.Invalid(path, addr.BindAddress,
+			"equals address: omit bindAddress when the node holds the address, because the relay then binds it")}
+	}
+	return nil
 }
 
 // validateImmutability rejects changes that would invalidate live allocations.

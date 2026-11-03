@@ -270,7 +270,9 @@ func TestComputePlanExternalIPPool(t *testing.T) {
 		Mode: turnfleetv1alpha1.AddressingModeExternalIPPool,
 		ExternalIPPool: &turnfleetv1alpha1.ExternalIPPoolSpec{
 			Addresses: []turnfleetv1alpha1.ExternalAddress{
-				{NodeName: "worker-2", Address: "198.51.100.12"},
+				// A 1:1 NAT address: the node holds 10.0.0.12 and the network
+				// translates the declared address to it.
+				{NodeName: "worker-2", Address: "198.51.100.12", BindAddress: "10.0.0.12"},
 				{NodeName: "worker-1", Address: "198.51.100.11"},
 				{NodeName: "gone", Address: "198.51.100.99"}, // node is not a relay node
 			},
@@ -293,11 +295,111 @@ func TestComputePlanExternalIPPool(t *testing.T) {
 		t.Errorf("relay addresses are %s and %s, want the declared ones in node order",
 			plan.Relays[0].Address, plan.Relays[1].Address)
 	}
+	// An entry without bindAddress is local: the relay binds what it
+	// advertises. An entry with one binds it and advertises address.
+	wantBind := map[string]string{
+		"198.51.100.11": "198.51.100.11",
+		"198.51.100.12": "10.0.0.12",
+	}
 	for _, r := range plan.Relays {
-		if r.BindAddress != r.Address {
-			t.Errorf("relay %s binds %s but advertises %s: a declared secondary address is local",
-				r.Name, r.BindAddress, r.Address)
+		if r.BindAddress != wantBind[r.Address] {
+			t.Errorf("relay %s advertises %s and binds %s, want it to bind %s",
+				r.Name, r.Address, r.BindAddress, wantBind[r.Address])
 		}
+		if r.DetectsBind() {
+			t.Errorf("relay %s decides its bind on the node: a declared address states it", r.Name)
+		}
+	}
+}
+
+// TestComputePlanExternalIPPoolBindAddressKeepsIdentity pins that the bind
+// address is not part of the relay's identity: the same advertised address and
+// port range is the same relay, however it is bound.
+func TestComputePlanExternalIPPoolBindAddressKeepsIdentity(t *testing.T) {
+	t.Parallel()
+
+	plan := func(bindAddress string) Relay {
+		t.Helper()
+		spec := renderSpec(turnfleetv1alpha1.AddressingModeExternalIPPool)
+		spec.Replicas = 1
+		spec.Addressing.ExternalIPPool.Addresses = []turnfleetv1alpha1.ExternalAddress{
+			{NodeName: "worker-1", Address: "203.0.113.20", BindAddress: bindAddress},
+		}
+		got := ComputePlan(&PlanInput{PoolName: "demo", Spec: spec, Nodes: []Node{v4Node("worker-1", "10.0.0.11")}})
+		if len(got.Relays) != 1 {
+			t.Fatalf("placed %d relays, want 1", len(got.Relays))
+		}
+		return got.Relays[0]
+	}
+
+	local, nat := plan(""), plan("10.0.0.11")
+	if local.Identity != nat.Identity || local.Name != nat.Name {
+		t.Errorf("identity %q name %q with bindAddress, %q %q without: the bind address must not change either",
+			nat.Identity, nat.Name, local.Identity, local.Name)
+	}
+	if local.BindAddress != "203.0.113.20" || nat.BindAddress != "10.0.0.11" {
+		t.Errorf("bind addresses are %q and %q, want 203.0.113.20 and 10.0.0.11", local.BindAddress, nat.BindAddress)
+	}
+}
+
+// TestComputePlanExternalIPPoolSkipsAnUnusableBindAddress pins the planner's
+// half of the defence: an entry whose bindAddress the renderer would refuse is
+// skipped with a note, and the other entries still place relays. One bad entry
+// must not stop the pool, as a non-IP address does not.
+func TestComputePlanExternalIPPoolSkipsAnUnusableBindAddress(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		bindAddress string
+		wantProblem string
+	}{
+		{"not an IP address", "worker-1.internal", "is not an IP address"},
+		{"another family than address", "fd00::11", "is an IPv6 address, but address 203.0.113.20 is IPv4"},
+		{"unspecified", "0.0.0.0", "unspecified"},
+		{"loopback", "127.0.0.1", "loopback"},
+		{"a zone", "fe80::1%eth0", "is not an IP address"},
+		{"surrounding space", " 10.0.0.11", "is not an IP address"},
+		{"IPv4 in IPv6 form", "::ffff:10.0.0.11", "is not an IP address"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			spec := renderSpec(turnfleetv1alpha1.AddressingModeExternalIPPool)
+			spec.Replicas = 2
+			spec.Addressing.ExternalIPPool.Addresses = []turnfleetv1alpha1.ExternalAddress{
+				{NodeName: "worker-1", Address: "203.0.113.20", BindAddress: tc.bindAddress},
+				{NodeName: "worker-2", Address: "203.0.113.21", BindAddress: "10.0.0.12"},
+			}
+			plan := ComputePlan(&PlanInput{
+				PoolName: "demo",
+				Spec:     spec,
+				Nodes:    []Node{v4Node("worker-1", "10.0.0.11"), v4Node("worker-2", "10.0.0.12")},
+			})
+
+			if len(plan.Relays) != 1 || plan.Relays[0].Address != "203.0.113.21" {
+				t.Fatalf("plan places %+v, want only the relay on 203.0.113.21", plan.Relays)
+			}
+			if plan.Unplaced != 1 {
+				t.Errorf("unplaced = %d, want 1", plan.Unplaced)
+			}
+			var noted bool
+			for _, note := range plan.Notes {
+				if strings.Contains(note, "203.0.113.20") && strings.Contains(note, tc.wantProblem) {
+					noted = true
+				}
+			}
+			if !noted {
+				t.Errorf("notes %q do not say why 203.0.113.20 is skipped (%q)", plan.Notes, tc.wantProblem)
+			}
+			// Every relay the plan places must render.
+			for _, planned := range plan.Relays {
+				if _, err := Render(&RenderInput{Relay: planned, PoolName: "demo", PoolNamespace: "default", Spec: spec, AuthSecret: testSecret}); err != nil {
+					t.Errorf("planned relay %s does not render: %v", planned.Name, err)
+				}
+			}
+		})
 	}
 }
 

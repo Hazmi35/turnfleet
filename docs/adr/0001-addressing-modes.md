@@ -7,6 +7,9 @@
   address is still the node's `ExternalIP`, but when the node also has a
   different `InternalIP`, the relay pod decides which of the two it binds. The
   modes, the identities and the capacity below stand.
+* Superseded on one point by [0024](0024-externalippool-bind-address.md): an
+  `ExternalIPPool` entry may bind a local `bindAddress` and advertise its
+  `address`. The identity and the capacity below stand.
 
 ## Context
 

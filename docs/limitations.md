@@ -19,8 +19,22 @@ its statement and gains a pointer to the issue.
   still admitted, because a single-object webhook cannot see the other pool's
   addresses atomically.
 * **Secondary addresses must be attached already.** `ExternalIPPool` never
-  attaches addresses to nodes; it binds to what is there. Attaching cloud
-  elastic IPs stays the operator's job. Tracked in #11.
+  attaches addresses to nodes, and never configures them. It binds what is
+  there: `address`, or `bindAddress` when the public address is a 1:1 NAT
+  address the node does not hold. Attaching a cloud public address to an
+  instance, any interface the CNI does not manage, the operating system's
+  configuration of that interface and its routing, and the exemption of the
+  address from the cluster's outbound NAT stay the operator's job
+  (`docs/adr/0024-externalippool-bind-address.md`). A cluster that does it for
+  you is tracked in #89, #90, #91 and #92.
+* **Two pools can bind one local address.** The cross-pool conflict check
+  compares advertised addresses. Any two relays from different pools that bind
+  one local address are not reported, and they compete for the sockets on it.
+  That covers two entries that map different public addresses to one private
+  address, an entry whose `bindAddress` is another pool's `address`, and an
+  entry whose `bindAddress` is a node's `InternalIP` that a `HostNetwork` or
+  `PartitionedIP` relay binds. The webhook checks one pool only
+  (`docs/adr/0024-externalippool-bind-address.md`).
 * **No Service in the data path means firewall work.** Listener ports and the
   relay range must be reachable on each relay node. The operator cannot create
   security-group or firewall rules for an address it does not own.
