@@ -119,7 +119,7 @@ func TestReconcileExternalIPPoolSkipsAnUnusableBindAddress(t *testing.T) {
 	}
 	// The rules leave the API server as the CRD update propagates, so the pool
 	// is created once the server accepts the value.
-	err := wait.PollUntilContextTimeout(f.ctx, 200*time.Millisecond, 30*time.Second, true, func(context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(f.ctx, 200*time.Millisecond, 30*time.Second, true, func(ctx context.Context) (bool, error) {
 		candidate := pool.DeepCopy()
 		candidate.Namespace = f.namespace
 		if candidate.Spec.Dataplane.Image == "" {
@@ -127,7 +127,7 @@ func TestReconcileExternalIPPoolSkipsAnUnusableBindAddress(t *testing.T) {
 		}
 		candidate.Spec.Auth.Realm = "turnfleet.test"
 		candidate.Spec.Auth.SecretRef = pool.Spec.Auth.SecretRef
-		return k8sClient.Create(f.ctx, candidate) == nil, nil
+		return k8sClient.Create(ctx, candidate) == nil, nil
 	})
 	if err != nil {
 		t.Fatalf("the API server still enforces the entry rules: %v", err)
