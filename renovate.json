@@ -78,11 +78,13 @@
       "matchFileNames": ["charts/turnfleet/values.yaml"],
       "matchDatasources": ["docker"],
       "enabled": false
+    },
+    {
+      "description": "`go mod tidy` after every go.mod update. This is a rule every upgrade matches rather than the `gomod` manager block, because a branch takes its config from its first upgrade in name order. In a group that mixes managers, such as #63 with docker/login-action ahead of the Go modules, the first upgrade is not a gomod one and never sees the manager block. The artifact step then runs only `go get`, which adds the new sums and leaves the superseded ones in go.sum (#81). Other managers ignore the option.",
+      "matchPackageNames": ["*"],
+      "postUpdateOptions": ["gomodTidy"]
     }
   ],
-  "gomod": {
-    "postUpdateOptions": ["gomodTidy"]
-  },
   "kubernetes": {
     "description": "Scoped to the examples: the kubernetes manager matches no file by default, and the rest of config/ carries only this project's own placeholder image (`controller:latest`), which is not a dependency to track.",
     "managerFilePatterns": ["/^config/samples/.*\\.ya?ml$/"]
