@@ -1,0 +1,29 @@
+# SPDX-License-Identifier: AGPL-3.0-only
+# Copyright (C) 2026 Turnfleet Authors
+#
+# The attachment the PodIP Multus e2e case names in addressing.podIP.attachmentRef.
+#
+# macvlan in bridge mode puts a second interface (net1) in the relay pod on the
+# kind node's eth0, so the pod holds an address on the network the host reaches
+# the nodes through. The static IPAM plugin declares no address of its own: it
+# takes the one the pod asks for in its network selection ("ips"), which is the
+# address the node declares in turnfleet.hzmi.dev/relay-pod-addresses. That
+# makes the case independent of the kind network's subnet, which differs between
+# hosts. `capabilities.ips` is what makes Multus pass the request on to the
+# plugin.
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: podip-macvlan
+  namespace: turnfleet-e2e
+spec:
+  config: |
+    {
+      "cniVersion": "1.0.0",
+      "name": "podip-macvlan",
+      "type": "macvlan",
+      "master": "eth0",
+      "mode": "bridge",
+      "capabilities": {"ips": true},
+      "ipam": {"type": "static"}
+    }
