@@ -2,6 +2,11 @@
 
 * Status: accepted
 * Date: 2026-10-13
+* Superseded on one point by [0023](0023-relay-bind-decided-on-the-node.md):
+  which node address a `HostNetwork` or `PartitionedIP` relay binds. The relay
+  address is still the node's `ExternalIP`, but when the node also has a
+  different `InternalIP`, the relay pod decides which of the two it binds. The
+  modes, the identities and the capacity below stand.
 
 ## Context
 

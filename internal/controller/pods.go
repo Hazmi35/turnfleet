@@ -53,10 +53,13 @@ func relayHash(pool *turnfleetv1alpha1.TURNPool, state *relayState, tlsSecretHas
 		// did before this field existed, so upgrading the operator does not roll
 		// a fleet that never had a certificate to rotate.
 		TLSSecret string `json:"TLSSecret,omitempty"`
-		// Helper is the image of the init container that decides the bind
-		// address on the node. omitempty matters for the same reason: a relay
-		// without one hashes exactly as it did before this field existed.
-		Helper string `json:",omitempty"`
+		// Decision is the version of the logic the init container decides
+		// with (relayinit.Version). It is not the helper's image: the image
+		// changes with every controller release, and a release must not roll
+		// every relay on a two-address node. omitempty matters for the same
+		// reason as above: a relay without an init container hashes exactly as
+		// it did before this field existed.
+		Decision string `json:",omitempty"`
 	}{
 		Config:       state.hashedConfig(),
 		Image:        pool.Spec.Dataplane.Image,
@@ -65,13 +68,22 @@ func relayHash(pool *turnfleetv1alpha1.TURNPool, state *relayState, tlsSecretHas
 		NodeName:     state.relay.NodeName,
 		ConfigSource: "Secret/" + RelayConfigSecretName(pool),
 		TLSSecret:    tlsSecretHash,
-		Helper:       state.helperImage,
+		Decision:     decisionVersion(state),
 	}
 	encoded, err := json.Marshal(projection)
 	if err != nil {
 		return "", fmt.Errorf("hashing the relay projection: %w", err)
 	}
 	return relay.ConfigHash(string(encoded)), nil
+}
+
+// decisionVersion is what the hash holds of a relay's init container: the
+// version of its decision logic, or nothing for a relay without one.
+func decisionVersion(state *relayState) string {
+	if state.candidates == nil {
+		return ""
+	}
+	return relayinit.Version
 }
 
 // configFiles are the entries one relay contributes to the pool's configuration
@@ -267,7 +279,8 @@ func sameAddress(a, b string) bool {
 // recordDetectedBinds writes the bind address a relay's init container chose
 // onto its pod, in the annotation every other relay's pod gets at creation, and
 // says which case the node was in. It does nothing for a pod that has not
-// reported, and nothing twice.
+// reported, nothing twice, and nothing for a report that is not one of the two
+// addresses the relay was given.
 func (r *TURNPoolReconciler) recordDetectedBinds(ctx context.Context, pool *turnfleetv1alpha1.TURNPool, states []*relayState) error {
 	for _, state := range states {
 		if state.pod == nil || !state.planned || !state.relay.DetectsBind() {
@@ -275,6 +288,15 @@ func (r *TURNPoolReconciler) recordDetectedBinds(ctx context.Context, pool *turn
 		}
 		bind, ok := detectedBind(state.pod)
 		if !ok || state.pod.Annotations[RelayBindAddressAnnotation] == bind {
+			continue
+		}
+		if !sameAddress(bind, state.relay.LocalBindAddress) && !sameAddress(bind, state.relay.BindAddress) {
+			// The init container can only have chosen one of the two addresses
+			// it was given. Anything else is not its report, so it is not
+			// recorded as the relay's bind address.
+			r.Recorder.Eventf(pool, nil, corev1.EventTypeWarning, "RelayBindUnexpected", "Detect",
+				"relay %s: the init container reported %q, which is neither %s nor %s, so it is ignored",
+				state.relay.Name, bind, state.relay.LocalBindAddress, state.relay.BindAddress)
 			continue
 		}
 
@@ -572,7 +594,7 @@ func relayInitContainer(state *relayState) corev1.Container {
 	return corev1.Container{
 		Name:            relayInitContainerName,
 		Image:           state.helperImage,
-		ImagePullPolicy: relayImagePullPolicy,
+		ImagePullPolicy: helperImagePullPolicy,
 		Args: []string{
 			relayinit.Command,
 			"--local-address=" + state.relay.LocalBindAddress,
@@ -744,6 +766,16 @@ func tlsSecretName(listeners []turnfleetv1alpha1.ListenerSpec) string {
 // the image never needs to resolve it again; a cluster that preloads the image
 // (kind, or an air-gapped registry mirror) therefore works without a pull.
 const relayImagePullPolicy = corev1.PullIfNotPresent
+
+// helperImagePullPolicy is IfNotPresent for the init container's image too, for
+// a different reason: the webhook's digest rule does not cover it. The
+// controller pins the image to the digest its own pod reports when the kubelet
+// reports one, so the reference is immutable and a cached copy is the right
+// one. When the kubelet reports none that can be pulled, the image is the tag
+// the controller runs, and a node that already holds another image under a
+// reused tag keeps it. The decision is versioned (relayinit.Version) so that a
+// change to it rolls the relays whichever image a node has.
+const helperImagePullPolicy = corev1.PullIfNotPresent
 
 func resources(spec *corev1.ResourceRequirements) corev1.ResourceRequirements {
 	if spec == nil {

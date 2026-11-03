@@ -174,11 +174,13 @@ fixed when the pod is created, before the choice, and probes that address.
 Nothing is advertised or relayed through loopback.
 
 The init container runs the controller's own image, which the controller finds
-from its own pod. Outside a pod, `--relay-helper-image` names it. A relay that
-needs the decision is refused with an error when the controller knows neither.
-Only relays on a node with differing addresses get the init container: a node
-with one address, equal addresses, or the annotation below plans exactly the
-relay it always did.
+from its own pod when a relay first needs it, pinned to the digest the kubelet
+reports. Outside a pod, `--relay-helper-image` names it. A relay that needs the
+decision is refused with an error when the controller knows neither. Only relays
+on a node with differing addresses and no `relay-bind` get the init container. A
+node with one address, equal addresses, or `relay-bind` has no init container,
+and a relay on a node with one address, equal addresses or `relay-bind=ExternalIP`
+plans exactly the relay it always did.
 
 The node annotation `turnfleet.hzmi.dev/relay-bind` skips the decision. The
 value `ExternalIP` binds and advertises the `ExternalIP`, and `InternalIP` binds

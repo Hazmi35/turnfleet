@@ -199,17 +199,18 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx := ctrl.SetupSignalHandler()
-	if relayHelperImage == "" {
-		relayHelperImage = discoverRelayHelperImage(ctx, mgr.GetAPIReader())
-	}
-
-	if err := (&controller.TURNPoolReconciler{
+	reconciler := &controller.TURNPoolReconciler{
 		Client:           mgr.GetClient(),
 		Scheme:           mgr.GetScheme(),
 		ClusterCIDRs:     splitCIDRs(clusterCIDRs),
 		RelayHelperImage: relayHelperImage,
-	}).SetupWithManager(mgr); err != nil {
+	}
+	if relayHelperImage == "" {
+		// Read when a relay needs it, not at start: a failed read is retried
+		// by the next reconcile instead of lasting as long as the process.
+		reconciler.ResolveRelayHelperImage = ownImageResolver(mgr.GetAPIReader())
+	}
+	if err := reconciler.SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "failed to create controller", "controller", "turnpool")
 		os.Exit(1)
 	}
@@ -231,7 +232,7 @@ func main() {
 	}
 
 	setupLog.Info("starting manager")
-	if err := mgr.Start(ctx); err != nil {
+	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "failed to run manager")
 		os.Exit(1)
 	}

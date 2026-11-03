@@ -4,6 +4,8 @@
 package controller
 
 import (
+	"context"
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -16,6 +18,7 @@ import (
 
 	turnfleetv1alpha1 "github.com/Hazmi35/turnfleet/api/v1alpha1"
 	"github.com/Hazmi35/turnfleet/internal/relay"
+	"github.com/Hazmi35/turnfleet/internal/relayinit"
 )
 
 func hostNetworkPool(name string, replicas int32) *turnfleetv1alpha1.TURNPool {
@@ -1238,6 +1241,25 @@ func TestReconcileIgnoresAFailedInitContainer(t *testing.T) {
 	}
 }
 
+// TestReconcileIgnoresAnUnexpectedBind covers a termination message that is an
+// address, but not one the relay was given: it is not recorded.
+func TestReconcileIgnoresAnUnexpectedBind(t *testing.T) {
+	f := newFixture(t)
+	f.createSecret()
+	f.createNATNode("tf-detect-4", "10.42.0.141", "203.0.113.41", nil)
+
+	f.createPool(natPool("tpool-unexpected", 50800))
+	f.reconcile("tpool-unexpected")
+	f.reconcile("tpool-unexpected")
+
+	pods := f.pods("tpool-unexpected")
+	f.reportInitContainer(&pods[0], 0, "192.0.2.1")
+	f.reconcile("tpool-unexpected")
+	if got, recorded := f.pods("tpool-unexpected")[0].Annotations[RelayBindAddressAnnotation]; recorded {
+		t.Errorf("the pod records bind address %q, which is neither address the relay was given", got)
+	}
+}
+
 // TestReconcileRelayBindSkipsTheDecision covers the node annotation: a node
 // that says which address it holds gets a relay with one configuration, no init
 // container and the probe on the bind address, exactly like any other relay.
@@ -1327,6 +1349,45 @@ func TestReconcileNeedsTheHelperImage(t *testing.T) {
 	}
 	if pods := f.pods("tpool-no-helper"); len(pods) != 0 {
 		t.Errorf("got %d relay pods, want none", len(pods))
+	}
+}
+
+// TestReconcileResolvesTheHelperImageLazily covers a controller that reads its
+// own image when a relay needs it: a failed read fails the pass and is retried,
+// the first success is kept, and the pod runs what was read.
+func TestReconcileResolvesTheHelperImageLazily(t *testing.T) {
+	f := newFixture(t)
+	f.reconciler.RelayHelperImage = ""
+	calls := 0
+	failing := true
+	f.reconciler.ResolveRelayHelperImage = func(context.Context) (string, error) {
+		calls++
+		if failing {
+			return "", errors.New("the API server is not reachable")
+		}
+		return "ghcr.io/hazmi35/turnfleet-controller:v9@sha256:" + strings.Repeat("ab", 32), nil
+	}
+	f.createSecret()
+	f.createNATNode("tf-lazy-1", "10.42.0.140", "203.0.113.40", nil)
+	f.createPool(natPool("tpool-lazy", 50700))
+
+	_, err := f.reconcileResult("tpool-lazy")
+	if err == nil || !strings.Contains(err.Error(), "the API server is not reachable") {
+		t.Fatalf("reconcile error = %v, want the failed read", err)
+	}
+
+	failing = false
+	f.reconcile("tpool-lazy")
+	f.reconcile("tpool-lazy")
+	pods := f.pods("tpool-lazy")
+	if len(pods) != 1 || len(pods[0].Spec.InitContainers) != 1 {
+		t.Fatalf("pods = %d, want one relay pod with its init container", len(pods))
+	}
+	if got := pods[0].Spec.InitContainers[0].Image; !strings.HasPrefix(got, "ghcr.io/hazmi35/turnfleet-controller:v9@sha256:") {
+		t.Errorf("init container image = %q, want the image the resolver found", got)
+	}
+	if calls != 2 {
+		t.Errorf("the resolver was called %d times, want 2: one failure, one success that is kept", calls)
 	}
 }
 
@@ -1608,10 +1669,12 @@ func TestRelayHashOfAPlainRelayIsUnchanged(t *testing.T) {
 	}
 }
 
-// TestRelayHashCoversTheCandidatesAndTheHelper pins what rolls a relay that
-// decides its bind address on the node: a change to either candidate
-// configuration, and a change to the image of its init container.
-func TestRelayHashCoversTheCandidatesAndTheHelper(t *testing.T) {
+// TestRelayHashCoversTheCandidates pins what rolls a relay that decides its
+// bind address on the node: a change to either candidate configuration. A
+// change to the image of its init container does not: every controller release
+// has another image, and a release must not restart every relay on a
+// two-address node.
+func TestRelayHashCoversTheCandidates(t *testing.T) {
 	t.Parallel()
 
 	pool := hostNetworkPool("demo", 1)
@@ -1640,7 +1703,6 @@ func TestRelayHashCoversTheCandidatesAndTheHelper(t *testing.T) {
 	changes := map[string]func(*relayState){
 		"local candidate":  func(s *relayState) { s.candidates.Local += "# changed\n" },
 		"mapped candidate": func(s *relayState) { s.candidates.Mapped += "# changed\n" },
-		"helper image":     func(s *relayState) { s.helperImage = "ghcr.io/hazmi35/turnfleet-controller:v2" },
 	}
 	for name, change := range changes {
 		state := base()
@@ -1648,6 +1710,20 @@ func TestRelayHashCoversTheCandidatesAndTheHelper(t *testing.T) {
 		if got := hashOf(state); got == original {
 			t.Errorf("changing the %s leaves the hash alone, so the relay would not roll", name)
 		}
+	}
+
+	newImage := base()
+	newImage.helperImage = "ghcr.io/hazmi35/turnfleet-controller:v2"
+	if got := hashOf(newImage); got != original {
+		t.Error("a new helper image changes the hash, so every controller release would roll every relay on a two-address node")
+	}
+
+	// A relay with candidates carries the decision version, and one without
+	// does not.
+	plain := base()
+	plain.candidates, plain.config = nil, "listening-ip=10.42.0.134\n"
+	if decisionVersion(plain) != "" || decisionVersion(base()) != relayinit.Version {
+		t.Error("decisionVersion() must be empty for a relay without candidates and relayinit.Version for one with")
 	}
 
 	// Moving text between the two candidates is a change too.

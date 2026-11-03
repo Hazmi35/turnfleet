@@ -30,6 +30,14 @@ import (
 // package instead of the manager.
 const Command = "relay-init"
 
+// Version is the version of the decision this package makes, and of the files
+// it installs. The controller hashes it into the config hash of every relay that
+// has an init container, so a change to the decision rolls those relays. Bump
+// it when Decide, or what Run does with its result, changes what a node binds.
+// A new release of the controller that leaves the decision alone leaves it too,
+// so that it does not restart every relay on a two-address node.
+const Version = "1"
+
 // outputMode is the mode of the chosen configuration. It embeds the shared
 // secret, and coturn runs as the user the init container ran as.
 const outputMode = 0o400

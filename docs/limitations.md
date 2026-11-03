@@ -117,7 +117,10 @@ its statement and gains a pointer to the issue.
   the controller has to know it: it reads it from its own pod, or from
   `--relay-helper-image` outside a pod. Without either, a pool that plans such a
   relay fails to reconcile with an error that names the flag and the node
-  annotation. The relay also listens on the loopback address of its family,
+  annotation. Relay pods get no `imagePullSecrets`, so a controller image in a
+  private registry leaves the init container in `ImagePullBackOff` unless the
+  node holds a pull credential or the image. Setting `relay-bind` on the node
+  avoids the init container. The relay also listens on the loopback address of its family,
   which its readiness probe uses, because the probe is fixed before the choice
   is made. A node that sets `turnfleet.hzmi.dev/relay-bind`, or that has one
   address per family, gets neither. kind nodes cannot hold an `ExternalIP` the
@@ -129,10 +132,14 @@ its statement and gains a pointer to the issue.
   `turnfleet.hzmi.dev/relay-bind` gains the init container and the loopback
   listener, so its pod spec and config hash change and the relay rolls once,
   under drain, one relay at a time. Its identity `(address, port range)` does
-  not change. On a node that holds its `ExternalIP`, the relay binds and
+  not change. The hash holds the version of the decision, not the init
+  container's image, so a later controller release does not roll these relays
+  again unless the decision changes. On a node that holds its `ExternalIP`, the relay binds and
   advertises what it did before. On a NATed node it starts serving, where it
-  bound an address the node did not hold. A relay on a node with one address, or
-  with equal addresses, hashes as it did and is not restarted.
+  bound an address the node did not hold. A relay on a node with one address,
+  with equal addresses, or with `relay-bind=ExternalIP` hashes as it did and is
+  not restarted. With `relay-bind=InternalIP` the bind address changes, so the
+  relay rolls once.
 * **`PodIP` needs the operator to reserve the addresses.** The relay advertises
   the address its own pod holds, on the default network or on a Multus
   attachment (`spec.addressing.podIP.attachmentRef`). The operator declares the

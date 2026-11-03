@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -86,9 +87,20 @@ type TURNPoolReconciler struct {
 	// RelayHelperImage is the image of the init container that decides a
 	// relay's bind address on its node (ADR 23). It is the controller's own
 	// image, because the init container runs this binary's relay-init command,
-	// so the two always agree. It is empty when the controller does not know its
-	// image, and a relay that needs the decision cannot be planned then.
+	// so the two always agree. It is set by --relay-helper-image.
 	RelayHelperImage string
+
+	// ResolveRelayHelperImage finds that image when RelayHelperImage is empty:
+	// the controller's own pod says what it runs. It is called when a relay
+	// needs the image, and its first answer is kept. An error fails the pass,
+	// which is retried, so a read that failed once does not last as long as the
+	// process. When neither is set, a relay that needs the decision cannot be
+	// planned.
+	ResolveRelayHelperImage func(ctx context.Context) (string, error)
+
+	// helperMu guards helperResolved, the answer ResolveRelayHelperImage gave.
+	helperMu       sync.Mutex
+	helperResolved string
 
 	// probes is the last probe of every relay this controller probed. It is
 	// the probe schedule and the source of the probe metrics, kept out of the
@@ -186,7 +198,7 @@ func (r *TURNPoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	plan := relay.ComputePlan(&relay.PlanInput{PoolName: pool.Name, Spec: pool.Spec, Nodes: observed.relays})
 	relay.SortRelays(plan.Relays)
 
-	states, err := r.renderRelays(pool, &plan, observed, secret, tlsSecret, pods)
+	states, err := r.renderRelays(ctx, pool, &plan, observed, secret, tlsSecret, pods)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -229,6 +241,30 @@ func (r *TURNPoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	return ctrl.Result{RequeueAfter: r.requeueAfter(draining, pool)}, nil
+}
+
+// relayHelperImage is the image of the init container of the relays in the plan
+// that decide their bind address on the node, or "" when none does or the
+// controller does not know it. It asks ResolveRelayHelperImage only when a
+// relay needs the image, and keeps the first answer.
+func (r *TURNPoolReconciler) relayHelperImage(ctx context.Context, plan *relay.Plan) (string, error) {
+	if r.RelayHelperImage != "" {
+		return r.RelayHelperImage, nil
+	}
+	if r.ResolveRelayHelperImage == nil || !slices.ContainsFunc(plan.Relays, func(planned relay.Relay) bool { return planned.DetectsBind() }) {
+		return "", nil
+	}
+
+	r.helperMu.Lock()
+	defer r.helperMu.Unlock()
+	if r.helperResolved == "" {
+		image, err := r.ResolveRelayHelperImage(ctx)
+		if err != nil {
+			return "", fmt.Errorf("finding the image of the relay init container: %w", err)
+		}
+		r.helperResolved = image
+	}
+	return r.helperResolved, nil
 }
 
 // requeueAfter picks the next reconcile: a second while a drain is in flight,

@@ -133,6 +133,7 @@ func (s *relayState) probeObservedCapacity() bool {
 // renderRelays joins the plan with the existing pods and each relay's rendered
 // configuration.
 func (r *TURNPoolReconciler) renderRelays(
+	ctx context.Context,
 	pool *turnfleetv1alpha1.TURNPool,
 	plan *relay.Plan,
 	observed *nodeObservation,
@@ -140,6 +141,11 @@ func (r *TURNPoolReconciler) renderRelays(
 	tlsSecretHash string,
 	pods []corev1.Pod,
 ) ([]*relayState, error) {
+	helperImage, err := r.relayHelperImage(ctx, plan)
+	if err != nil {
+		return nil, err
+	}
+
 	denied := relay.MergeCIDRs(policyDeniedCIDRs(pool), r.ClusterCIDRs, observed.podCIDRs)
 	requests := podAddressRequests(observed)
 	var allowed []string
@@ -168,7 +174,7 @@ func (r *TURNPoolReconciler) renderRelays(
 			addressRequest: requests[planned.NodeName+"|"+planned.Address],
 		}
 		if planned.DetectsBind() {
-			if r.RelayHelperImage == "" {
+			if helperImage == "" {
 				return nil, fmt.Errorf("relay %s on node %s needs its pod to tell whether the node holds %s, "+
 					"and the controller does not know its own image to run that check with: "+
 					"run the controller in a pod, set --relay-helper-image, or set %s=%s or %s=%s on the node",
@@ -180,7 +186,7 @@ func (r *TURNPoolReconciler) renderRelays(
 				return nil, fmt.Errorf("rendering relay %s: %w", planned.Name, err)
 			}
 			state.candidates = &candidates
-			state.helperImage = r.RelayHelperImage
+			state.helperImage = helperImage
 		} else {
 			config, err := relay.Render(&input)
 			if err != nil {

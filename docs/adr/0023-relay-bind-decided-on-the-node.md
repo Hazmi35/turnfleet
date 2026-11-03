@@ -69,7 +69,11 @@ The mechanics, for a relay that needs the decision:
 
 * The controller renders two configurations, one per case, and stores both in
   the pool's relay Secret under `<relay>.local.conf` and `<relay>.mapped.conf`.
-  Both go into the config hash, so a change to either rolls the relay.
+  Both go into the config hash, so a change to either rolls the relay. So
+  does `relayinit.Version`, the version of the decision the init container
+  makes, which is bumped only when that decision changes. The image is not in
+  the hash: it changes with every controller release, and a release that leaves
+  the decision alone must not restart every relay on a two-address node.
 * The pod gets an init container that runs `turnfleet-controller relay-init`,
   from the controller's own image. It lists the node's interfaces with
   `net.Interfaces()`, which needs no privilege, copies the matching
@@ -81,9 +85,18 @@ The mechanics, for a relay that needs the decision:
   and emits a `RelayBindDetected` event. It needs no new RBAC.
 * The image is the controller's own, found by reading its own pod (the manager
   container, by the hostname and the namespace file the service account
-  mounts). `--relay-helper-image` overrides it, for a controller that runs
-  outside a pod. A relay that needs the decision is refused with an error that
-  names the flag and the node annotation when the controller knows neither.
+  mounts), and pinned to the digest the kubelet reports for it when it reports
+  one that can be pulled. Otherwise it is the tag the controller runs, and a
+  node that holds another image under a reused tag keeps it (the pull policy is
+  `IfNotPresent`, as for the dataplane image). The controller reads its pod when
+  a relay first needs the image, keeps the first answer, and retries a failed
+  read on the next pass. `--relay-helper-image` overrides it, for a controller
+  that runs outside a pod. A relay that needs the decision is refused with an
+  error that names the flag and the node annotation when the controller knows
+  neither.
+* The controller records only an address that is one of the two it gave the
+  init container. A report that is another address is ignored, with a
+  `RelayBindUnexpected` event.
 * The dataplane image stays the user's pinned coturn. Nothing runs in it but
   `turnserver`: it has no shell and no `ip`.
 * Both configurations also set `listening-ip` to the loopback address of the
@@ -154,12 +167,18 @@ that changes the plan re-plans the node.
   the `ExternalIP` in both cases, so no `turnURIs` entry changes. A node that
   holds its `ExternalIP` binds and advertises what it did before. A NATed node
   goes from broken to working. A relay on a node with one address per family,
-  equal addresses, or `relay-bind` set hashes as it did and does not roll
-  (a test pins the value).
+  equal addresses, or `relay-bind=ExternalIP` hashes as it did and does not roll
+  (a test pins the value). With `relay-bind=InternalIP` the relay has no init
+  container, but its bind address changes from the `ExternalIP` to the
+  `InternalIP`, so it rolls once, as a NATed node must. Later controller
+  releases do not roll these relays unless the decision changes.
 * A relay pod on such a node has an init container, and the node has to be able
-  to pull the controller's image for it. The pod's memory-backed `emptyDir`
-  holds the configuration, which embeds the shared secret, so it never reaches
-  the node's disk.
+  to pull the controller's image for it. Relay pods get no `imagePullSecrets`,
+  so a controller image in a private registry leaves the init container in
+  `ImagePullBackOff`, unless the node holds a pull credential or the image. The
+  workaround is `relay-bind` on the node, which needs no init container. The
+  pod's memory-backed `emptyDir` holds the configuration, which embeds the
+  shared secret, so it never reaches the node's disk.
 * The relay listens on loopback as well. Any process on the node can reach that
   listener, and credentials still apply.
 * A relay on a node that holds neither address cannot start: the init container
