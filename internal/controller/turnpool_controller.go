@@ -97,6 +97,7 @@ type TURNPoolReconciler struct {
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch;create;update
 // +kubebuilder:rbac:groups="",resources=nodes,verbs=get;list;watch
 // +kubebuilder:rbac:groups="",resources=events,verbs=create;patch
+// +kubebuilder:rbac:groups=events.k8s.io,resources=events,verbs=create;patch
 
 // Reconcile converges one TURNPool.
 func (r *TURNPoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
