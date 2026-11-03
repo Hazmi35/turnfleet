@@ -197,7 +197,7 @@ the addresses come from is the addressing mode:
 
 | Mode | Address a relay binds | How capacity grows |
 | --- | --- | --- |
-| `HostNetwork` | the relay node's own address | one port range per labelled relay node |
+| `HostNetwork` | the relay node's own address: its `ExternalIP` when the node holds it on an interface, its `InternalIP` when the `ExternalIP` is a 1:1 NAT address (the relay pod decides, and `turnfleet.hzmi.dev/relay-bind` overrides); the relay advertises the `ExternalIP` either way | one port range per labelled relay node |
 | `ExternalIPPool` | a secondary address already attached to a node | one port range per declared address |
 | `PodIP` | the relay pod's own address, on the default network or on a Multus attachment | one port range per address the node declares in `turnfleet.hzmi.dev/relay-pod-addresses` |
 | `PartitionedIP` | the node address, shared by `addressing.partitionedIP.relaysPerNode` relays | not at all: the slices still sum to one IP's port space, so it adds concurrency and isolation only |

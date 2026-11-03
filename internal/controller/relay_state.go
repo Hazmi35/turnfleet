@@ -28,9 +28,16 @@ type relayState struct {
 	// that is not planned is on its way out.
 	planned bool
 
-	// config is the rendered coturn configuration and hash is its digest.
-	config string
-	hash   string
+	// config is the rendered coturn configuration and hash is its digest. A
+	// relay that decides its bind address on its node has candidates instead
+	// of a config: the hash covers both of them.
+	config     string
+	candidates *relay.Candidates
+	hash       string
+
+	// helperImage is the image of the init container that picks one of the
+	// candidates. It is empty for a relay that has none.
+	helperImage string
 
 	// pod is the relay's pod, or nil when it does not exist yet.
 	pod *corev1.Pod
@@ -145,7 +152,7 @@ func (r *TURNPoolReconciler) renderRelays(
 
 	for i := range plan.Relays {
 		planned := plan.Relays[i]
-		config, err := relay.Render(&relay.RenderInput{
+		input := relay.RenderInput{
 			Relay:         planned,
 			PoolNamespace: pool.Namespace,
 			PoolName:      pool.Name,
@@ -153,16 +160,33 @@ func (r *TURNPoolReconciler) renderRelays(
 			DeniedCIDRs:   denied,
 			AllowedCIDRs:  allowed,
 			AuthSecret:    secret,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("rendering relay %s: %w", planned.Name, err)
 		}
 
 		state := &relayState{
 			relay:          planned,
 			planned:        true,
-			config:         config,
 			addressRequest: requests[planned.NodeName+"|"+planned.Address],
+		}
+		if planned.DetectsBind() {
+			if r.RelayHelperImage == "" {
+				return nil, fmt.Errorf("relay %s on node %s needs its pod to tell whether the node holds %s, "+
+					"and the controller does not know its own image to run that check with: "+
+					"run the controller in a pod, set --relay-helper-image, or set %s=%s or %s=%s on the node",
+					planned.Name, planned.NodeName, planned.LocalBindAddress,
+					RelayBindAnnotation, RelayBindInternalIP, RelayBindAnnotation, RelayBindExternalIP)
+			}
+			candidates, err := relay.RenderCandidates(&input)
+			if err != nil {
+				return nil, fmt.Errorf("rendering relay %s: %w", planned.Name, err)
+			}
+			state.candidates = &candidates
+			state.helperImage = r.RelayHelperImage
+		} else {
+			config, err := relay.Render(&input)
+			if err != nil {
+				return nil, fmt.Errorf("rendering relay %s: %w", planned.Name, err)
+			}
+			state.config = config
 		}
 		hash, err := relayHash(pool, state, tlsSecretHash)
 		if err != nil {

@@ -17,10 +17,31 @@ const (
 	// address, so this label is the pool's placement contract.
 	RelayNodeLabel = "turnfleet.hzmi.dev/relay-node"
 
-	// RelayAddressAnnotation overrides the address a relay on a node advertises
-	// (and binds), for nodes whose ExternalIP is not the address clients should
-	// use.
+	// RelayAddressAnnotation overrides the address a relay on a node advertises,
+	// for nodes whose ExternalIP is not the address clients should use. It
+	// replaces only the advertised address of the family it names. The address
+	// the relay binds follows RelayBindAnnotation and the node itself, and is
+	// never overridden.
 	RelayAddressAnnotation = "turnfleet.hzmi.dev/relay-address"
+
+	// RelayBindAnnotation is a NODE annotation that says which node address a
+	// relay binds when the node has both an InternalIP and an ExternalIP in a
+	// family and they differ. The value is RelayBindInternalIP or
+	// RelayBindExternalIP. When it is absent, the relay pod decides when it
+	// starts, by whether the node holds the ExternalIP on an interface (ADR 23).
+	// It is not RelayBindAddressAnnotation, which is a POD annotation that
+	// records the address a relay binds.
+	RelayBindAnnotation = "turnfleet.hzmi.dev/relay-bind"
+
+	// RelayBindInternalIP makes a relay bind the node's InternalIP and advertise
+	// its ExternalIP, for a node whose ExternalIP is a 1:1 NAT address the node
+	// does not hold. It skips the decision on the node.
+	RelayBindInternalIP = "InternalIP"
+
+	// RelayBindExternalIP makes a relay bind and advertise the node's ExternalIP,
+	// for a node that holds it on an interface. It skips the decision on the
+	// node.
+	RelayBindExternalIP = "ExternalIP"
 
 	// The PodIP mode's address declaration is relay.PodAddressesAnnotation: the
 	// planner, the admission webhook and this controller all read it, so it
@@ -82,6 +103,30 @@ const (
 	configVolumeName = "turnfleet-config"
 	tlsVolumeName    = "turnfleet-tls"
 	tmpVolumeName    = "turnfleet-tmp"
+
+	// configFileName is the name of the coturn configuration file in the volume
+	// the relay container mounts at relay.ConfigPath.
+	configFileName = "turnserver.conf"
+
+	// candidatesVolumeName holds the two configurations of a relay that decides
+	// its bind address on its node. The init container reads them, and writes
+	// the chosen one to the volume named configVolumeName, which then is an
+	// in-memory emptyDir instead of the Secret.
+	candidatesVolumeName = "turnfleet-config-candidates"
+
+	// candidatesMountPath and activeMountPath are where the init container sees
+	// the candidates and the directory it writes the chosen configuration to.
+	candidatesMountPath = "/turnfleet/candidates"
+	activeMountPath     = "/turnfleet/active"
+
+	// localConfigFile and mappedConfigFile are the candidate files, and the
+	// suffixes of their keys in the configuration Secret.
+	localConfigFile  = "local.conf"
+	mappedConfigFile = "mapped.conf"
+
+	// relayInitContainerName is the init container that decides the bind
+	// address. Its termination message is the address it chose.
+	relayInitContainerName = "relay-init"
 
 	// tlsMountPath is where a tls listener's Secret is mounted.
 	tlsMountPath = "/etc/turnfleet/tls"

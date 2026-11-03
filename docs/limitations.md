@@ -97,15 +97,42 @@ its statement and gains a pointer to the issue.
   the IPv6 data path is proven against the pinned coturn image rather than by
   `make test-e2e` (`docs/capacity-model.md`).
 * **`HostNetwork` needs a node address that clients can actually route to.** It
-  binds the node's `ExternalIP`, or the `turnfleet.hzmi.dev/relay-address`
+  advertises the node's `ExternalIP`, or the `turnfleet.hzmi.dev/relay-address`
   annotation when the node has no `ExternalIP`, or when the `ExternalIP` is not
-  the address clients should use. On a cluster where the nodes have no public
-  address at all, this mode is unusable. Azure Kubernetes Service with Cilium is
-  the named example: inbound traffic arrives only through a load balancer and
-  outbound goes through a NAT gateway. The relay would advertise the
-  node's `InternalIP`, an RFC 1918 address no peer can reach, while the
-  allocation and the in-cluster probe both look healthy. `PodIP` addressing is
-  what closes that gap (`docs/adr/0018-addressing-mode-podip.md`).
+  the address clients should use. When the node has an `InternalIP` and a
+  different `ExternalIP`, the relay binds the `ExternalIP` if the node holds it
+  on an interface and the `InternalIP` if it does not (1:1 NAT, as on EKS with
+  public nodes). The relay pod decides when it starts
+  (`docs/adr/0023-relay-bind-decided-on-the-node.md`), and the node annotation
+  `turnfleet.hzmi.dev/relay-bind` (`InternalIP` or `ExternalIP`) skips the
+  decision. On a cluster where the nodes have no public address at all, this
+  mode is unusable. Azure Kubernetes Service with Cilium is the named example:
+  inbound traffic arrives only through a load balancer and outbound goes
+  through a NAT gateway. The relay would advertise the node's `InternalIP`, an
+  RFC 1918 address no peer can reach, while the allocation and the in-cluster
+  probe both look healthy. `PodIP` addressing is what closes that gap
+  (`docs/adr/0018-addressing-mode-podip.md`).
+* **A relay on a node with two different addresses carries an init container.**
+  It runs the controller's own image, so the node has to be able to pull it, and
+  the controller has to know it: it reads it from its own pod, or from
+  `--relay-helper-image` outside a pod. Without either, a pool that plans such a
+  relay fails to reconcile with an error that names the flag and the node
+  annotation. The relay also listens on the loopback address of its family,
+  which its readiness probe uses, because the probe is fixed before the choice
+  is made. A node that sets `turnfleet.hzmi.dev/relay-bind`, or that has one
+  address per family, gets neither. kind nodes cannot hold an `ExternalIP` the
+  kubelet does not report, so `make test-e2e` runs the path without the init
+  container. The choice itself is covered by unit and envtest tests and was run
+  by hand against the pinned coturn image.
+* **Upgrading restarts the relays on nodes with two different addresses.** A
+  relay on a node whose `ExternalIP` and `InternalIP` differ and that has no
+  `turnfleet.hzmi.dev/relay-bind` gains the init container and the loopback
+  listener, so its pod spec and config hash change and the relay rolls once,
+  under drain, one relay at a time. Its identity `(address, port range)` does
+  not change. On a node that holds its `ExternalIP`, the relay binds and
+  advertises what it did before. On a NATed node it starts serving, where it
+  bound an address the node did not hold. A relay on a node with one address, or
+  with equal addresses, hashes as it did and is not restarted.
 * **`PodIP` needs the operator to reserve the addresses.** The relay advertises
   the address its own pod holds, on the default network or on a Multus
   attachment (`spec.addressing.podIP.attachmentRef`). The operator declares the

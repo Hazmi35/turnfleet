@@ -72,8 +72,16 @@ type Relay struct {
 
 	// BindAddress is the local address the relay binds. It differs from Address
 	// only when the advertised address is not local (a NAT/override case), in
-	// which case the renderer emits coturn's public/private mapping.
+	// which case the renderer emits coturn's public/private mapping. For a
+	// relay with LocalBindAddress it is the address bound when the node does
+	// not hold LocalBindAddress.
 	BindAddress string
+
+	// LocalBindAddress is the address the relay binds instead of BindAddress
+	// when the node holds it on an interface. It is set only for a relay whose
+	// bind address is decided on the node when its pod starts (ADR 23), and it
+	// is empty for every other relay.
+	LocalBindAddress string
 
 	// PortRange is the slice of the pool's port space this relay owns.
 	PortRange PortRange
@@ -101,6 +109,34 @@ type Relay struct {
 
 // Capacity is the number of concurrent allocations this relay can hold.
 func (r *Relay) Capacity() int32 { return r.PortRange.Ports() }
+
+// DetectsBind reports whether the relay's bind address is decided on the node,
+// when its pod starts, between LocalBindAddress and BindAddress.
+func (r *Relay) DetectsBind() bool { return r.LocalBindAddress != "" }
+
+// Loopback addresses, one per address family.
+const (
+	LoopbackV4 = "127.0.0.1"
+	LoopbackV6 = "::1"
+)
+
+// ListenerProbeAddress is the address a TCP readiness probe connects to.
+//
+// It is the bind address, except for a relay that decides its bind address
+// when its pod starts: the pod's probe is fixed when the pod is created, before
+// the choice, so such a relay also listens on the loopback address of its
+// family and the probe connects there. The probe runs on the node, in the
+// pod's host network namespace, so loopback reaches the listener whichever
+// address the relay bound.
+func (r *Relay) ListenerProbeAddress() string {
+	if !r.DetectsBind() {
+		return r.BindAddress
+	}
+	if AddressFamilyOf(r.Address) == turnfleetv1alpha1.AddressingFamilyIPv6 {
+		return LoopbackV6
+	}
+	return LoopbackV4
+}
 
 // Node is one relay node as the planner sees it.
 type Node struct {
@@ -134,6 +170,13 @@ type NodeAddress struct {
 	// when the advertised address is not local (a NAT public address, or the
 	// turnfleet.hzmi.dev/relay-address override).
 	BindAddress string
+
+	// LocalBindAddress is set when the node has an InternalIP and a different
+	// ExternalIP and did not say which one it holds. The relay then binds
+	// LocalBindAddress when the node has it on an interface, and BindAddress
+	// when it does not. Only the node can tell: the relay pod decides when it
+	// starts. It is empty when the bind address is already known.
+	LocalBindAddress string
 }
 
 // addressOf returns the node's address in one family.

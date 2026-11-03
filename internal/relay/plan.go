@@ -93,12 +93,13 @@ type candidate struct {
 	nodeName           string
 	address            string
 	bindAddress        string
+	localBindAddress   string
 	portRange          PortRange
 	listenerPortOffset int32
 	metricsPortOffset  int32
 }
 
-func (c candidate) relay(poolName string) Relay {
+func (c *candidate) relay(poolName string) Relay {
 	id := identity(c.address, c.portRange)
 	return Relay{
 		Name:               RelayName(poolName, id),
@@ -106,6 +107,7 @@ func (c candidate) relay(poolName string) Relay {
 		NodeName:           c.nodeName,
 		Address:            c.address,
 		BindAddress:        c.bindAddress,
+		LocalBindAddress:   c.localBindAddress,
 		PortRange:          c.portRange,
 		ListenerPortOffset: c.listenerPortOffset,
 		MetricsPortOffset:  c.metricsPortOffset,
@@ -151,10 +153,11 @@ func candidatesForFamily(spec *turnfleetv1alpha1.TURNPoolSpec, node *Node, famil
 			return nil
 		}
 		return []candidate{{
-			nodeName:    node.Name,
-			address:     address.Address,
-			bindAddress: address.BindAddress,
-			portRange:   portRange,
+			nodeName:         node.Name,
+			address:          address.Address,
+			bindAddress:      address.BindAddress,
+			localBindAddress: address.LocalBindAddress,
+			portRange:        portRange,
 		}}
 
 	case turnfleetv1alpha1.AddressingModeExternalIPPool:
@@ -180,10 +183,11 @@ func candidatesForFamily(spec *turnfleetv1alpha1.TURNPoolSpec, node *Node, famil
 		out := make([]candidate, 0, len(portSlices))
 		for slot, slice := range portSlices {
 			out = append(out, candidate{
-				nodeName:    node.Name,
-				address:     address.Address,
-				bindAddress: address.BindAddress,
-				portRange:   slice,
+				nodeName:         node.Name,
+				address:          address.Address,
+				bindAddress:      address.BindAddress,
+				localBindAddress: address.LocalBindAddress,
+				portRange:        slice,
 				// Every relay on this address needs its own listening
 				// port: a listening socket can only be bound once per
 				// address.

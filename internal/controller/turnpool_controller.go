@@ -83,6 +83,13 @@ type TURNPoolReconciler struct {
 	// controller's flags: the cluster's service range when it is not RFC 1918.
 	ClusterCIDRs []string
 
+	// RelayHelperImage is the image of the init container that decides a
+	// relay's bind address on its node (ADR 23). It is the controller's own
+	// image, because the init container runs this binary's relay-init command,
+	// so the two always agree. It is empty when the controller does not know its
+	// image, and a relay that needs the decision cannot be planned then.
+	RelayHelperImage string
+
 	// probes is the last probe of every relay this controller probed. It is
 	// the probe schedule and the source of the probe metrics, kept out of the
 	// status so that a probe with an unchanged outcome writes nothing.
@@ -186,6 +193,10 @@ func (r *TURNPoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 
 	if err := r.reconcileRelayConfig(ctx, pool, states); err != nil {
 		return ctrl.Result{}, fmt.Errorf("reconciling the relay configuration: %w", err)
+	}
+
+	if err := r.recordDetectedBinds(ctx, pool, states); err != nil {
+		return ctrl.Result{}, fmt.Errorf("recording the bind addresses of the relays: %w", err)
 	}
 
 	draining, err := r.reconcilePods(ctx, pool, states)
@@ -297,17 +308,38 @@ func (r *TURNPoolReconciler) observeNodes(ctx context.Context) (*nodeObservation
 }
 
 // nodeAddresses returns the addresses a relay on this node could advertise, one
-// per address family, IPv4 first.
+// per address family, IPv4 first, with the address the relay binds for each.
 //
-// Each family comes from the node's ExternalIP, or its InternalIP when there is
-// none. Both are collected: a dual-stack node has one of each, and a DualStack
-// pool plans a relay on each of them, because the two addresses are two relay
-// addresses with two port spaces.
+// Both are collected per family: a dual-stack node has one of each, and a
+// DualStack pool plans a relay on each of them, because the two addresses are
+// two relay addresses with two port spaces.
+//
+// A family with one address, or with an InternalIP and an ExternalIP that are
+// equal, binds and advertises it. A family with both and different is the
+// case the Node object cannot settle: a cloud's public node holds only its
+// InternalIP and the provider translates the ExternalIP (1:1 NAT), while a
+// bare-metal node, or a node on DigitalOcean, Linode, Vultr or Hetzner Cloud,
+// holds the ExternalIP on an interface. The relay advertises the ExternalIP in
+// both cases. What it binds depends on the node, so unless the node says
+// otherwise the relay pod decides when it starts (LocalBindAddress, ADR 23):
+// the ExternalIP when the node holds it, the InternalIP otherwise.
+//
+// The turnfleet.hzmi.dev/relay-bind annotation skips that decision. InternalIP
+// binds the InternalIP and ExternalIP binds the ExternalIP, in every family
+// where the two differ.
 //
 // The turnfleet.hzmi.dev/relay-address annotation overrides the advertised
-// address of the family it names. One annotation therefore covers one family:
-// the other keeps the node's own address.
+// address of the family it names, and never the bind address. One annotation
+// therefore covers one family: the other keeps the node's own address.
 func nodeAddresses(node *corev1.Node) ([]relay.NodeAddress, error) {
+	bindMode := strings.TrimSpace(node.Annotations[RelayBindAnnotation])
+	switch bindMode {
+	case "", RelayBindInternalIP, RelayBindExternalIP:
+	default:
+		return nil, fmt.Errorf("node %s has an unusable %s annotation %q: it must be %s or %s",
+			node.Name, RelayBindAnnotation, bindMode, RelayBindInternalIP, RelayBindExternalIP)
+	}
+
 	external := map[turnfleetv1alpha1.AddressingFamily]string{}
 	internal := map[turnfleetv1alpha1.AddressingFamily]string{}
 	for _, addr := range node.Status.Addresses {
@@ -331,14 +363,21 @@ func nodeAddresses(node *corev1.Node) ([]relay.NodeAddress, error) {
 
 	out := make([]relay.NodeAddress, 0, 2)
 	for _, family := range relay.AddressFamilies(turnfleetv1alpha1.AddressingFamilyDualStack) {
-		address := external[family]
-		if address == "" {
-			address = internal[family]
+		address := relay.NodeAddress{Address: external[family], BindAddress: internal[family]}
+		switch {
+		case address.Address == "":
+			address.Address = address.BindAddress
+		case address.BindAddress == "" || address.BindAddress == address.Address:
+			address.BindAddress = address.Address
+		case bindMode == RelayBindExternalIP:
+			address.BindAddress = address.Address
+		case bindMode == "":
+			address.LocalBindAddress = address.Address
 		}
-		if address == "" {
+		if address.Address == "" {
 			continue
 		}
-		out = append(out, relay.NodeAddress{Address: address, BindAddress: address})
+		out = append(out, address)
 	}
 
 	override := strings.TrimSpace(node.Annotations[RelayAddressAnnotation])
@@ -573,8 +612,8 @@ func nodeChanged() predicate.Predicate {
 }
 
 // nodeAddressKey is the addresses a relay on this node would use, in one
-// comparable string. It includes the relay-address annotation, because the
-// annotation is what decides the advertised address.
+// comparable string. It includes the relay-address and relay-bind annotations,
+// because they decide the advertised and the bound address.
 //
 // An address set that cannot be read is its own key rather than an empty one:
 // two different misconfigurations are two different changes.
@@ -585,7 +624,7 @@ func nodeAddressKey(node *corev1.Node) string {
 	}
 	parts := make([]string, 0, len(addresses))
 	for _, address := range addresses {
-		parts = append(parts, address.Address+"/"+address.BindAddress)
+		parts = append(parts, address.Address+"/"+address.BindAddress+"/"+address.LocalBindAddress)
 	}
 	return strings.Join(parts, ",")
 }

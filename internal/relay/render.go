@@ -58,6 +58,55 @@ type RenderInput struct {
 // (testdata/coturn-4.18.0-r0-help.txt). Adding a flag means re-capturing that
 // file from a new pin.
 func Render(in *RenderInput) (string, error) {
+	if in.Relay.DetectsBind() {
+		return "", fmt.Errorf("relay %s decides its bind address on the node: render it with RenderCandidates", in.Relay.Name)
+	}
+	return render(in, "")
+}
+
+// Candidates are the two configurations of a relay that decides its bind
+// address when its pod starts (ADR 23). Both listen on the loopback address of
+// the relay's family as well, so that a readiness probe fixed at pod creation
+// reaches the listener whichever configuration the node runs.
+type Candidates struct {
+	// Local binds Relay.LocalBindAddress, for a node that holds it on an
+	// interface. The relay advertises Relay.Address.
+	Local string
+
+	// Mapped binds Relay.BindAddress, for a node that does not hold
+	// Relay.LocalBindAddress (1:1 NAT). The relay advertises Relay.Address, and
+	// coturn maps it to the bind address with external-ip.
+	Mapped string
+}
+
+// RenderCandidates renders both configurations of a relay whose bind address
+// the node decides.
+func RenderCandidates(in *RenderInput) (Candidates, error) {
+	if !in.Relay.DetectsBind() {
+		return Candidates{}, fmt.Errorf("relay %s has no local bind address to detect: render it with Render", in.Relay.Name)
+	}
+	loopback := in.Relay.ListenerProbeAddress()
+
+	local := *in
+	local.Relay.BindAddress = in.Relay.LocalBindAddress
+	local.Relay.LocalBindAddress = ""
+	localConfig, err := render(&local, loopback)
+	if err != nil {
+		return Candidates{}, fmt.Errorf("rendering the configuration for a node that holds %s: %w", in.Relay.LocalBindAddress, err)
+	}
+
+	mapped := *in
+	mapped.Relay.LocalBindAddress = ""
+	mappedConfig, err := render(&mapped, loopback)
+	if err != nil {
+		return Candidates{}, fmt.Errorf("rendering the configuration for a node that does not hold %s: %w", in.Relay.LocalBindAddress, err)
+	}
+	return Candidates{Local: localConfig, Mapped: mappedConfig}, nil
+}
+
+// render writes the configuration. A loopback address, when given, becomes a
+// second listening-ip.
+func render(in *RenderInput, loopback string) (string, error) {
 	if err := validateRenderInput(in); err != nil {
 		return "", err
 	}
@@ -78,7 +127,7 @@ func Render(in *RenderInput) (string, error) {
 
 	var b strings.Builder
 	writeHeader(&b, in)
-	writeAddressing(&b, in)
+	writeAddressing(&b, in, loopback)
 	writeListeners(&b, in, plainPort, tlsPort, hasPlain, hasTLS)
 	writeCapacity(&b, in)
 	writeAuth(&b, in)
@@ -143,8 +192,14 @@ func writeHeader(b *strings.Builder, in *RenderInput) {
 // IPv6 relay renders listening-ip=2001:db8::1 with no brackets. external-ip
 // takes "public/private" and coturn splits it on the slash, which is why an
 // IPv6 pair needs no quoting either.
-func writeAddressing(b *strings.Builder, in *RenderInput) {
+func writeAddressing(b *strings.Builder, in *RenderInput, loopback string) {
 	fmt.Fprintf(b, "listening-ip=%s\n", in.Relay.BindAddress)
+	if loopback != "" {
+		// Only a relay that decides its bind address on the node listens on
+		// loopback too, for the readiness probe. relay-ip below stays the
+		// bound node address, so relayed traffic never uses loopback.
+		fmt.Fprintf(b, "listening-ip=%s\n", loopback)
+	}
 	fmt.Fprintf(b, "relay-ip=%s\n", in.Relay.BindAddress)
 	if in.Relay.Address != in.Relay.BindAddress {
 		// The advertised address is not local (NAT or an explicit override):

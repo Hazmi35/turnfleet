@@ -28,6 +28,7 @@ decision gets a new ADR that says so.
 | [0020](0020-relay-config-secret.md) | The rendered relay configuration is delivered as a Secret, not a ConfigMap: it embeds the shared HMAC secret. |
 | [0021](0021-drain-before-delete.md) | Drain ordering: a drain is recorded on the pod in one pass and the pod deleted in a later one, one relay at a time. |
 | [0022](0022-probe-status-records-outcomes.md) | A relay's probe status records its outcome and changes only when the outcome does; the probe schedule lives in the controller's memory. |
+| [0023](0023-relay-bind-decided-on-the-node.md) | A relay on a node with two different addresses advertises the `ExternalIP` and decides on the node which address it binds: the `ExternalIP` if an interface holds it, the `InternalIP` behind 1:1 NAT. `turnfleet.hzmi.dev/relay-bind` skips the decision. Amends ADR 1 and ADR 13. |
 
 Related documents that are not ADRs: [`../architecture.md`](../architecture.md),
 [`../capacity-model.md`](../capacity-model.md),

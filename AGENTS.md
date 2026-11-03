@@ -19,6 +19,14 @@ nothing. This file is the only instruction file for every agent.
   replicas behind one address adds nothing").
 * **Allocation**: a TURN allocation held on a relay, occupying one port.
 * **Relay address**: the public IP a relay advertises in `XOR-RELAYED-ADDRESS`.
+* **Bind address**: the local address a relay's coturn binds (`listening-ip`,
+  `relay-ip`). It equals the relay address unless the advertised address is not
+  local: a 1:1 NAT node, where the relay binds the node's `InternalIP` and
+  advertises its `ExternalIP`, or the `turnfleet.hzmi.dev/relay-address`
+  override. When a node's `ExternalIP` and `InternalIP` differ, the relay pod
+  decides which one it binds, by whether the node holds the `ExternalIP` on an
+  interface (ADR 23). The node annotation `turnfleet.hzmi.dev/relay-bind`
+  skips that decision.
 * **Declared address**: one of the addresses an operator reserves for a `PodIP`
   relay on a relay node, in the node annotation
   `turnfleet.hzmi.dev/relay-pod-addresses`. The operator owns the IPAM and

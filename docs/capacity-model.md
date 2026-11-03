@@ -57,8 +57,8 @@ its own port range, delivered without a load balancer.
 
 | Mode | Relays per node | Address per relay | Ports per relay | Ports per node |
 | --- | --- | --- | --- | --- |
-| `HostNetwork` | 1 (required anti-affinity) | the node's `ExternalIP` (or the `turnfleet.hzmi.dev/relay-address` annotation) | the whole range | `end - start + 1` |
-| `PartitionedIP` | `addressing.partitionedIP.relaysPerNode` | the node address, shared by all relays on that node | `(end - start + 1) / relaysPerNode`, remainder to the first slices | still `end - start + 1`: **splitting an IP does not create ports** |
+| `HostNetwork` | 1 (required anti-affinity) | advertises the node's `ExternalIP` (or the `turnfleet.hzmi.dev/relay-address` annotation) and binds the `ExternalIP` when the node holds it, the `InternalIP` when it does not | the whole range | `end - start + 1` |
+| `PartitionedIP` | `addressing.partitionedIP.relaysPerNode` | the node address, shared by all relays on that node, advertised and bound by the same rule as `HostNetwork` | `(end - start + 1) / relaysPerNode`, remainder to the first slices | still `end - start + 1`: **splitting an IP does not create ports** |
 | `ExternalIPPool` | one per declared address on the node | the declared secondary address | the whole range | `addresses on the node × (end - start + 1)` |
 | `PodIP` | one per declared address on the node | the address the pod holds on the default network or on a Multus attachment, declared per node in `turnfleet.hzmi.dev/relay-pod-addresses` | the whole range | `addresses on the node × (end - start + 1)` |
 
@@ -150,11 +150,51 @@ on IPv4-only nodes places nothing. It reports the shortfall on the `Ready` and
 `Degraded` conditions, whose messages carry the planner's notes, rather than
 quietly falling back to IPv4.
 
+A node address has two roles: the address a relay advertises and the address it
+binds. A family with one address, or with an `InternalIP` and an `ExternalIP`
+that are equal, binds and advertises it. A family with an `InternalIP` and a
+different `ExternalIP` is the case the Node object cannot settle. The relay
+advertises the `ExternalIP` in both situations below, and what it binds depends
+on the node:
+
+| The node | The relay binds | coturn is told |
+| --- | --- | --- |
+| holds the `ExternalIP` on an interface (bare metal, DigitalOcean, Linode, Vultr, Hetzner Cloud, k3s with `--node-external-ip` on a public interface) | the `ExternalIP` | nothing: bound and advertised address are one |
+| holds only its `InternalIP`, and the provider translates the `ExternalIP` (1:1 NAT: EKS with public nodes and the other major clouds) | the `InternalIP` | `external-ip=<public>/<private>` |
+
+The controller cannot see which one a node is, so the relay pod decides when it
+starts (ADR 23). An init container checks whether the `ExternalIP` is assigned to
+an interface of the node that is up, and starts coturn with the matching one of
+two configurations the controller rendered. It reports the address it chose in
+its termination message, and the controller records it in the pod annotation
+`turnfleet.hzmi.dev/relay-bind-address` and in a `RelayBindDetected` event.
+Both configurations also make coturn listen on the loopback address of the
+relay's family (`127.0.0.1` or `::1`), because the pod's TCP readiness probe is
+fixed when the pod is created, before the choice, and probes that address.
+Nothing is advertised or relayed through loopback.
+
+The init container runs the controller's own image, which the controller finds
+from its own pod. Outside a pod, `--relay-helper-image` names it. A relay that
+needs the decision is refused with an error when the controller knows neither.
+Only relays on a node with differing addresses get the init container: a node
+with one address, equal addresses, or the annotation below plans exactly the
+relay it always did.
+
+The node annotation `turnfleet.hzmi.dev/relay-bind` skips the decision. The
+value `ExternalIP` binds and advertises the `ExternalIP`, and `InternalIP` binds
+the `InternalIP` and advertises the `ExternalIP`. Any other value is reported as
+a reconcile error. The annotation names a node, not a relay: it covers every
+family of the node where the two addresses differ. Do not confuse it with
+`turnfleet.hzmi.dev/relay-bind-address`, which is a pod annotation the
+controller writes to record the address a relay binds.
+
 The `turnfleet.hzmi.dev/relay-address` annotation overrides the advertised
-address of the family it names. One annotation covers one family, and the other
-family keeps the node's own address. The value has to be an IP address. A value
-that is not one, or that names a family the node has no address in, is reported
-as a reconcile error rather than advertising an address no peer can reach.
+address of the family it names, and never the bind address: the node, or
+`relay-bind`, still decides that. One annotation covers one family, and the
+other family keeps the node's own address. The value has to be an IP address. A
+value that is not one, or that names a family the node has no address in, is
+reported as a reconcile error rather than advertising an address no peer can
+reach.
 
 ### Checking IPv6 against a real relay
 
@@ -292,11 +332,14 @@ relay bound to the IPv6 address.
 
 Turnfleet deliberately does not create a Service or security-group rule for the
 relay range: it cannot know how the node's address is exposed. When a relay
-advertises a public address that differs from the address it binds, the
-annotation `turnfleet.hzmi.dev/relay-address` or an `ExternalIPPool` entry
-declares the advertised address. The renderer then emits `-X public/private` so
-coturn advertises the public one. coturn maps one address to another within one
-family, so an IPv6 relay renders an IPv6 pair.
+advertises a public address that differs from the address it binds, the renderer
+emits `-X public/private` so coturn advertises the public one. A relay on a node
+behind 1:1 NAT gets that mapping without configuration (see ADR 23), and the
+annotation `turnfleet.hzmi.dev/relay-address` replaces the advertised address.
+An `ExternalIPPool` entry cannot declare a separate advertised address:
+`ExternalAddress.address` is both the address a relay binds and the one it
+advertises. That is tracked in #11. coturn maps one address to another within
+one family, so an IPv6 relay renders an IPv6 pair.
 
 ## Which environments can be served
 
