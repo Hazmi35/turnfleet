@@ -7,6 +7,7 @@ package e2e
 
 import (
 	"context"
+	"os/exec"
 	"strings"
 	"testing"
 	"time"
@@ -63,6 +64,15 @@ func TestPodIPRelayWhoseDeclaredAddressThePodCannotHold(t *testing.T) {
 				{Name: "turn", Protocol: turnfleetv1alpha1.ListenerProtocolUDP, Port: 34788},
 			},
 		},
+	})
+
+	// A case that cannot tell why it failed is only a red job, so a failure
+	// logs what the pool, its pods and the controller were doing. This runs
+	// before the pool is deleted, because cleanups run last in, first out.
+	t.Cleanup(func() {
+		if t.Failed() {
+			dumpPoolState(t, name)
+		}
 	})
 
 	// leaked is reported once. The relay must not be published at any poll.
@@ -175,6 +185,28 @@ func requirePoolNotReady(ctx context.Context, t *testing.T, poolName string) {
 	}
 	if uris := configMapURIs(ctx, t, poolName); uris != "" {
 		t.Errorf("ConfigMap %s lists %q, want no URI", controller.URIsConfigMapName(current), uris)
+	}
+}
+
+// dumpPoolState logs the pool, its relay pods, the namespace events and the
+// controller's recent log. Each is one best-effort kubectl call: it runs on a
+// failing case, so an error here is logged and never replaces the failure.
+func dumpPoolState(t *testing.T, poolName string) {
+	t.Helper()
+
+	for _, args := range [][]string{
+		{"-n", testNamespace, "get", "turnpool", poolName, "-o", "yaml"},
+		{"-n", testNamespace, "get", "pods", "-o", "wide"},
+		{"-n", testNamespace, "get", "pods", "-l", "app.kubernetes.io/instance=" + poolName, "-o", "yaml"},
+		{"-n", testNamespace, "get", "events.events.k8s.io", "-o", "wide"},
+		{"-n", controllerNamespace, "logs", "deployment/" + controllerDeploymentName, "--tail=300"},
+	} {
+		full := append([]string{"--context", kubeContext}, args...)
+		ctx, cancel := context.WithTimeout(context.Background(), kubectlTimeout)
+		//nolint:gosec // the suite execs the tools it documents; the arguments come from the tests, not from untrusted input.
+		output, err := exec.CommandContext(ctx, "kubectl", full...).CombinedOutput()
+		cancel()
+		t.Logf("kubectl %s (error: %v):\n%s", strings.Join(args, " "), err, output)
 	}
 }
 
