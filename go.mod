@@ -4,7 +4,7 @@ go 1.27.3
 
 require (
 	github.com/google/licensecheck v0.3.1
-	github.com/onsi/ginkgo/v2 v2.33.1
+	github.com/onsi/ginkgo/v2 v2.34.0
 	github.com/onsi/gomega v1.44.0
 	github.com/pion/logging v0.2.4
 	github.com/pion/stun/v4 v4.0.1

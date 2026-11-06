@@ -48,7 +48,7 @@ RUNTIME_IMAGE ?= gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c89185
 # is the manifest of the same release, vendored unchanged (the `kind-multus`
 # target swaps in this image). A Multus bump moves the image through Renovate
 # and re-vendors the manifest by hand.
-MULTUS_IMAGE ?= ghcr.io/k8snetworkplumbingwg/multus-cni:v4.3.1-thick@sha256:a357a79359b80ddd5f4699117946cacf3b54f5baecf7944535594863e875fc25
+MULTUS_IMAGE ?= ghcr.io/k8snetworkplumbingwg/multus-cni:v4.3.2-thick@sha256:109b885d8752fe7a7bc3b2371750bfad6789b8b8e2d0b0820b337386ba9b93c9
 MULTUS_MANIFEST ?= test/fixtures/multus-daemonset-thick.yaml
 # The kind node image carries host-local, loopback, portmap and ptp only. The
 # attachment needs macvlan and the static IPAM plugin, which `make
