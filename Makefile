@@ -29,7 +29,7 @@ KUSTOMIZE_VERSION ?= v5.8.2
 # from the release into $(LOCALBIN) and verified against the checksum the
 # release publishes next to it (see the `helm` target). Renovate reads this
 # line (customManager in renovate.json).
-HELM_VERSION ?= v4.3.1
+HELM_VERSION ?= v4.3.2
 KIND_IMAGE ?= kindest/node:v1.37.0@sha256:a1ed56cfb0e7b93589bdf97c8cd566405a265939e3620fc4f5de89adff580ae5
 # The coturn data plane. COTURN_IMAGE is the tag the kind cluster is loaded
 # with (a multi-arch index digest cannot be loaded with `docker save`), and
@@ -48,15 +48,15 @@ RUNTIME_IMAGE ?= gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c89185
 # is the manifest of the same release, vendored unchanged (the `kind-multus`
 # target swaps in this image). A Multus bump moves the image through Renovate
 # and re-vendors the manifest by hand.
-MULTUS_IMAGE ?= ghcr.io/k8snetworkplumbingwg/multus-cni:v4.3.1-thick@sha256:a357a79359b80ddd5f4699117946cacf3b54f5baecf7944535594863e875fc25
+MULTUS_IMAGE ?= ghcr.io/k8snetworkplumbingwg/multus-cni:v4.3.2-thick@sha256:109b885d8752fe7a7bc3b2371750bfad6789b8b8e2d0b0820b337386ba9b93c9
 MULTUS_MANIFEST ?= test/fixtures/multus-daemonset-thick.yaml
 # The kind node image carries host-local, loopback, portmap and ptp only. The
 # attachment needs macvlan and the static IPAM plugin, which `make
 # kind-cni-plugins` extracts from this release into every node. The tarball is
 # verified against the checksum below before anything is extracted. Renovate
 # moves the version and the checksum together (customManager in renovate.json).
-CNI_PLUGINS_VERSION ?= v1.9.1
-CNI_PLUGINS_SHA256 ?= b98f74a0f8522f0a83867178729c1aa70f2158f90c45a2ca8fa791db1c76b303
+CNI_PLUGINS_VERSION ?= v1.10.0
+CNI_PLUGINS_SHA256 ?= ce8603d6a1bd448efba5bd6dc44f38dce349f821aa57e1bb354b52628ebf1853
 CNI_PLUGINS_BINARIES ?= macvlan static
 
 # Local cluster. `make deploy` and every kubectl invocation in this file target
